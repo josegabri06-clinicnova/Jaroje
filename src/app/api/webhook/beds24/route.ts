@@ -10,7 +10,7 @@ import {
 } from '@/lib/whatsapp';
 import { getBeds24Token, clearBeds24Cache, syncBeds24BookingLocal, isInvoicePayment, extractPhoneFromBookingData, updateBeds24BookingPhone } from '@/lib/beds24';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
-import { isOtaChannel, sendOtaWelcomeMessage } from '@/lib/beds24-messages';
+import { isOtaChannel, sendOtaWelcomeMessage, sendOfficialOtaTemplate } from '@/lib/beds24-messages';
 
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking/Google/Directo o se cancela
 export async function POST(req: Request) {
@@ -176,6 +176,24 @@ export async function POST(req: Request) {
               }
             } catch (waErr) {
               console.error("[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada en webhook:", waErr);
+            }
+          }
+
+          // Enviar también plantilla oficial de cancelación al chat de la OTA si corresponde
+          const rawChannel = String(b.channel || source || b.referer || '').trim();
+          if (isOtaChannel(rawChannel)) {
+            try {
+              const otaGuestName = `${b.firstName || ''} ${b.lastName || ''}`.trim() || (b.guestName || guestName || 'Huésped');
+              const otaLang = country && ['US', 'CA', 'GB', 'UK'].includes(country.toUpperCase()) ? 'en' : 'es';
+              await sendOfficialOtaTemplate(bookingIdStr, 'disponibilidad_liberada', {
+                guestName: otaGuestName,
+                channel: rawChannel,
+                lang: otaLang,
+                force: true
+              });
+              console.log(`[Webhook Beds24] ✅ Plantilla oficial disponibilidad_liberada enviada a chat OTA ${rawChannel} (ID: ${bookingIdStr})`);
+            } catch (otaErr) {
+              console.error(`[Webhook Beds24] Error enviando disponibilidad_liberada a OTA para ID ${bookingIdStr}:`, otaErr);
             }
           }
 

@@ -4,7 +4,9 @@ import {
   checkAndProcessOtaGuestReplies, 
   sendOtaWelcomeMessage, 
   hasOtaMessageBeenSent,
-  isOtaChannel
+  isOtaChannel,
+  isDummyOrInvalidPhone,
+  processOta20MinuteFallback
 } from '@/lib/beds24-messages';
 
 export const dynamic = 'force-dynamic';
@@ -55,8 +57,8 @@ export async function GET(req: Request) {
     let sentCount = 0;
     if (!otaErr && pendingOtas) {
       for (const res of pendingOtas) {
-        const hasPhone = Boolean(res.guest_phone && res.guest_phone !== 'null' && res.guest_phone !== 'undefined');
-        if (hasPhone) continue;
+        const hasValidPhone = !isDummyOrInvalidPhone(res.guest_phone);
+        if (hasValidPhone) continue;
 
         const alreadySent = await hasOtaMessageBeenSent(res.id, 'ota_welcome_request_phone');
         if (alreadySent) continue;
@@ -76,12 +78,26 @@ export async function GET(req: Request) {
       }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // FASE 3: Fallback de 20 minutos para Airbnb y Expedia
+    // Si pasaron >20 min sin recibir el WhatsApp, envía automáticamente la plantilla
+    // oficial de Meta con el enlace directo al Portal del Huésped
+    // ─────────────────────────────────────────────────────────────────────────────
+    const fallbackResults = await processOta20MinuteFallback();
+    if (fallbackResults.fallbackSentCount > 0) {
+      fallbackResults.details.forEach(d => {
+        reports.push(`⏱️ Fallback de 20 min ejecutado para ${d.guestName} (${d.channel}, ID: ${d.bookingId}): enviada plantilla oficial '${d.template}'.`);
+      });
+    }
+
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
       repliesChecked: replyResults.processedCount,
       upgradedToWhatsApp: replyResults.upgradedCount,
       welcomeMessagesSent: sentCount,
+      fallbacksChecked: fallbackResults.checkedCount,
+      fallbacksSent: fallbackResults.fallbackSentCount,
       actions: reports
     });
 

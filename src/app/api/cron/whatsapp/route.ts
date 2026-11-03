@@ -16,6 +16,7 @@ import {
   sendTemplate10_RecibimientoNuevamente,
   sendTemplate_AlojamientoListo
 } from '@/lib/whatsapp';
+import { isOtaChannel, sendOfficialOtaTemplate, isDummyOrInvalidPhone } from '@/lib/beds24-messages';
 
 // Asegurar de forma automatizada que existe la tabla whatsapp_logs en Supabase
 async function ensureLogsTable() {
@@ -410,8 +411,52 @@ export async function GET(req: Request) {
     for (const booking of allBookings) {
       try {
         const bookingIdStr = String(booking.id);
-        const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
-        if (!guestPhone) continue;
+        const rawPhone = booking.phone || booking.mobile || booking.guest_phone;
+        const rawChannel = String(booking.channel || '').trim();
+        const isOta = isOtaChannel(rawChannel);
+        const hasValidPhone = Boolean(rawPhone && !isDummyOrInvalidPhone(rawPhone));
+
+        // Si no tiene teléfono válido y no es una OTA con chat, omitir
+        if (!hasValidPhone && !isOta) continue;
+
+        const guestPhone = hasValidPhone ? rawPhone : undefined;
+
+        // Despachador unificado: WhatsApp si tiene teléfono válido, o chat oficial OTA si no tiene WhatsApp
+        const dispatchTemplate = async (
+          templateName: string,
+          waSender: () => Promise<any>,
+          friendlyLabel: string,
+          logTemplateKey?: string
+        ) => {
+          const logKey = logTemplateKey || templateName;
+          if (guestPhone) {
+            const res = await waSender();
+            if (res.success) {
+              await supabase.from('whatsapp_logs').insert([{
+                reservation_id: bookingIdStr,
+                template_name: logKey,
+                phone: guestPhone,
+                sent_at: new Date().toISOString(),
+                status: 'sent'
+              }]);
+              markTemplateAsSent(bookingIdStr, guestPhone, logKey);
+              reports.push(`Enviado ${friendlyLabel} (WhatsApp) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            } else {
+              console.warn(`[Cron WhatsApp] Error enviando ${templateName} a ${booking.guest_name}:`, res.error);
+            }
+          } else if (isOta) {
+            const res = await sendOfficialOtaTemplate(bookingIdStr, templateName, {
+              guestName: booking.guest_name,
+              channel: rawChannel
+            });
+            if (res.success) {
+              markTemplateAsSent(bookingIdStr, undefined, logKey);
+              reports.push(`Enviado ${friendlyLabel} (OTA ${rawChannel}) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            } else {
+              console.warn(`[Cron WhatsApp] Error enviando ${templateName} a OTA ${rawChannel} para ${booking.guest_name}:`, res.error);
+            }
+          }
+        };
 
         // --- REGLA: Cancelación Automática 3h tras Último Aviso enviado desde la app (Solo Reservas Directas/Locales/Expedia con anticipo pendiente, NUNCA OTAs prepagadas Airbnb/Booking) ---
         const isCancelled = booking.status === 'cancelled' || String(booking.status) === '0';
@@ -517,23 +562,36 @@ export async function GET(req: Request) {
               }
 
               // 5. Registrar éxito de la cancelación grupal en los logs de auditoría
-              // 6. Enviar WhatsApp de disponibilidad liberada una sola vez para todo el grupo (respetando freno de emergencia)
-              const waRes = await sendTemplate4_DisponibilidadLiberada(booking, false);
+              // 6. Enviar WhatsApp / OTA de disponibilidad liberada una sola vez para todo el grupo (respetando freno de emergencia)
+              if (guestPhone) {
+                const waRes = await sendTemplate4_DisponibilidadLiberada(booking, false);
+                if (waRes.success) {
+                  reports.push(`[Expirado 3h tras Último Aviso] Grupo [${groupMemberIds.join(', ')}] cancelado y notificado con Mensaje 4 por WhatsApp.`);
+                } else {
+                  reports.push(`[Expirado 3h tras Último Aviso] Grupo [${groupMemberIds.join(', ')}] cancelado en sistema, pero falló WhatsApp: ${waRes.error}`);
+                }
+              }
+              if (isOta) {
+                try {
+                  await sendOfficialOtaTemplate(booking.id, 'disponibilidad_liberada', {
+                    guestName: booking.guest_name,
+                    channel: rawChannel
+                  });
+                  reports.push(`[Expirado 3h tras Último Aviso] Grupo [${groupMemberIds.join(', ')}] cancelado y notificado con Mensaje 4 por chat OTA.`);
+                } catch (otaErr) {
+                  console.error('Error enviando disponibilidad_liberada a OTA:', otaErr);
+                }
+              }
               
               // 7. Registrar logs de whatsapp_logs para TODOS los miembros del grupo
               for (const memberId of groupMemberIds) {
                 await supabase.from('whatsapp_logs').insert([{
                   reservation_id: memberId,
                   template_name: 'disponibilidad_liberada',
-                  phone: guestPhone
+                  phone: guestPhone || `OTA_${rawChannel.toUpperCase()}`
                 }]);
               }
 
-              if (waRes.success) {
-                reports.push(`[Expirado 3h tras Último Aviso] Grupo [${groupMemberIds.join(', ')}] cancelado y notificado con Mensaje 4.`);
-              } else {
-                reports.push(`[Expirado 3h tras Último Aviso] Grupo [${groupMemberIds.join(', ')}] cancelado en sistema, pero falló WhatsApp: ${waRes.error}`);
-              }
               continue; // Saltar el resto de verificaciones para esta reserva
             } else {
               // Omitido por tener transferencia pendiente o aprobada en el grupo
@@ -641,12 +699,7 @@ export async function GET(req: Request) {
         // NUNCA enviar si la reserva ya está en el hotel (checked_in) o cancelada
         if (!isCancelled && !isAlreadyCheckedIn && cleanCheckIn === tomorrowStr && (currentHour >= 18 && currentHour < 21)) {
           if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'preparacion_llegada')) {
-            const res = await sendTemplate5_PreparacionLlegada(booking);
-            if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'preparacion_llegada', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
-              markTemplateAsSent(bookingIdStr, guestPhone, 'preparacion_llegada');
-              reports.push(`Enviado Mensaje 5 (Prep llegada 6PM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-            }
+            await dispatchTemplate('preparacion_llegada', () => sendTemplate5_PreparacionLlegada(booking), 'Mensaje 5 (Prep llegada 6PM)');
           }
         }
 
@@ -664,26 +717,12 @@ export async function GET(req: Request) {
                 return otherRoom === rRoom && otherIn <= yesterdayStr && otherOut >= todayStr;
               });
 
-              const channelLower = (booking.channel || '').toLowerCase();
-              const isOta = ['airbnb', 'booking', 'expedia'].some(ota => channelLower.includes(ota)) && !channelLower.includes('engine');
               const hasDeposit = Number(booking.deposit || 0) > 0;
               const isAcknowledged = booking.is_acknowledged === true || sentSet.has(`${bookingIdStr}_acknowledged`);
-
               const isConfirmed = isOta || hasDeposit || isAcknowledged;
 
               if (isConfirmed && booking.status !== 'request' && booking.status !== '0' && !occupiedYesterday) {
-                const res = await sendTemplate_AlojamientoListo(booking);
-                if (res.success) {
-                  await supabase.from('whatsapp_logs').insert([{
-                    reservation_id: bookingIdStr,
-                    template_name: 'alojamiento_listo',
-                    phone: guestPhone,
-                    sent_at: new Date().toISOString(),
-                    status: 'sent'
-                  }]);
-                  markTemplateAsSent(bookingIdStr, guestPhone, 'alojamiento_listo');
-                  reports.push(`Enviado Mensaje Alojamiento Listo (Vacante ayer) a ${booking.guest_name} para Habitación ${rRoom} (ID: ${bookingIdStr})`);
-                }
+                await dispatchTemplate('alojamiento_listo', () => sendTemplate_AlojamientoListo(booking), `Mensaje Alojamiento Listo (Hab ${rRoom})`);
               }
             }
           }
@@ -692,12 +731,7 @@ export async function GET(req: Request) {
         // --- MENSAJE 6: Bienvenidos a Condominios Jaroje (Automático en Check-In) ---
         if (booking.checked_in || booking.status === 'checked_in') {
           if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'bienvenida_checkin')) {
-            const res = await sendTemplate6_BienvenidaCheckin(booking);
-            if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'bienvenida_checkin', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
-              markTemplateAsSent(bookingIdStr, guestPhone, 'bienvenida_checkin');
-              reports.push(`Enviado Mensaje 6 (Bienvenida Check-In) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-            }
+            await dispatchTemplate('bienvenida_checkin', () => sendTemplate6_BienvenidaCheckin(booking), 'Mensaje 6 (Bienvenida Check-In)');
           }
         }
 
@@ -708,14 +742,7 @@ export async function GET(req: Request) {
 
         if (isStayActiveForTemplate7 && currentHour >= 9 && currentHour < 14) {
           if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'seguimiento_satisfaccion')) {
-            const res = await sendTemplate7_SeguimientoSatisfaccion(booking);
-            if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'seguimiento_satisfaccion', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
-              markTemplateAsSent(bookingIdStr, guestPhone, 'seguimiento_satisfaccion');
-              reports.push(`Enviado Mensaje 7 (Satisfacción 9AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-            } else {
-              console.warn(`[Cron WhatsApp] Fallo al enviar Mensaje 7 a ${booking.guest_name} (ID: ${bookingIdStr}):`, res.error);
-            }
+            await dispatchTemplate('seguimiento_satisfaccion', () => sendTemplate7_SeguimientoSatisfaccion(booking), 'Mensaje 7 (Satisfacción 9AM)');
           }
         }
 
@@ -723,12 +750,7 @@ export async function GET(req: Request) {
         // Soporta extensiones de estancia: Se enviará a las 7 AM de la nueva fecha de salida si la estancia fue extendida
         if (cleanCheckOut === todayStr && currentHour >= 7 && currentHour < 12) {
           if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'salida_checkout')) {
-            const res = await sendTemplate8_SalidaCheckout(booking);
-            if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'salida_checkout', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
-              markTemplateAsSent(bookingIdStr, guestPhone, 'salida_checkout');
-              reports.push(`Enviado Mensaje 8 (Salida Checkout 7AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-            }
+            await dispatchTemplate('salida_checkout', () => sendTemplate8_SalidaCheckout(booking), 'Mensaje 8 (Salida Checkout 7AM)');
           }
         }
 
@@ -742,12 +764,7 @@ export async function GET(req: Request) {
             if (hasIncident) {
               reports.push(`Omisado Mensaje 9 para ${booking.guest_name} por reporte de incidencia con urgencia alta en ${roomStr}`);
             } else {
-              const res = await sendTemplate9_ComparteExperiencia(booking);
-              if (res.success) {
-                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'comparte_experiencia', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
-                markTemplateAsSent(bookingIdStr, guestPhone, 'comparte_experiencia');
-                reports.push(`Enviado Mensaje 9 (Encuesta Experiencia 10AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-              }
+              await dispatchTemplate('comparte_experiencia', () => sendTemplate9_ComparteExperiencia(booking), 'Mensaje 9 (Encuesta Experiencia 10AM)');
             }
           }
         }
@@ -756,21 +773,11 @@ export async function GET(req: Request) {
         if (currentHour >= 10 && currentHour < 14) {
           if (cleanCheckIn === fiveMonthsAgoCheckinStr) {
             if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'recibimiento_nuevamente_5m')) {
-              const res = await sendTemplate10_RecibimientoNuevamente(booking);
-              if (res.success) {
-                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_5m', phone: guestPhone, status: 'sent' }]);
-                markTemplateAsSent(bookingIdStr, guestPhone, 'recibimiento_nuevamente_5m');
-                reports.push(`Enviado Mensaje 10 (Fidelización 5 meses) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-              }
+              await dispatchTemplate('recibimiento_nuevamente', () => sendTemplate10_RecibimientoNuevamente(booking), 'Mensaje 10 (Fidelización 5 meses)', 'recibimiento_nuevamente_5m');
             }
           } else if (cleanCheckIn === tenMonthsAgoCheckinStr) {
             if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'recibimiento_nuevamente_10m')) {
-              const res = await sendTemplate10_RecibimientoNuevamente(booking);
-              if (res.success) {
-                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_10m', phone: guestPhone, status: 'sent' }]);
-                markTemplateAsSent(bookingIdStr, guestPhone, 'recibimiento_nuevamente_10m');
-                reports.push(`Enviado Mensaje 10 (Fidelización 10 meses) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-              }
+              await dispatchTemplate('recibimiento_nuevamente', () => sendTemplate10_RecibimientoNuevamente(booking), 'Mensaje 10 (Fidelización 10 meses)', 'recibimiento_nuevamente_10m');
             }
           }
         }
