@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
+import { isGuestAuthorized, grantGuestAccess, normalizeBookingId } from '@/lib/guest-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,10 @@ export async function POST(req: Request) {
     }
 
     const bookingId = Number(id);
+    const guestId = normalizeBookingId(id);
+    if (!guestId) {
+      return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
+    }
 
     // 1. Obtener detalles de la reservación (Check-in/Check-out/Guest Name) y verificar pago
     let checkInDate = null;
@@ -74,6 +79,11 @@ export async function POST(req: Request) {
 
     if (existingCheckin && existingCheckin.receipt_url) {
       hasUploadedReceipt = true;
+    }
+
+    // Sustituir una identificación ya subida solo lo puede hacer quien está autorizado en esta reserva; la primera subida es libre
+    if (existingCheckin?.document_url && !(await isGuestAuthorized(req, guestId))) {
+      return NextResponse.json({ error: 'Verifica tu identidad para cambiar tu identificación.', code: 'verification_required' }, { status: 403 });
     }
 
     if (!isPaidOrOta && !hasUploadedReceipt) {
@@ -145,7 +155,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Fallo al registrar identificación en base de datos: ' + dbError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, url: publicUrl });
+    const okRes = NextResponse.json({ success: true, url: publicUrl });
+    await grantGuestAccess(okRes, guestId); // quien sube su identificación queda autorizado en este dispositivo
+    return okRes;
 
   } catch (err: any) {
     console.error("Error en POST de api/public/reserva/dni:", err);
