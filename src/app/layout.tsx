@@ -3,7 +3,6 @@ import { Inter } from 'next/font/google';
 import { BottomNav } from '@/components/BottomNav';
 import { AuthGuard } from '@/components/AuthGuard';
 import CopilotWidget from '@/components/CopilotWidget';
-import RealtimeLogNotifier from '@/components/RealtimeLogNotifier';
 
 import { LayoutWrapper } from '@/components/LayoutWrapper';
 
@@ -43,7 +42,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} bg-[#fafafa] text-zinc-900 min-h-screen flex flex-col selection:bg-zinc-200 overscroll-none`}>
         <AuthGuard>
           <Beds24RateLimitBanner />
-          <RealtimeLogNotifier />
           <LayoutWrapper>
             {children}
           </LayoutWrapper>
