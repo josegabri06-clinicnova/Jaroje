@@ -8217,6 +8217,28 @@ function ReservasListInner() {
           </div>
         </div>
       )}
+
+      {zoomImage && (
+        <div
+          className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setZoomImage(null)}
+        >
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={() => setZoomImage(null)}
+            className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-md"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+          <img
+            src={zoomImage}
+            alt="Imagen ampliada"
+            className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
