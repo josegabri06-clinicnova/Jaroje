@@ -266,6 +266,18 @@ function ReservasListInner() {
   const [voucherUploadLoading, setVoucherUploadLoading] = useState<boolean>(false);
   const [checkInSummaryModal, setCheckInSummaryModal] = useState<{ show: boolean; text: string; reservationTitle: string; copied: boolean } | null>(null);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
+  // Archivos de huespedes (DNI, vouchers, comprobantes):
+  //  - Imagenes: visor propio con X arriba a la derecha (no se sale de la app).
+  //  - PDF: pestana nueva (Android y ordenador ya muestran su propia barra con X), salvo en iPhone instalado como web app,
+  //    donde un enlace a otra pestana se abre en la misma ventana sin barra ni boton para volver: ahi se usa el visor.
+  const openGuestFile = (e: React.MouseEvent, url?: string | null) => {
+    if (!url) return;
+    const isPdf = /\.pdf(?:[?#].*)?$/i.test(url);
+    const isIosStandalone = typeof navigator !== 'undefined' && (navigator as any).standalone === true;
+    if (isPdf && !isIosStandalone) return;
+    e.preventDefault();
+    setZoomImage(url);
+  };
 
   const [showAcknowledgeGroupModal, setShowAcknowledgeGroupModal] = useState(false);
   const [acknowledgeGroupMembers, setAcknowledgeGroupMembers] = useState<any[]>([]);
@@ -5685,6 +5697,7 @@ function ReservasListInner() {
                       ) : (
                         <a 
                           href={selectedRes.document_url}
+                          onClick={(e) => openGuestFile(e, selectedRes.document_url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-2.5 px-4 py-3 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
@@ -5709,6 +5722,7 @@ function ReservasListInner() {
                         <span className="text-[10px] font-bold text-amber-800 uppercase tracking-widest block mb-2">Voucher TPV / Comprobante de Pago</span>
                         <a 
                           href={vUrl}
+                          onClick={(e) => openGuestFile(e, vUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-2.5 px-4 py-3 bg-white border border-amber-200 hover:bg-amber-50 text-amber-900 hover:text-amber-950 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
@@ -5799,6 +5813,7 @@ function ReservasListInner() {
                               <div className="space-y-2 pt-1 border-t border-zinc-100">
                                 <a
                                   href={receipt.receipt_url}
+                                  onClick={(e) => openGuestFile(e, receipt.receipt_url)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center justify-center gap-1.5 w-full py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 font-bold rounded-lg text-[11px] transition-colors cursor-pointer"
@@ -6443,6 +6458,7 @@ function ReservasListInner() {
                         ) : (
                           <a 
                             href={selectedRes.document_url}
+                            onClick={(e) => openGuestFile(e, selectedRes.document_url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className={`bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 transition-colors shadow-sm ${isOtaRes ? 'col-span-2' : ''}`}
@@ -6461,6 +6477,7 @@ function ReservasListInner() {
                         return (
                           <a 
                             href={vUrl}
+                            onClick={(e) => openGuestFile(e, vUrl)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-amber-200 transition-colors shadow-sm col-span-2"
@@ -6598,6 +6615,7 @@ function ReservasListInner() {
                                 ) : (
                                   <a 
                                     href={selectedRes.document_url}
+                                    onClick={(e) => openGuestFile(e, selectedRes.document_url)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[13px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 transition-colors shadow-sm"
@@ -8220,23 +8238,36 @@ function ReservasListInner() {
 
       {zoomImage && (
         <div
-          className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-sm overflow-auto animate-in fade-in duration-200"
           onClick={() => setZoomImage(null)}
         >
           <button
             type="button"
             aria-label="Cerrar"
             onClick={() => setZoomImage(null)}
-            className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-md"
+            className="fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 w-11 h-11 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-md border border-white/20"
           >
-            <X size={20} strokeWidth={2.5} />
+            <X size={22} strokeWidth={2.5} />
           </button>
-          <img
-            src={zoomImage}
-            alt="Imagen ampliada"
-            className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          />
+          <div className="min-h-full flex flex-col items-center justify-start gap-3 px-4 pt-[max(4rem,calc(env(safe-area-inset-top)+3.5rem))] pb-8">
+            {/\.pdf(?:[?#].*)?$/i.test(zoomImage) ? (
+              <>
+                <iframe
+                  src={zoomImage}
+                  title="Documento PDF"
+                  className="w-full max-w-3xl h-[75vh] bg-white rounded-xl shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </>
+            ) : (
+              <img
+                src={zoomImage}
+                alt="Imagen ampliada"
+                className="max-w-full h-auto rounded-xl shadow-2xl animate-in zoom-in-95 duration-200"
+                onClick={(e) => e.stopPropagation()}
+              />
+            )}
+          </div>
         </div>
       )}
     </div>
