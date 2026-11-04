@@ -8,20 +8,56 @@ function escapeRegex(str: string): string {
 }
 
 /**
+ * Limpia bloques contextuales de la descripción que contienen números que NO son IDs de reserva:
+ * - Empleado/Operador: (Operado por: NOMBRE APELLIDO (110))
+ * - Habitaciones: Hab Apartamento Premier de 3 dormitorios (107) o Habs 103 o Hab 201
+ * - Sobres/Cajas: S17 - 107
+ */
+function stripNonBookingNumbers(description: string): string {
+  if (!description) return '';
+  return description
+    // Eliminar bloque de operador completo
+    .replace(/\(Operado por:[^\)]+\)/gi, ' ')
+    // Eliminar bloque de habitación con o sin paréntesis (ej: Habitación Doble (304), Hab 107, Habs 103)
+    .replace(/\b(?:Hab(?:itaci[oó]n)?|Habs|Apartamento|Casa)\b[^\(\[\n]*\(\s*\d+\s*\)/gi, ' ')
+    .replace(/\b(?:Hab(?:itaci[oó]n)?|Habs)\s+\d+\b/gi, ' ')
+    // Eliminar identificadores de sobre/caja
+    .replace(/\bS\d+\s*-\s*\d+\b/gi, ' ');
+}
+
+/**
  * Comprueba de manera estricta si una descripción de movimiento financiero
- * corresponde al ID de una reserva específica para evitar falsos positivos.
+ * corresponde al ID de una reserva específica para evitar falsos positivos
+ * (colisiones con número de empleado, habitación o sobre).
  */
 export function matchesBookingFinance(description: string, bookingId: string | number): boolean {
   if (!description || !bookingId) return false;
   const strId = String(bookingId).trim();
   if (!strId) return false;
 
+  const cleaned = stripNonBookingNumbers(description);
   const escaped = escapeRegex(strId);
-  // Coincide con:
-  // (ID: 123), ID: 123, ID:123, B24: 123, B24:123, [Reserva B24: 123], #123, Reserva 123,
-  // o como palabra completa delimitada por límites de palabra o paréntesis/guiones
-  const regex = new RegExp(`(?:\\b|ID:\\s*|B24:\\s*|#|Reserva\\s*|\\[Reserva B24:\\s*)${escaped}(?:\\b|\\)|\\s|\\]|$)`, 'i');
-  return regex.test(description);
+
+  // 1. Formatos explícitos de reserva:
+  // - [Reservas B24: ..., 12345, ...] o [Reserva B24: 12345] o [Beds24: 12345]
+  // - (ID: 12345) o (IDs: 12345, 12346) o (ID Local: 12345)
+  // - [Reserva Local: 12345]
+  const explicitBookingRegex = new RegExp(
+    `(?:\\[(?:Reservas? B24|Beds24|Reserva Local):[^\\]]*\\b${escaped}\\b[^\\]]*\\]|\\(IDs?:[^\\)]*\\b${escaped}\\b[^\\)]*\\)|\\(ID Local:\\s*${escaped}\\))`,
+    'i'
+  );
+  if (explicitBookingRegex.test(cleaned)) {
+    return true;
+  }
+
+  // 2. Si el ID de reserva tiene 6 o más dígitos (típico de Beds24 como 88222928, 95676021),
+  // permitir búsqueda con prefijo estricto de reserva:
+  if (strId.length >= 6) {
+    const generalPrefixRegex = new RegExp(`(?:\\bID:\\s*|\\bB24:\\s*|\\bReserva\\s*#?\\s*)${escaped}\\b`, 'i');
+    return generalPrefixRegex.test(cleaned);
+  }
+
+  return false;
 }
 
 /**
@@ -29,10 +65,11 @@ export function matchesBookingFinance(description: string, bookingId: string | n
  */
 export function extractBookingIdsFromDescription(description: string): string[] {
   if (!description) return [];
+  const cleaned = stripNonBookingNumbers(description);
   const found = new Set<string>();
 
   // 1. [Reservas B24: 12345, 12346] o [Reserva B24: 12345]
-  const b24Bracket = description.match(/\[(?:Reservas B24|Reserva B24|Beds24):\s*([^\]]+)\]/i);
+  const b24Bracket = cleaned.match(/\[(?:Reservas B24|Reserva B24|Beds24):\s*([^\]]+)\]/i);
   if (b24Bracket && b24Bracket[1]) {
     const parts = b24Bracket[1].split(/[\s,]+/);
     for (const p of parts) {
@@ -42,7 +79,7 @@ export function extractBookingIdsFromDescription(description: string): string[] 
   }
 
   // 2. (IDs: 12345, 12346) o (ID: 12345, 12346)
-  const idParens = description.match(/\(IDs?:\s*([^\)]+)\)/i);
+  const idParens = cleaned.match(/\(IDs?:\s*([^\)]+)\)/i);
   if (idParens && idParens[1]) {
     const parts = idParens[1].split(/[\s,]+/);
     for (const p of parts) {
