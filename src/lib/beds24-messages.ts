@@ -60,6 +60,14 @@ export function generateOtaWelcomeMessage(guestName: string = 'Huésped', countr
 }
 
 /**
+ * Dominio de producción para los enlaces que se envían al huésped.
+ * Mismo criterio que lib/whatsapp.ts (NEXT_PUBLIC_SITE_URL o el dominio real de la app).
+ */
+function getSiteUrl(): string {
+  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app').replace(/\/+$/, '');
+}
+
+/**
  * Genera el texto EXACTO oficial de las plantillas de Meta para su envío en centros de mensajes de OTAs
  */
 export function getOfficialOtaTemplateText(
@@ -79,8 +87,9 @@ export function getOfficialOtaTemplateText(
   const name = (guestName || 'Huésped').trim().split(' ')[0] || 'Huésped';
   const cleanBookingId = String(bookingId).trim();
   const allowLinks = canOtaReceiveLinks(channel);
-  const portalUrl = `https://hotel-condominio-app.vercel.app/public/reserva/${cleanBookingId}?lang=${lang}`;
-  const catalogUrl = `https://hotel-condominio-app.vercel.app/public/reservar`;
+  const siteUrl = getSiteUrl();
+  const portalUrl = `${siteUrl}/public/reserva/${encodeURIComponent(cleanBookingId)}?lang=${encodeURIComponent(lang)}`;
+  const catalogUrl = `${siteUrl}/public/reservar`;
 
   const isEn = lang === 'en';
 
