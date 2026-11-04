@@ -1274,11 +1274,6 @@ export default function PublicReservaPage() {
     setActivePhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
   };
 
-  // Solo para mostrar: las unidades 601-607 son condominios, no habitaciones
-  function formatRoomLabel(name: string): string {
-    return String(name || '').replace(/Habitaci[oó]n\s+(60[1-7])\b/gi, (_m, n) => (lang === 'en' ? `Condominium ${n}` : `Condominio ${n}`));
-  }
-
   function getRoomTypeKey(roomName: string): string {
     // Para múltiples habitaciones separadas por coma, usar el tipo de la primera
     const firstRoom = (roomName || '').split(',')[0].trim();
@@ -1702,7 +1697,7 @@ export default function PublicReservaPage() {
                 </div>
               ) : (
                 <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">
-                  {formatRoomLabel(booking.room_name.replace(/\s*\(\d+\)\s*$/, '').trim())}
+                  {booking.room_name.replace(/\s*\(\d+\)\s*$/, '').trim()}
                 </strong>
               )}
             </div>
@@ -2892,7 +2887,7 @@ export default function PublicReservaPage() {
                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-1.5 text-[11.5px]">
                     <div className="flex justify-between">
                       <span className="text-zinc-500 font-semibold">Habitación:</span>
-                      <span className="font-bold text-zinc-900">{formatRoomLabel(booking.room_name)}</span>
+                      <span className="font-bold text-zinc-900">{booking.room_name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-zinc-500 font-semibold">Total pagado:</span>
@@ -3006,7 +3001,7 @@ export default function PublicReservaPage() {
                   <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3.5 space-y-2 text-[11.5px]">
                     <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Correo:</span><span className="font-bold text-zinc-900">{facturaEmail}</span></div>
                     <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">CFDI:</span><span className="font-bold text-zinc-900">{facturaCfdi}</span></div>
-                    <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Habitación:</span><span className="font-bold text-zinc-900">{formatRoomLabel(booking.room_name)}</span></div>
+                    <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Habitación:</span><span className="font-bold text-zinc-900">{booking.room_name}</span></div>
                     <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Monto:</span><span className="font-extrabold text-indigo-700">${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} {curr}</span></div>
                     {facturaNotes && <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Obs.:</span><span className="font-bold text-zinc-900">{facturaNotes}</span></div>}
                   </div>
