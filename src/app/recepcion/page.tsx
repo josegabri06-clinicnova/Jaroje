@@ -21,6 +21,7 @@ import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCap
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
+import { normalizePhone } from '@/lib/whatsapp';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -76,6 +77,8 @@ interface Reserva {
   groupRooms?: { roomId: string; unitId: string; name: string }[];
   extra_guest_surcharge?: string;
   channel?: string;
+  country?: string;
+  country2?: string;
   status?: string;
   taxes?: {
     iva: number;
@@ -1051,13 +1054,22 @@ export default function RecepcionPage() {
     if (!selectedReserva || !editedPhone.trim()) return;
     setSavingPhoneOnly(true);
     try {
-      const cleanPhone = editedPhone.trim();
-      // 1. Guardar en beds24_reservations de Supabase
+      const rawVal = editedPhone.trim();
+      const cleanPhone = normalizePhone(rawVal, selectedReserva?.country2 || selectedReserva?.country);
+
+      // 1. Guardar en beds24_reservations y local_reservas de Supabase
       const { error: dbErr } = await supabase
         .from('beds24_reservations')
         .update({ guest_phone: cleanPhone, updated_at: new Date().toISOString() })
         .eq('id', String(selectedReserva.id));
       if (dbErr) console.warn("Aviso actualizando beds24_reservations:", dbErr.message);
+
+      try {
+        await supabase
+          .from('local_reservas')
+          .update({ phone: cleanPhone })
+          .eq('id', Number(selectedReserva.id));
+      } catch (_) {}
 
       // 2. Sincronizar vía API PUT
       await fetch('/api/reservas', {
@@ -1442,12 +1454,13 @@ export default function RecepcionPage() {
 
     setIsSavingChanges(true);
     try {
+      const cleanPhone = editedPhone.trim() ? normalizePhone(editedPhone.trim(), selectedReserva?.country2 || selectedReserva?.country) : '';
       const res = await fetch('/api/reservas', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedReserva.id,
-          phone: editedPhone,
+          phone: cleanPhone,
           numAdult: editedAdults,
           numChild: editedChildren,
           price: Number(editedPrice),
@@ -1481,11 +1494,11 @@ export default function RecepcionPage() {
             action: 'reserva_modificada',
             room: selectedReserva.room || 'General',
             details: JSON.stringify({
-              text: `${selectedReserva.guest_name} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room || 'General'} - Modificó la reserva (Pax: ${editedAdults}A/${editedChildren}N, Tel: ${editedPhone}, Total: MX$${editedPrice}, Anticipo: MX$${editedDeposit}).`,
+              text: `${selectedReserva.guest_name} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room || 'General'} - Modificó la reserva (Pax: ${editedAdults}A/${editedChildren}N, Tel: ${cleanPhone}, Total: MX$${editedPrice}, Anticipo: MX$${editedDeposit}).`,
               modificacion: {
                 bookingId: selectedReserva.id,
                 guestName: selectedReserva.guest_name,
-                phone: editedPhone,
+                phone: cleanPhone,
                 numAdult: editedAdults,
                 numChild: editedChildren,
                 price: Number(editedPrice),
@@ -1501,7 +1514,7 @@ export default function RecepcionPage() {
 
       setSelectedReserva((prev: any) => ({
         ...prev,
-        guest_phone: editedPhone,
+        guest_phone: cleanPhone,
         num_adult: editedAdults,
         num_child: editedChildren,
         price_estimate: Number(editedPrice),
@@ -1512,7 +1525,7 @@ export default function RecepcionPage() {
 
       setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? {
         ...r,
-        guest_phone: editedPhone,
+        guest_phone: cleanPhone,
         num_adult: editedAdults,
         num_child: editedChildren,
         price_estimate: Number(editedPrice),
@@ -3921,13 +3934,19 @@ export default function RecepcionPage() {
         });
         paymentSplits[selectedReserva.id] = Math.max(0, totalPayment - allocatedSum);
 
-        // Guardar teléfono actualizado en beds24_reservations si se ingresó durante check-in
+        // Guardar teléfono actualizado en beds24_reservations y local_reservas si se ingresó durante check-in
         if (editedPhone.trim()) {
-          const cleanPhone = editedPhone.trim();
+          const cleanPhone = normalizePhone(editedPhone.trim(), selectedReserva?.country2 || selectedReserva?.country);
           await supabase
             .from('beds24_reservations')
             .update({ guest_phone: cleanPhone, updated_at: new Date().toISOString() })
             .eq('id', String(selectedReserva.id));
+          try {
+            await supabase
+              .from('local_reservas')
+              .update({ phone: cleanPhone })
+              .eq('id', Number(selectedReserva.id));
+          } catch (_) {}
         }
 
         const sentGroupWelcomePhones = new Set<string>();
@@ -4569,17 +4588,24 @@ export default function RecepcionPage() {
           return;
         }
 
-        // Guardar teléfono actualizado en beds24_reservations si se ingresó durante check-in
+        // Guardar teléfono actualizado en beds24_reservations y local_reservas si se ingresó durante check-in
         if (editedPhone.trim()) {
-          const cleanPhone = editedPhone.trim();
+          const cleanPhone = normalizePhone(editedPhone.trim(), selectedReserva?.country2 || selectedReserva?.country);
           await supabase
             .from('beds24_reservations')
             .update({ guest_phone: cleanPhone, updated_at: new Date().toISOString() })
             .eq('id', String(selectedReserva.id));
+          try {
+            await supabase
+              .from('local_reservas')
+              .update({ phone: cleanPhone })
+              .eq('id', Number(selectedReserva.id));
+          } catch (_) {}
         }
 
         // Enviar plantilla de bienvenida WhatsApp en segundo plano
-        const indPhone = editedPhone.trim() || selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || (selectedReserva as any).guestPhone || '';
+        const rawIndPhone = editedPhone.trim() || selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || (selectedReserva as any).guestPhone || '';
+        const indPhone = rawIndPhone ? normalizePhone(rawIndPhone, selectedReserva?.country2 || selectedReserva?.country) : '';
         fetch('/api/whatsapp/send-template', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

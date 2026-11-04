@@ -4,6 +4,7 @@ import { getBeds24Bookings, getBeds24Token, clearBeds24Cache, areBookingsInSameG
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
 import {
+  normalizePhone,
   sendTemplate1_SolicitudRecibida,
   sendTemplate2_UltimoAviso,
   sendTemplate3_ReservacionConfirmada,
@@ -412,14 +413,20 @@ export async function GET(req: Request) {
       try {
         const bookingIdStr = String(booking.id);
         const rawPhone = booking.phone || booking.mobile || booking.guest_phone;
+        const normalizedPhone = rawPhone ? normalizePhone(rawPhone, booking.country2 || booking.country) : '';
         const rawChannel = String(booking.channel || '').trim();
         const isOta = isOtaChannel(rawChannel);
-        const hasValidPhone = Boolean(rawPhone && !isDummyOrInvalidPhone(rawPhone));
+        const hasValidPhone = Boolean(normalizedPhone && !isDummyOrInvalidPhone(normalizedPhone));
 
         // Si no tiene teléfono válido y no es una OTA con chat, omitir
         if (!hasValidPhone && !isOta) continue;
 
-        const guestPhone = hasValidPhone ? rawPhone : undefined;
+        const guestPhone = hasValidPhone ? normalizedPhone : undefined;
+        if (guestPhone) {
+          booking.phone = guestPhone;
+          booking.guest_phone = guestPhone;
+          booking.mobile = guestPhone;
+        }
 
         // Despachador unificado: WhatsApp si tiene teléfono válido, o chat oficial OTA si no tiene WhatsApp
         const dispatchTemplate = async (

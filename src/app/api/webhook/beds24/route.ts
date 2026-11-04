@@ -133,6 +133,10 @@ export async function POST(req: Request) {
           } catch (_) {}
         }
 
+        if (phone) {
+          phone = normalizePhone(phone, b.country2 || b.country);
+        }
+
         // Si se extrajo un teléfono válido de notas/mensajes y Beds24 no lo tenía en sus campos nativos, sincronizarlo a Beds24
         if (phone && (!b.phone || !b.mobile)) {
           updateBeds24BookingPhone(bookingIdStr, phone).catch(err => {

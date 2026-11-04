@@ -227,10 +227,16 @@ function toCanonicalMx(tenDigits: string): string {
   return '52' + tenDigits;
 }
 
-// Normaliza y limpia el número de teléfono para base de datos y búsqueda
+// Normaliza y limpia el número de teléfono para base de datos y búsqueda, eliminando cualquier símbolo, espacio o caracter unicode invisible
 export function normalizePhone(phone: string, countryCodeOrName?: string | null): string {
   if (!phone) return '';
-  let cleaned = phone.replace(/\D/g, '');
+  const sanitized = String(phone)
+    .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E]/g, '') // Caracteres invisibles y de dirección LTR/RTL
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ') // Espacios duros / non-breaking spaces
+    .replace(/[\u2010-\u2015\u2212]/g, '-') // Guiones unicode no estándar
+    .trim();
+
+  let cleaned = sanitized.replace(/\D/g, '');
   if (!cleaned) return '';
 
   // Limpiar prefijo internacional heredado de conmutadores/telcos '00' (ej. 0034... -> 34..., 0052... -> 52...)
@@ -247,6 +253,11 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
   }
 
   // PRIORIDAD PREFIJO EXISTENTE:
+  // Si el usuario explícitamente incluyó "+1" o "1" con 11 dígitos -> US / Canadá (NANP)
+  if (cleaned.startsWith('1') && cleaned.length === 11) {
+    return cleaned;
+  }
+
   // Si el número ingresado ya contiene un código de país conocido y su longitud es la estándar,
   // respetamos ese prefijo de forma prioritaria, ignorando el código del país de facturación (cc).
   if (cleaned.startsWith('521') && cleaned.length === 13) {
@@ -255,11 +266,18 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
   if (cleaned.startsWith('52') && cleaned.length === 12) {
     return cleaned; // Ya viene en formato canónico '52' + 10 dígitos
   }
-  if (cleaned.startsWith('1') && cleaned.length === 11) {
-    return cleaned; // US/Canada
-  }
   if (cleaned.startsWith('34') && cleaned.length === 11) {
     return cleaned; // España (34 + 9 dígitos)
+  }
+
+  // Si el país explícito es EE.UU. o Canadá (NANP)
+  if (cc === 'US' || cc === 'CA') {
+    if (cleaned.length === 10) {
+      return '1' + cleaned;
+    }
+    if (cleaned.startsWith('1') && cleaned.length === 11) {
+      return cleaned;
+    }
   }
 
   // Si el número ya empieza con algún prefijo internacional conocido de COUNTRY_TO_PREFIX y tiene longitud
@@ -276,8 +294,18 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
     }
   }
 
-  // Si no tenemos código de país, aplicamos la lógica clásica basada en la longitud
+  // Si no tenemos código de país, aplicamos la lógica clásica basada en la longitud e indicios de texto
   if (!cc) {
+    // Si el texto original comenzaba explícitamente con prefijo +1 (ej: +1 (418) 806-4416)
+    if (sanitized.startsWith('+1') || sanitized.startsWith('1 ') || sanitized.startsWith('1-')) {
+      if (cleaned.length === 11 && cleaned.startsWith('1')) return cleaned;
+      if (cleaned.length === 10) return '1' + cleaned;
+    }
+    // Si comenzaba con +34
+    if (sanitized.startsWith('+34')) {
+      if (cleaned.length === 11 && cleaned.startsWith('34')) return cleaned;
+      if (cleaned.length === 9) return '34' + cleaned;
+    }
     if (cleaned.length === 10) {
       return toCanonicalMx(cleaned);
     }
@@ -330,9 +358,14 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
   return cleaned;
 }
 
-// Limpia el teléfono específicamente para la llamada de Meta, YCloud y enlaces wa.me (removiendo el '1' legado de México y asegurando formato E.164)
+// Limpia el teléfono específicamente para la llamada de Meta, YCloud y enlaces wa.me (removiendo el '1' legado de México y asegurando formato E.164 limpio sin símbolos)
 export function cleanPhoneForMeta(phone: string): string {
-  let cleaned = (phone || '').replace(/\D/g, '');
+  const sanitized = String(phone || '')
+    .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E]/g, '')
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .trim();
+  let cleaned = sanitized.replace(/\D/g, '');
   if (cleaned.startsWith('521') && cleaned.length === 13) {
     cleaned = '52' + cleaned.substring(3);
   } else if (cleaned.length === 10) {

@@ -640,8 +640,14 @@ export function extractPhoneFromMessages(messages: any[], country?: string, book
   if (guestMessages.length === 0) return null;
 
   for (const m of guestMessages) {
-    const text = String(m.message || m.text || m.body || '').trim();
-    if (!text) continue;
+    const rawText = String(m.message || m.text || m.body || '').trim();
+    if (!rawText) continue;
+
+    // Pre-sanitizar caracteres invisibles, espacios duros y guiones unicode no estándar
+    const text = rawText
+      .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E]/g, '')
+      .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+      .replace(/[\u2010-\u2015\u2212]/g, '-');
 
     const dummyBooking = {
       id: bookingId,

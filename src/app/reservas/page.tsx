@@ -12,6 +12,7 @@ import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests, areBooki
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
+import { normalizePhone } from '@/lib/whatsapp';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -379,17 +380,24 @@ function ReservasListInner() {
     setSavingPhoneOnly(true);
     try {
       const rawVal = editPhone.trim();
+      const cleanPhone = rawVal ? normalizePhone(rawVal, selectedRes?.country2 || selectedRes?.country) : '';
       const primaryId = selectedRes.id;
       const memberIds = Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 0
         ? selectedRes.group_members.map((m: any) => m.id)
         : [primaryId];
 
-      // 1. Guardar en Supabase beds24_reservations
+      // 1. Guardar en Supabase beds24_reservations y local_reservas
       await Promise.all(memberIds.map(async (mId: any) => {
         await supabase
           .from('beds24_reservations')
-          .update({ guest_phone: rawVal })
+          .update({ guest_phone: cleanPhone })
           .eq('id', mId);
+        try {
+          await supabase
+            .from('local_reservas')
+            .update({ phone: cleanPhone })
+            .eq('id', Number(mId));
+        } catch (_) {}
       }));
 
       // 2. Sincronizar vía API PUT /api/reservas para Beds24
@@ -399,7 +407,7 @@ function ReservasListInner() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: primaryId,
-            phone: rawVal,
+            phone: cleanPhone,
             b24BookingId: selectedRes.b24_booking_id || selectedRes.booking_id
           })
         });
@@ -408,8 +416,8 @@ function ReservasListInner() {
       }
 
       // 3. Actualizar estado local
-      setSelectedRes((prev: any) => prev ? { ...prev, guest_phone: rawVal, phone: rawVal, mobile: rawVal } : null);
-      setReservas((prev: any[]) => prev.map((r: any) => (r.id === primaryId || memberIds.includes(r.id)) ? { ...r, guest_phone: rawVal, phone: rawVal, mobile: rawVal } : r));
+      setSelectedRes((prev: any) => prev ? { ...prev, guest_phone: cleanPhone, phone: cleanPhone, mobile: cleanPhone } : null);
+      setReservas((prev: any[]) => prev.map((r: any) => (r.id === primaryId || memberIds.includes(r.id)) ? { ...r, guest_phone: cleanPhone, phone: cleanPhone, mobile: cleanPhone } : r));
 
       setPhoneSavedSuccess(true);
       setTimeout(() => setPhoneSavedSuccess(false), 2500);
@@ -1086,8 +1094,9 @@ function ReservasListInner() {
       const employeeName = emp.full_name;
       const sentWelcomePhones = new Set<string>();
 
-      // Si se editó o ingresó teléfono en el Check-In, persistir en beds24_reservations y Beds24
-      const trimmedPhone = editPhone.trim();
+      // Si se editó o ingresó teléfono en el Check-In, persistir en beds24_reservations, local_reservas y Beds24
+      const rawTrimmedPhone = editPhone.trim();
+      const trimmedPhone = rawTrimmedPhone ? normalizePhone(rawTrimmedPhone, selectedRes?.country2 || selectedRes?.country) : '';
       if (trimmedPhone && selectedRes) {
         const pId = selectedRes.id;
         const mIds = Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 0
@@ -1099,6 +1108,12 @@ function ReservasListInner() {
               .from('beds24_reservations')
               .update({ guest_phone: trimmedPhone })
               .eq('id', mId);
+            try {
+              await supabase
+                .from('local_reservas')
+                .update({ phone: trimmedPhone })
+                .eq('id', Number(mId));
+            } catch (_) {}
           }));
           fetch('/api/reservas', {
             method: 'PUT',
@@ -2124,10 +2139,11 @@ function ReservasListInner() {
 
     setSaveEditLoading(true);
     try {
+      const cleanPhone = editPhone.trim() ? normalizePhone(editPhone.trim(), selectedRes?.country2 || selectedRes?.country) : '';
       const payload: any = {
         id: selectedRes.id,
         guestName: editGuestName,
-        phone: editPhone,
+        phone: cleanPhone,
         notes: editNotes,
         checkIn: editCheckIn,
         checkOut: editCheckOut
@@ -2215,7 +2231,7 @@ function ReservasListInner() {
               return {
                 ...gb,
                 guest_name: editGuestName,
-                guest_phone: editPhone,
+                guest_phone: cleanPhone,
                 num_adult: memberUpdate.num_adult,
                 num_child: memberUpdate.num_child,
                 price_estimate: Number(memberUpdate.price),
@@ -2232,7 +2248,7 @@ function ReservasListInner() {
           return {
             ...prev,
             guest_name: editGuestName,
-            guest_phone: editPhone,
+            guest_phone: cleanPhone,
             price_estimate: totalGroupPrice,
             deposit: totalGroupDeposit,
             balance: Math.max(0, totalGroupPrice - totalGroupDeposit),
@@ -2248,7 +2264,7 @@ function ReservasListInner() {
           return {
             ...prev,
             guest_name: editGuestName,
-            guest_phone: editPhone,
+            guest_phone: cleanPhone,
             num_adult: editAdults,
             num_child: editChildren,
             price_estimate: Number(editPrice),
@@ -2271,7 +2287,7 @@ function ReservasListInner() {
             return {
               ...r,
               guest_name: editGuestName,
-              guest_phone: editPhone,
+              guest_phone: cleanPhone,
               num_adult: memberUpdate.num_adult,
               num_child: memberUpdate.num_child,
               price_estimate: Number(memberUpdate.price),
@@ -2291,7 +2307,7 @@ function ReservasListInner() {
           return {
             ...r,
             guest_name: editGuestName,
-            guest_phone: editPhone,
+            guest_phone: cleanPhone,
             num_adult: editAdults,
             num_child: editChildren,
             price_estimate: Number(editPrice),

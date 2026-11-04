@@ -2470,8 +2470,14 @@ export function extractPhoneFromBookingData(b: any): string | null {
     });
   }
 
-  const fullText = textPool.join(' ');
-  if (!fullText.trim()) return null;
+  const rawFullText = textPool.join(' ');
+  if (!rawFullText.trim()) return null;
+
+  // Pre-sanitizar caracteres unicode, espacios duros y guiones no estándar para que cualquier regex los detecte
+  const fullText = rawFullText
+    .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E]/g, '')
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[\u2010-\u2015\u2212]/g, '-');
 
   const bookingIdStr = String(b.id || '').replace(/\D/g, '');
 
@@ -2540,7 +2546,7 @@ export function extractPhoneFromBookingData(b: any): string | null {
   return null;
 }
 
-/** Actualiza el teléfono de una reserva directamente en la API de Beds24 */
+/** Actualiza el teléfono de una reserva directamente en la API de Beds24 (siempre en formato canónico de dígitos puros) */
 export async function updateBeds24BookingPhone(bookingId: string | number, phone: string): Promise<boolean> {
   if (!bookingId || !phone) return false;
   try {
@@ -2548,7 +2554,11 @@ export async function updateBeds24BookingPhone(bookingId: string | number, phone
     const cleanId = Number(String(bookingId).replace(/\D/g, ''));
     if (!cleanId) return false;
 
-    const payload = [{ id: cleanId, phone: phone, mobile: phone }];
+    // Normalizar a dígitos puros (ej: 14188064416) para que ninguna OTA o Beds24 atore plantillas
+    const cleanPhone = normalizePhone(phone);
+    if (!cleanPhone) return false;
+
+    const payload = [{ id: cleanId, phone: cleanPhone, mobile: cleanPhone }];
     const res = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: {

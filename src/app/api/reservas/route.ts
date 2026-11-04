@@ -447,6 +447,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'La fecha de check-out debe ser posterior a la fecha de check-in' }, { status: 400 });
     }
 
+    // Normalizar teléfono a formato canónico de dígitos puros para que no se atore ninguna plantilla
+    const cleanPhone = phone ? normalizePhone(phone) : '';
+
     const finalRoomId = Number(roomId);
     const finalUnitId = Number(unitId);
 
@@ -462,7 +465,7 @@ export async function POST(req: Request) {
           check_out: checkOut,
           price: price ? Number(price) : 0,
           deposit: deposit ? Number(deposit) : 0,
-          phone: phone || '',
+          phone: cleanPhone,
           num_adult: numAdult ? Number(numAdult) : 1,
           num_child: numChild ? Number(numChild) : 0,
           notes: notes || '',
@@ -485,14 +488,14 @@ export async function POST(req: Request) {
             booking_id: String(data.id),
             show_card_payment: portalSettings?.showCardPayment ?? true,
             transfer_account: portalSettings?.transferAccount ?? 'santander',
-            language: portalSettings?.language || detectLanguageFromPhone(data.phone)
+            language: portalSettings?.language || detectLanguageFromPhone(cleanPhone)
           });
       } catch (dbErr) {
         console.error("Error al guardar portal settings locales:", dbErr);
       }
 
       // Enviar WhatsApp en segundo plano (reserva local)
-      if (!isBlock && phone && sendWhatsApp) {
+      if (!isBlock && cleanPhone && sendWhatsApp) {
         (async () => {
           try {
             const is600 = finalRoomId === 685543;
@@ -504,7 +507,7 @@ export async function POST(req: Request) {
             const bookingForWA = {
               id: bookingIdStr,
               guest_name: data.guest_name,
-              phone: data.phone,
+              phone: cleanPhone,
               room_name: `${roomLabel} ${physicalName}`,
               check_in: data.check_in,
               check_out: data.check_out,
@@ -638,8 +641,8 @@ export async function POST(req: Request) {
       } : {}),
       ...(!isBlock && deposit !== undefined && deposit !== null ? { deposit: Number(deposit) } : {}),
       ...(!isBlock ? {
-        mobile: phone || '',
-        phone: phone || '',
+        mobile: cleanPhone,
+        phone: cleanPhone,
         numAdult: numAdult !== undefined ? Number(numAdult) : 1,
         numChild: numChild !== undefined ? Number(numChild) : 0,
         notes: notes || '',
@@ -716,7 +719,7 @@ export async function POST(req: Request) {
     }
 
     // Enviar WhatsApp en segundo plano para Beds24 (busca en la raíz, en el objeto 'new' o en 'info')
-    if (!isBlock && phone && bookingId && sendWhatsApp) {
+    if (!isBlock && cleanPhone && bookingId && sendWhatsApp) {
       (async () => {
         try {
           const physicalName = unitId ? (UNIT_TO_ROOM[String(unitId)] || String(unitId)) : '';
@@ -724,7 +727,7 @@ export async function POST(req: Request) {
           const bookingForWA = {
             id: bookingIdStr,
             guest_name: guestName || 'Huésped',
-            phone: phone,
+            phone: cleanPhone,
             room_name: `Habitación ${physicalName}`,
             check_in: checkIn,
             check_out: checkOut,
@@ -1179,6 +1182,7 @@ export async function PUT(req: Request) {
   try {
     const body = await req.json();
     const { id, roomName, guestName, phone, numAdult, numChild, price, notes, deposit, checkIn, checkOut, portalSettings, preview } = body;
+    const cleanPhoneInput = phone !== undefined ? (phone ? normalizePhone(phone) : '') : undefined;
 
     if (!id) {
       return NextResponse.json({ error: 'Falta el parámetro id' }, { status: 400 });
@@ -1420,7 +1424,7 @@ export async function PUT(req: Request) {
         if (localMem) {
           const localUpdate: any = {};
           if (guestName) localUpdate.guest_name = guestName;
-          if (phone !== undefined) localUpdate.phone = phone;
+          if (cleanPhoneInput !== undefined) localUpdate.phone = cleanPhoneInput;
           if (m.numAdult !== undefined) localUpdate.num_adult = Number(m.numAdult);
           if (m.numChild !== undefined) localUpdate.num_child = Number(m.numChild);
           if (m.price !== undefined) localUpdate.price = Number(m.price);
@@ -1433,6 +1437,7 @@ export async function PUT(req: Request) {
 
           const dbUpdate: any = {};
           if (guestName) dbUpdate.guest_name = guestName;
+          if (cleanPhoneInput !== undefined) dbUpdate.phone = cleanPhoneInput;
           if (checkIn) dbUpdate.check_in_date = checkIn;
           if (checkOut) dbUpdate.check_out_date = checkOut;
           if (Object.keys(dbUpdate).length > 0) {
@@ -1457,9 +1462,9 @@ export async function PUT(req: Request) {
               b24Item.lastName = '';
             }
           }
-          if (phone !== undefined) {
-            b24Item.phone = phone;
-            b24Item.mobile = phone;
+          if (cleanPhoneInput !== undefined) {
+            b24Item.phone = cleanPhoneInput;
+            b24Item.mobile = cleanPhoneInput;
           }
           if (m.numAdult !== undefined) b24Item.numAdult = Number(m.numAdult);
           if (m.numChild !== undefined) b24Item.numChild = Number(m.numChild);
@@ -1612,7 +1617,7 @@ export async function PUT(req: Request) {
             }
             if (notes !== undefined) b24DirectUpdate.notes = notes;
             if (guestName) b24DirectUpdate.guest_name = guestName;
-            if (phone !== undefined) b24DirectUpdate.guest_phone = phone;
+            if (cleanPhoneInput !== undefined) b24DirectUpdate.guest_phone = cleanPhoneInput;
             if (checkIn) b24DirectUpdate.check_in = checkIn;
             if (checkOut) b24DirectUpdate.check_out = checkOut;
             await supabase.from('beds24_reservations').update(b24DirectUpdate).eq('id', bId);
@@ -1629,7 +1634,7 @@ export async function PUT(req: Request) {
                 const { syncBeds24BookingLocal } = await import('@/lib/beds24');
                 // Beds24 puede tardar en propagar el teléfono que le acabamos de enviar en este mismo
                 // request; si no lo refleja todavía, no pisamos lo que nosotros mismos le pedimos guardar.
-                await syncBeds24BookingLocal(freshBooking, phone !== undefined ? { phone } : undefined);
+                await syncBeds24BookingLocal(freshBooking, cleanPhoneInput !== undefined ? { phone: cleanPhoneInput } : undefined);
               }
             }
           } catch (syncErr) {
@@ -1735,7 +1740,7 @@ export async function PUT(req: Request) {
       // Es local! Modificar localmente
       const localUpdate: any = {};
       if (guestName) localUpdate.guest_name = guestName;
-      if (phone !== undefined) localUpdate.phone = phone;
+      if (cleanPhoneInput !== undefined) localUpdate.phone = cleanPhoneInput;
       if (numAdult !== undefined) localUpdate.num_adult = Number(numAdult);
       if (numChild !== undefined) localUpdate.num_child = Number(numChild);
       if (price !== undefined) localUpdate.price = Number(price);
@@ -1772,6 +1777,7 @@ export async function PUT(req: Request) {
       const dbUpdate: any = {};
       if (displayRoomName) dbUpdate.room = displayRoomName;
       if (guestName) dbUpdate.guest_name = guestName;
+      if (cleanPhoneInput !== undefined) dbUpdate.phone = cleanPhoneInput;
       if (checkIn) dbUpdate.check_in_date = checkIn;
       if (checkOut) dbUpdate.check_out_date = checkOut;
 
@@ -1838,9 +1844,9 @@ export async function PUT(req: Request) {
         updatePayload.lastName = '';
       }
     }
-    if (phone !== undefined) {
-      updatePayload.phone = phone;
-      updatePayload.mobile = phone;
+    if (cleanPhoneInput !== undefined) {
+      updatePayload.phone = cleanPhoneInput;
+      updatePayload.mobile = cleanPhoneInput;
     }
     if (numAdult !== undefined) {
       updatePayload.numAdult = Number(numAdult);
@@ -2279,7 +2285,7 @@ export async function PUT(req: Request) {
       }
       if (notes !== undefined) b24DirectUpdate.notes = notes;
       if (guestName) b24DirectUpdate.guest_name = guestName;
-      if (phone !== undefined) b24DirectUpdate.guest_phone = phone;
+      if (cleanPhoneInput !== undefined) b24DirectUpdate.guest_phone = cleanPhoneInput;
       if (checkIn) b24DirectUpdate.check_in = checkIn;
       if (checkOut) b24DirectUpdate.check_out = checkOut;
       if (displayRoomName) b24DirectUpdate.room_name = displayRoomName;
@@ -2319,7 +2325,7 @@ export async function PUT(req: Request) {
           const { syncBeds24BookingLocal } = await import('@/lib/beds24');
           // Igual que en el PUT de grupo: Beds24 puede no reflejar todavía el teléfono que esta misma
           // petición le acaba de enviar, así que no dejamos que esa lectura prematura lo deshaga.
-          await syncBeds24BookingLocal(freshBooking, phone !== undefined ? { phone } : undefined);
+          await syncBeds24BookingLocal(freshBooking, cleanPhoneInput !== undefined ? { phone: cleanPhoneInput } : undefined);
           console.log(`[Reservas PUT] ✅ Reserva ${id} Sincronizada con éxito en Supabase.`);
         }
       }

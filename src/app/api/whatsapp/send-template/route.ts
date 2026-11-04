@@ -71,6 +71,14 @@ export async function POST(req: Request) {
       } catch (ePhone) {
         console.warn("[send-template] Error fetching fallback phone from DB:", ePhone);
       }
+    } else {
+      const rawProvidedPhone = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || activeBooking.guestPhone;
+      if (rawProvidedPhone) {
+        const { normalizePhone } = await import('@/lib/whatsapp');
+        activeBooking.phone = normalizePhone(rawProvidedPhone, activeBooking.country2 || activeBooking.country);
+        activeBooking.guest_phone = activeBooking.phone;
+        activeBooking.mobile = activeBooking.phone;
+      }
     }
 
     const isMetaConfigured = Boolean(getWhatsAppToken() && getWhatsAppPhoneId());
