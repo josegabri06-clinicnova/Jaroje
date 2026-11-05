@@ -1,8 +1,9 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Token, updateBeds24BookingPhone, extractPhoneFromBookingData } from '@/lib/beds24';
-import { 
-  normalizePhone, 
-  sendTemplate3_ReservacionConfirmada 
+import {
+  normalizePhone,
+  sendTemplate3_ReservacionConfirmada,
+  isWhatsAppAutomationsPaused
 } from '@/lib/whatsapp';
 
 export interface SendOtaMessageOptions {
@@ -441,6 +442,12 @@ export async function sendBeds24OtaMessage(
     return { success: false, error: 'bookingId o mensaje inválidos' };
   }
 
+  // FRENO DE EMERGENCIA: todos los mensajes a OTAs son automáticos (crons y webhook), así que
+  // este es el punto único por el que pasan. Si el administrador pausó los envíos, no sale nada.
+  if (await isWhatsAppAutomationsPaused()) {
+    return { success: false, error: 'paused' };
+  }
+
   const payload = [{
     bookingId: cleanId,
     message: message.trim()
@@ -518,6 +525,11 @@ export async function sendOfficialOtaTemplate(
     }
   }
 
+  // Pausa global: no enviar y tampoco registrar un "failed" (se reintenta solo al reanudar)
+  if (await isWhatsAppAutomationsPaused()) {
+    return { success: false, error: 'paused' };
+  }
+
   const messageText = getOfficialOtaTemplateText(templateName, {
     bookingId: cleanId,
     guestName,
@@ -557,6 +569,11 @@ export async function sendOtaWelcomeMessage({
     if (alreadySent) {
       return { success: true, alreadySent: true };
     }
+  }
+
+  // Pausa global: no enviar y tampoco registrar un "failed" (se reintenta solo al reanudar)
+  if (await isWhatsAppAutomationsPaused()) {
+    return { success: false, error: 'paused' };
   }
 
   const messageText = generateOtaWelcomeMessage(guestName, country);

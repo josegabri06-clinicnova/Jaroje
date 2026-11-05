@@ -37,6 +37,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
+    // FRENO DE EMERGENCIA GLOBAL (el mismo interruptor de Ajustes que usa el cron de WhatsApp)
+    const { isWhatsAppAutomationsPaused } = await import('@/lib/whatsapp');
+    if (await isWhatsAppAutomationsPaused()) {
+      console.log('[Cron OTA Messages] FRENO DE EMERGENCIA ACTIVO: envíos automáticos pausados en Ajustes. Abortando cron.');
+      return NextResponse.json({
+        success: true,
+        paused: true,
+        message: 'Los envíos automáticos están pausados desde Ajustes por el administrador.',
+        actions: ['Envíos automáticos pausados por configuración global.']
+      });
+    }
+
     const reports: string[] = [];
 
     // ─────────────────────────────────────────────────────────────────────────────
