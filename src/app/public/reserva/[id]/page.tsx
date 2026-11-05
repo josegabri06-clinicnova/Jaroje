@@ -439,7 +439,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     dniError: 'No se pudo subir la identificación. Inténtalo de nuevo.',
     dniChangeButton: 'Cambiar Identificación 🔄',
     verifyTitle: 'Verifica que eres tú',
-    verifyDesc: 'Para ver o cambiar tus documentos, escribe los últimos 4 dígitos del teléfono de tu reserva.',
+    verifyDesc: 'Para ver o cambiar tus documentos, escribe los 4 últimos dígitos del teléfono utilizado para tu reserva.',
     verifyButton: 'Verificar',
     verifying: 'Verificando…',
     verifyWrong: 'Los dígitos no coinciden.',
