@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { sendTemplate_BienvenidoConmutador, normalizePhone, isSpanishOrLatamPhone } from '@/lib/whatsapp';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { maskPhone } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -168,7 +169,7 @@ async function processConmutadorCall(req: Request) {
     const isLatamOrSpain = isSpanishOrLatamPhone(cleanPhone);
     const lang = isLatamOrSpain ? 'es' : 'en';
 
-    console.log(`[Webhook Conmutador] 📞 Llamada entrante de ${cleanPhone} (${resolvedCallerName || 'Desconocido'}, Lang: ${lang}). Registrando en conmutador_calls...`);
+    console.log(`[Webhook Conmutador] 📞 Llamada entrante de ${maskPhone(cleanPhone)} (Lang: ${lang}). Registrando en conmutador_calls...`);
 
     // 1. Guardar llamada en la tabla conmutador_calls para el nuevo módulo /llamadas
     let callRecord: any = null;

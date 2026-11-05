@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { handleInboundMessage } from '@/lib/inbound-handler';
 import { normalizePhone } from '@/lib/whatsapp';
+import { maskPhone, describeText } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -128,7 +129,7 @@ export async function POST(req: Request) {
               messageText = `[Mensaje ${msgType || 'recibido'}]`;
             }
 
-            console.log(`[Meta Webhook POST] 📩 Mensaje entrante de ${cleanPhone} (${contactName}): "${messageText}" (payload: "${buttonPayload}")`);
+            console.log(`[Meta Webhook POST] 📩 Mensaje entrante de ${maskPhone(cleanPhone)} (${msgType || 'tipo desconocido'}) ${describeText(messageText)} (payload: "${buttonPayload}")`);
 
             // Procesar con el motor central de inbound
             try {
@@ -139,9 +140,9 @@ export async function POST(req: Request) {
                 button_payload: buttonPayload,
                 timestamp
               });
-              console.log(`[Meta Webhook POST] Resultado procesamiento para ${cleanPhone}:`, res);
+              console.log(`[Meta Webhook POST] Resultado procesamiento para ${maskPhone(cleanPhone)}:`, { success: (res as any)?.success, isAutoReplyTriggered: (res as any)?.isAutoReplyTriggered });
             } catch (procErr) {
-              console.error(`[Meta Webhook POST] Error procesando mensaje de ${cleanPhone}:`, procErr);
+              console.error(`[Meta Webhook POST] Error procesando mensaje de ${maskPhone(cleanPhone)}:`, procErr);
             }
           }
         }
@@ -150,7 +151,7 @@ export async function POST(req: Request) {
         if (Array.isArray(val.statuses) && val.statuses.length > 0) {
           for (const st of val.statuses) {
             if (st.status === 'failed') {
-              console.error(`[Meta Webhook POST] ⚠️ Fallo de entrega a ${st.recipient_id}:`, JSON.stringify(st.errors || []));
+              console.error(`[Meta Webhook POST] ⚠️ Fallo de entrega a ${maskPhone(st.recipient_id)}:`, JSON.stringify(st.errors || []));
             }
           }
         }
