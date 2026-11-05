@@ -1,5 +1,6 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendWhatsAppTextMessage, sendWhatsAppTemplate, normalizePhone, cleanPhoneForMeta } from '@/lib/whatsapp';
+import { maskPhone, describeText } from '@/lib/log-mask';
 
 const requestCache = new Map<string, number>();
 const welcomeSentMemoryCache = new Map<string, number>();
@@ -145,7 +146,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       const currentTime = new Date(timestamp).getTime();
       const diffSeconds = Math.abs(currentTime - lastTime) / 1000;
       if (diffSeconds < 6) {
-        console.log(`[Inbound Handler] Ignorando duplicado de base de datos para ${phone} (diff: ${diffSeconds}s)`);
+        console.log(`[Inbound Handler] Ignorando duplicado de base de datos para ${maskPhone(phone)} (diff: ${diffSeconds}s)`);
         return { success: true, message: 'Duplicate database message ignored.' };
       }
     }
@@ -219,7 +220,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   const personalCheck = await isExcludedPersonalContact(phone);
   if (personalCheck.isExcluded) {
     const contactName = personalCheck.contact?.name || 'Contacto Personal';
-    console.log(`[Inbound Handler] 🛑 Contacto en lista 'excluded_person' (${phone} - ${contactName}): "${guestMsgText}". Se cancela el envío de cualquier plantilla relacionada con palabras clave.`);
+    console.log(`[Inbound Handler] 🛑 Contacto en lista 'excluded_person' (${maskPhone(phone)}) ${describeText(guestMsgText)}. Se cancela el envío de cualquier plantilla relacionada con palabras clave.`);
 
     // Guardar el mensaje en el historial para visibilidad en el Inbox en modo humano
     if (guestMsgText || params.button_payload) {
@@ -315,7 +316,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       }
 
       if (matchedBooking) {
-        console.log(`[Inbound Handler] 🔗 Vinculando teléfono ${phone} con la reserva ${matchedBooking.id} (${matchedBooking.guest_name})`);
+        console.log(`[Inbound Handler] 🔗 Vinculando teléfono ${maskPhone(phone)} con la reserva ${matchedBooking.id}`);
         await supabase
           .from('beds24_reservations')
           .update({ guest_phone: phone })
@@ -505,7 +506,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
 
     if (Date.now() - lastWifiSentAt < WIFI_WINDOW_MS) {
-      console.log(`[Inbound Handler] 📶 ${phone} pidió WiFi/claves pero ya recibió 'wifi_informacion' hace menos de 24 h. No se reenvía.`);
+      console.log(`[Inbound Handler] 📶 ${maskPhone(phone)} pidió WiFi/claves pero ya recibió 'wifi_informacion' hace menos de 24 h. No se reenvía.`);
     } else {
       wifiSentMemoryCache.set(phone, Date.now());
       if (wifiSentMemoryCache.size > 100) {
@@ -516,7 +517,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       try {
         const { isSpanishOrLatamPhone, sendTemplate_WiFiInformacion } = await import('@/lib/whatsapp');
         const wifiLang = isSpanishOrLatamPhone(phone) ? 'es' : 'en';
-        console.log(`[Inbound Handler] 📶 Palabra clave wifi/claves de ${phone}. Enviando 'wifi_informacion'...`);
+        console.log(`[Inbound Handler] 📶 Palabra clave wifi/claves de ${maskPhone(phone)}. Enviando 'wifi_informacion'...`);
         const wifiRes = await sendTemplate_WiFiInformacion(phone, wifiLang);
         if (!wifiRes.success) {
           wifiSentMemoryCache.delete(phone);
@@ -593,7 +594,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     if (!guestBooking && !isWithin24h) {
       const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
       try {
-        console.log(`[Inbound Handler] 🌟 Intención de cotización/reserva detectada para ${phone}. Despachando plantilla oficial 'bienvenido_cliente_whatsaap_v4'...`);
+        console.log(`[Inbound Handler] 🌟 Intención de cotización/reserva detectada para ${maskPhone(phone)}. Despachando plantilla oficial 'bienvenido_cliente_whatsaap_v4'...`);
         const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
         if (welcomeResult.success) {
           welcomeSentMemoryCache.set(phone, Date.now());
@@ -645,7 +646,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
         oldest.forEach(k => welcomeSentMemoryCache.delete(k));
       }
 
-      console.log(`[Inbound Handler] 🌟 Primer contacto sin bienvenida previa. Enviando 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
+      console.log(`[Inbound Handler] 🌟 Primer contacto sin bienvenida previa. Enviando 'bienvenido_cliente_whatsaap_v4' a ${maskPhone(phone)}...`);
       const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
       const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
       console.log(`[Inbound Handler] Resultado envío bienvenida WhatsApp:`, welcomeResult);
@@ -661,10 +662,10 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   // 2. Enviar respuesta automática por WhatsApp si aplica
   if (isAutoReplyTriggered && finalBotResponse) {
     try {
-      console.log(`[Inbound Handler] Enviando respuesta automática a ${phone}: "${finalBotResponse.slice(0, 60)}..."`);
+      console.log(`[Inbound Handler] Enviando respuesta automática a ${maskPhone(phone)} ${describeText(finalBotResponse)}`);
       const waSendRes = await sendWhatsAppTextMessage(phone, finalBotResponse);
       if (!waSendRes.success) {
-        console.error(`[Inbound Handler] Error enviando mensaje a ${phone}:`, waSendRes.error);
+        console.error(`[Inbound Handler] Error enviando mensaje a ${maskPhone(phone)}:`, waSendRes.error);
       }
     } catch (sendErr) {
       console.error("[Inbound Handler] Excepción enviando WhatsApp automático:", sendErr);
