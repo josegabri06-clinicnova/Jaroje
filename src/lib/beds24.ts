@@ -2091,17 +2091,25 @@ export function getDirectStayBreakdown(
       }
     }
 
-    // 2. Buscar en reglas de Supabase si no hubo descuento temporal
+    // 2. Reglas de Supabase con fecha explícita (tarifa especial o temporada con rango propio).
+    //    Son excepciones puntuales; mandan sobre el precio de temporada.
+    const ruleMatchesRoom = (rule: any) => rule.room_type_id === roomB24.roomId || rule.room_type_id === parentRoom.roomId;
+    const currentSeason = getSeason(dateStr, seasonRanges);
+    let currentSeasonTitle = 'Temporada Baja';
+    if (currentSeason === 'media') currentSeasonTitle = 'Temporada Media';
+    else if (currentSeason === 'media_alta') currentSeasonTitle = 'Temporada Media-Alta';
+    else if (currentSeason === 'alta') currentSeasonTitle = 'Temporada Alta';
+
     if (priceUsed <= 0 && rulesList && Array.isArray(rulesList) && rulesList.length > 0) {
       const specialRule = rulesList.find(rule => 
-        (rule.room_type_id === roomB24.roomId || rule.room_type_id === parentRoom.roomId) && 
+        ruleMatchesRoom(rule) && 
         rule.rule_type === 'special' && 
         rule.start_date <= dateStr && 
         rule.end_date >= dateStr
       );
 
-      let seasonalRule = rulesList.find(rule => 
-        (rule.room_type_id === roomB24.roomId || rule.room_type_id === parentRoom.roomId) && 
+      const datedSeasonalRule = rulesList.find(rule => 
+        ruleMatchesRoom(rule) && 
         rule.rule_type === 'seasonal' && 
         rule.start_date && 
         rule.end_date &&
@@ -2109,33 +2117,46 @@ export function getDirectStayBreakdown(
         rule.end_date >= dateStr
       );
 
-      if (!seasonalRule) {
-        const season = getSeason(dateStr, seasonRanges);
-        let targetRuleName = 'Temporada Baja';
-        if (season === 'media') targetRuleName = 'Temporada Media';
-        else if (season === 'media_alta') targetRuleName = 'Temporada Media-Alta';
-        else if (season === 'alta') targetRuleName = 'Temporada Alta';
-
-        seasonalRule = rulesList.find(rule => 
-          (rule.room_type_id === roomB24.roomId || rule.room_type_id === parentRoom.roomId) && 
-          rule.rule_type === 'seasonal' && 
-          (!rule.start_date || !rule.end_date) &&
-          rule.name === targetRuleName
-        );
-      }
-
-      const baseRule = rulesList.find(rule => 
-        (rule.room_type_id === roomB24.roomId || rule.room_type_id === parentRoom.roomId) && 
-        rule.rule_type === 'base'
-      );
-
       if (specialRule) {
         priceUsed = Number(specialRule.price);
         currentRateName = specialRule.name || 'Tarifa Especial';
         currentIsDiscount = true;
-      } else if (seasonalRule) {
-        priceUsed = Number(seasonalRule.price);
-        currentRateName = seasonalRule.name || 'Temporada Estacional';
+      } else if (datedSeasonalRule) {
+        priceUsed = Number(datedSeasonalRule.price);
+        currentRateName = datedSeasonalRule.name || 'Temporada Estacional';
+      }
+    }
+
+    // 2b. Precio de temporada que se edita en la pantalla de Precios (settings.season_base_prices).
+    //     Es la FUENTE DE VERDAD: es lo que se envía a Beds24 al guardar, así que el recálculo debe usar lo mismo.
+    if (priceUsed <= 0) {
+      const editedSeasonPrice = Number(
+        seasonBasePrices?.[parentRoom.roomId]?.[currentSeason] ??
+        seasonBasePrices?.[roomB24.roomId]?.[currentSeason] ?? 0
+      );
+      if (editedSeasonPrice > 0) {
+        priceUsed = editedSeasonPrice;
+        currentRateName = currentSeasonTitle;
+      }
+    }
+
+    // 2c. Respaldo: reglas de pricing_rules por nombre de temporada o tarifa base
+    if (priceUsed <= 0 && rulesList && Array.isArray(rulesList) && rulesList.length > 0) {
+      const namedSeasonalRule = rulesList.find(rule => 
+        ruleMatchesRoom(rule) && 
+        rule.rule_type === 'seasonal' && 
+        (!rule.start_date || !rule.end_date) &&
+        rule.name === currentSeasonTitle
+      );
+
+      const baseRule = rulesList.find(rule => 
+        ruleMatchesRoom(rule) && 
+        rule.rule_type === 'base'
+      );
+
+      if (namedSeasonalRule) {
+        priceUsed = Number(namedSeasonalRule.price);
+        currentRateName = namedSeasonalRule.name || 'Temporada Estacional';
       } else if (baseRule) {
         priceUsed = Number(baseRule.price);
         currentRateName = baseRule.name || 'Tarifa Base';
