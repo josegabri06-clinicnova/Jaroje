@@ -14,12 +14,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: 'Server configuration error: CRON_SECRET is required' }, { status: 500 });
     }
 
-    const { searchParams } = new URL(req.url);
     const authHeader = req.headers.get('authorization') || '';
     const cronToken = (
       req.headers.get('x-cron-secret') || 
       authHeader.replace(/^bearer\s+/i, '').trim() ||
-      searchParams.get('token') ||
       ''
     ).trim();
 
