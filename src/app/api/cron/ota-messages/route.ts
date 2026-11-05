@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { 
   checkAndProcessOtaGuestReplies, 
@@ -13,18 +14,27 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const cronToken = searchParams.get('token');
-    const authHeader = req.headers.get('authorization');
-    const expectedToken = process.env.CRON_SECRET || process.env.SESSION_SECRET;
+    // Autenticación estricta de cron (Fail-Closed, comparación timing-safe). Solo CRON_SECRET:
+    // SESSION_SECRET firma las sesiones y nunca debe usarse como token de cron.
+    const expectedToken = process.env.CRON_SECRET?.trim();
+    if (!expectedToken) {
+      console.error('[Cron OTA Messages] CRON_SECRET no está configurado en el servidor. Rechazando por seguridad.');
+      return NextResponse.json({ success: false, error: 'Server configuration error: CRON_SECRET is required' }, { status: 500 });
+    }
 
-    // Autenticación de seguridad si hay token configurado
-    if (expectedToken) {
-      const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-      const provided = cronToken || bearerToken;
-      if (provided !== expectedToken) {
-        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-      }
+    const { searchParams } = new URL(req.url);
+    const authHeader = req.headers.get('authorization') || '';
+    const cronToken = (
+      req.headers.get('x-cron-secret') ||
+      authHeader.replace(/^bearer\s+/i, '').trim() ||
+      searchParams.get('token') ||
+      ''
+    ).trim();
+
+    const expectedHash = crypto.createHash('sha256').update(expectedToken).digest();
+    const providedHash = crypto.createHash('sha256').update(cronToken).digest();
+    if (!cronToken || !crypto.timingSafeEqual(expectedHash, providedHash)) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const reports: string[] = [];

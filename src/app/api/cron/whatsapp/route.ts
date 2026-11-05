@@ -494,7 +494,18 @@ export async function GET(req: Request) {
           }
 
           if (now >= limitTime) {
-            if (!isGroupPaidOrPending(booking)) {
+            // Salvaguarda: nunca cancelar automáticamente una estancia que ya empezó o que ya tiene check-in/check-out hecho
+            // (en el grupo completo). Esas reservas las gestiona recepción a mano; cancelarlas borraría el check-in y las finanzas.
+            const guardMembers = [booking, ...allBookings.filter(b => areBookingsInSameGroup(booking, b))];
+            const stayAlreadyStarted = guardMembers.some(m => {
+              const ci = String(m.check_in || '').split('T')[0].split(' ')[0];
+              return Boolean(ci) && ci < todayStr;
+            });
+            const hasCheckinDone = guardMembers.some(m => Boolean(m.checked_in || m.status === 'checked_in' || m.status === 'checked_out'));
+
+            if (stayAlreadyStarted || hasCheckinDone) {
+              console.log(`[Cron WhatsApp] Se omitió cancelación automática de la reserva ${bookingIdStr} (${booking.guest_name}): la estancia ya empezó o tiene check-in hecho.`);
+            } else if (!isGroupPaidOrPending(booking)) {
               // Obtener TODOS los miembros del grupo (incluyendo la reserva actual)
               const siblings = allBookings.filter(b => areBookingsInSameGroup(booking, b));
               const groupMembers = [booking, ...siblings];
