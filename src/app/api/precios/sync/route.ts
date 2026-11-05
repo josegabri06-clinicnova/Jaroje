@@ -135,7 +135,13 @@ async function handleSync(req: Request, checkAuth: boolean) {
           } else if (activeDiscount) {
             priceUsed = Number(activeDiscount.priceRaw);
           } else if (seasonalRule) {
+            // Temporada con rango de fechas propio en pricing_rules (excepción explícita)
             priceUsed = Number(seasonalRule.price);
+          } else if (Number(seasonBasePrices[group.parentId]?.[getSeason(dateStr, seasonRanges)] || 0) > 0) {
+            // FUENTE DE VERDAD: el precio de temporada que se edita en la pantalla de Precios (season_base_prices).
+            // Antes se leía pricing_rules primero, que ninguna pantalla actualiza, y la sincronización
+            // revertía en Beds24 las subidas de precio hechas desde la app.
+            priceUsed = Number(seasonBasePrices[group.parentId][getSeason(dateStr, seasonRanges)]);
           } else {
             const fallbackSeason = getSeason(dateStr, seasonRanges);
             const dbSeasonRule = rules.find((r: any) => 
