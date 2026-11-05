@@ -19,40 +19,6 @@ import {
 } from '@/lib/whatsapp';
 import { isOtaChannel, sendOfficialOtaTemplate, isDummyOrInvalidPhone } from '@/lib/beds24-messages';
 
-// Asegurar de forma automatizada que existe la tabla whatsapp_logs en Supabase
-async function ensureLogsTable() {
-  const sql = `
-  CREATE TABLE IF NOT EXISTS public.whatsapp_logs (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      reservation_id TEXT NOT NULL,
-      template_name TEXT NOT NULL,
-      phone TEXT,
-      sent_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-      status TEXT DEFAULT 'sent'
-  );
-  ALTER TABLE public.whatsapp_logs ENABLE ROW LEVEL SECURITY;
-  DROP POLICY IF EXISTS "Permitir todo en whatsapp_logs" ON public.whatsapp_logs;
-  CREATE POLICY "Permitir todo en whatsapp_logs" ON public.whatsapp_logs FOR ALL USING (true) WITH CHECK (true);
-  `;
-  try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !key) return;
-    
-    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': key,
-        'Authorization': `Bearer ${key}`,
-      },
-      body: JSON.stringify({ query: sql })
-    });
-  } catch (e) {
-    console.error("Error creating whatsapp_logs table via RPC:", e);
-  }
-}
-
 // Limpia y normaliza el número de habitación (por ejemplo, extrae "401" de "Casa Vacacional de 3 dormitorios (401)")
 function getCleanRoom(roomName: string, roomField: string): string {
   const parenMatch = String(roomName || '').match(/\((\d{3})\)/);
@@ -128,8 +94,7 @@ export async function GET(req: Request) {
       });
     }
 
-    // 1. Autocreación de la tabla de logs si no existe
-    await ensureLogsTable();
+    // 1. (La tabla whatsapp_logs ya existe y se gestiona solo desde Supabase: el cron no ejecuta SQL.)
 
     // 2. Obtener reservaciones de Beds24
     const beds24Reservas = await getBeds24Bookings(true);
