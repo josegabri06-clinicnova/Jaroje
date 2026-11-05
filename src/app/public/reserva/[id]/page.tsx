@@ -1322,6 +1322,27 @@ export default function PublicReservaPage() {
     );
   }
 
+  // Portal bloqueado: la reserva tiene un teléfono y este dispositivo aún no lo ha verificado.
+  // El servidor no envía nada de la reserva (solo el nombre de pila); aquí solo se pide verificar.
+  if ((booking as any).locked) {
+    const firstName = (booking as any).guest_first_name as string | undefined;
+    return (
+      <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center p-6 max-w-md mx-auto">
+        <div className="w-full bg-white border border-zinc-100 rounded-3xl shadow-sm p-6 space-y-4 text-center">
+          <h1 className="text-zinc-900 font-extrabold text-lg">
+            {lang === 'en' ? `Hello${firstName ? `, ${firstName}` : ''}!` : `¡Hola${firstName ? `, ${firstName}` : ''}!`}
+          </h1>
+          <p className="text-zinc-600 text-sm">
+            {lang === 'en'
+              ? 'To see your reservation, first confirm that it is you.'
+              : 'Para ver tu reservación, primero confirma que eres tú.'}
+          </p>
+          <div className="text-left">{renderVerifyBox()}</div>
+        </div>
+      </div>
+    );
+  }
+
   // --- MÁQUINA DE ESTADOS DINÁMICA ---
   let currentState: 'solicitud' | 'pago_pendiente' | 'confirmada' | 'checkin_pendiente' | 'hospedado' | 'finalizada' | 'liberada' = 'solicitud';
   let statusMessage = '';

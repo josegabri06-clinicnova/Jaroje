@@ -4,6 +4,7 @@ import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectA
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
+import { checkGuestAccess, firstNameOf, verificationRequiredResponse } from '@/lib/guest-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,9 +42,31 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
     }
 
-    // ¿Este dispositivo está autorizado a ver los archivos de esta reserva? (cookie firmada, no el simple número)
+    // Acceso al portal: si la reserva tiene un teléfono con el que verificar, no se enseña NADA hasta que el huésped
+    // escriba los 4 últimos dígitos (cookie firmada de esa reserva) o sea personal con sesión.
     const guestId = String(bookingId);
-    const guestAuthorized = await isGuestAuthorized(req, guestId);
+    const access = await checkGuestAccess(req, guestId);
+    if (!access.allowed) {
+      const { data: lockedSettings } = await supabase
+        .from('booking_portal_settings')
+        .select('language')
+        .eq('booking_id', guestId)
+        .maybeSingle();
+      return NextResponse.json({
+        success: true,
+        data: {
+          id: bookingId,
+          locked: true,
+          needs_verification: true,
+          verify_available: true,
+          guest_first_name: firstNameOf(access.contact?.guestName),
+          portal_settings: { language: lockedSettings?.language || detectLanguageFromPhone(access.contact?.phone || '') }
+        }
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    // ¿Este dispositivo está autorizado a ver los ARCHIVOS de esta reserva? Solo con la cookie del huésped (el personal usa el panel).
+    const guestAuthorized = access.reason === 'cookie';
 
     // Obtener el listado de comprobantes de transferencia de la reserva
     const { data: transferReceipts } = await supabase
@@ -381,11 +404,6 @@ export async function GET(req: Request) {
         .eq('booking_id', String(bookingId))
         .maybeSingle();
 
-      try {
-        const fs = require('fs');
-        fs.appendFileSync('/Users/josegabriel/Desktop/hotel condominio/scratch/api_debug.log', `[GET PUBLIC BEDS24] bookingId=${bookingId} db_show_card_payment=${portalSettings?.show_card_payment} (typeof=${typeof portalSettings?.show_card_payment}) map_value=${portalSettings?.show_card_payment !== false} time=${new Date().toISOString()}\n`);
-      } catch (logErr) {}
-
       let siblingBeds24: any[] = [];
       try {
         const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -514,17 +532,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta ID de la reserva o archivo' }, { status: 400 });
     }
 
-    const bookingId = Number(id);
     const guestId = normalizeBookingId(id);
     if (!guestId) {
       return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
     }
+    const bookingId = Number(guestId); // mismo id que valida la guardia (no el texto crudo del cliente)
+
+    // Solo quien ya verificó su teléfono (o personal) puede subir; ya no basta con conocer el número de reserva
+    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
 
     // Sustituir un comprobante ya subido solo lo puede hacer quien está autorizado en esta reserva; la primera subida es libre
     const { data: priorCheckin } = await supabase
       .from('checkins')
       .select('receipt_url')
-      .eq('reservation_id', String(id).toLowerCase().trim())
+      .eq('reservation_id', guestId)
       .maybeSingle();
     if (priorCheckin?.receipt_url && !(await isGuestAuthorized(req, guestId))) {
       return NextResponse.json({ error: 'Verifica tu identidad para cambiar tu comprobante.', code: 'verification_required' }, { status: 403 });
@@ -577,7 +598,7 @@ export async function POST(req: Request) {
     const publicUrl = filesProxyUrl('payment_receipts', filePath);
 
     // 5. Actualizar o insertar en la tabla 'checkins' de Supabase
-    const cleanId = String(id).toLowerCase().trim();
+    const cleanId = guestId;
     const { data: existingCheckin } = await supabase
       .from('checkins')
       .select('*')

@@ -3,6 +3,9 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings } from '@/lib/beds24';
 import { sendWhatsAppTemplate } from '@/lib/whatsapp';
 
+import { normalizeBookingId } from '@/lib/guest-auth';
+import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
+
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
@@ -10,11 +13,18 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { bookingId, type, description } = body;
 
-    if (!bookingId || !description) {
+    if (!bookingId || !description || typeof description !== 'string' || description.length > 2000) {
       return NextResponse.json({ success: false, error: 'Faltan parámetros obligatorios' }, { status: 400 });
     }
 
-    const id = Number(bookingId);
+    // Crea una tarea de mantenimiento a nombre del huésped: solo para quien verificó su teléfono o personal
+    const guestId = normalizeBookingId(bookingId);
+    if (!guestId) {
+      return NextResponse.json({ success: false, error: 'ID de reserva no válido' }, { status: 400 });
+    }
+    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
+
+    const id = Number(guestId); // mismo id que valida la guardia
     let roomName = 'General';
     let guestName = 'Huésped';
 
@@ -57,7 +67,7 @@ export async function POST(req: Request) {
       room: roomName, // La habitación del huésped que reportó
       description: description,
       status: 'nuevo',
-      reported_by: `Huésped: ${guestName} (Reserva: ${bookingId})`,
+      reported_by: `Huésped: ${guestName} (Reserva: ${guestId})`,
       direction: 'staff_to_admin',
       read_by_admin: false,
       created_at: new Date().toISOString()
@@ -80,7 +90,7 @@ export async function POST(req: Request) {
         description: description,
         status: 'nuevo',
         type: type,
-        reported_by: `Huésped: ${guestName} (Reserva: ${bookingId})`
+        reported_by: `Huésped: ${guestName} (Reserva: ${guestId})`
       }
     };
 
@@ -99,7 +109,7 @@ export async function POST(req: Request) {
     const managerPhone = '529581198448';
     const parameters = [
       guestName || 'Huésped',
-      String(bookingId),
+      guestId,
       type || 'Habitación',
       roomName || 'General',
       description
