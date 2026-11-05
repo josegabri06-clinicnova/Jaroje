@@ -131,32 +131,27 @@ export interface Employee {
   department: 'recepcion' | 'mantenimiento' | 'limpieza';
 }
 
-// Nómina oficial aprobada como fallback estático ultra-rápido (Zero Latency)
+// Nómina oficial aprobada de Condominios Jaroje (Sincronizada con catálogo oficial de Supabase)
 export const OFFICIAL_EMPLOYEES: Employee[] = [
-  // Recepción (7 Empleados)
-  { employee_num: '101', full_name: 'Sofía Alarcón', department: 'recepcion' },
-  { employee_num: '103', full_name: 'Carlos Méndez', department: 'recepcion' },
-  { employee_num: '106', full_name: 'Valeria Espinoza', department: 'recepcion' },
-  { employee_num: '108', full_name: 'Alejandro Ruiz', department: 'recepcion' },
-  { employee_num: '110', full_name: 'Mariana Ortiz', department: 'recepcion' },
-  { employee_num: '112', full_name: 'Diana Benítez', department: 'recepcion' },
-  { employee_num: '202', full_name: 'Roberto Salazar', department: 'recepcion' },
-  { employee_num: '999', full_name: 'Recepcionista Demo', department: 'recepcion' },
+  // Recepción
+  { employee_num: '100', full_name: 'ROLANDO DIAZ CEBALLOS', department: 'recepcion' },
+  { employee_num: '106', full_name: 'LUCEIDI PEREZ MENDOZA', department: 'recepcion' },
+  { employee_num: '110', full_name: 'JONATHAN JUAREZ CASTRO', department: 'recepcion' },
+  { employee_num: '202', full_name: 'CRISTIAN OMAR VASQUEZ', department: 'recepcion' },
+  { employee_num: '999', full_name: 'Pruebas JG', department: 'recepcion' },
 
-  // Mantenimiento (3 Empleados)
-  { employee_num: '101', full_name: 'Juan Carlos Peña', department: 'mantenimiento' },
-  { employee_num: '111', full_name: 'Eduardo Gómez', department: 'mantenimiento' },
-  { employee_num: '202', full_name: 'Roberto Salazar', department: 'mantenimiento' },
-  { employee_num: '999', full_name: 'Mantenimiento Demo', department: 'mantenimiento' },
+  // Mantenimiento
+  { employee_num: '101', full_name: 'HIPOLITO IVAN SORIANO OSORIO', department: 'mantenimiento' },
+  { employee_num: '111', full_name: 'ROBERTO PEREZ TORRES', department: 'mantenimiento' },
 
-  // Limpieza (6 Empleadas)
-  { employee_num: '104', full_name: 'María Elena Flores', department: 'limpieza' },
-  { employee_num: '105', full_name: 'Juana Martínez', department: 'limpieza' },
-  { employee_num: '106', full_name: 'Guadalupe Gómez', department: 'limpieza' },
-  { employee_num: '107', full_name: 'Teresa Ramos', department: 'limpieza' },
-  { employee_num: '108', full_name: 'Silvia Paredes', department: 'limpieza' },
-  { employee_num: '109', full_name: 'Francisca Ruiz', department: 'limpieza' },
-  { employee_num: '999', full_name: 'Limpieza Demo', department: 'limpieza' }
+  // Limpieza (Camaristas)
+  { employee_num: '103', full_name: 'INES SANTOS BORJA', department: 'limpieza' },
+  { employee_num: '104', full_name: 'EUGENIA SANTOYA REYES', department: 'limpieza' },
+  { employee_num: '105', full_name: 'ADELMA SOSA BARENCA', department: 'limpieza' },
+  { employee_num: '107', full_name: 'MIRIAM OYUKI VASQUEZ RAMIREZ', department: 'limpieza' },
+  { employee_num: '108', full_name: 'FELICIANA CORTEZ CRUZ', department: 'limpieza' },
+  { employee_num: '109', full_name: 'JANET ENRIQUEZ', department: 'limpieza' },
+  { employee_num: '112', full_name: 'GRISELDA ARADILLA MORENO', department: 'limpieza' }
 ];
 
 // Obtener el empleado activo para un módulo específico (con vencimiento absoluto de 1 hora)
@@ -183,9 +178,18 @@ export function getActiveEmployee(module: 'recepcion' | 'limpieza' | 'mantenimie
   // Renovar la ventana de actividad (sliding window)
   localStorage.setItem(`jaroje_active_emp_time_${module}`, now.toString());
   
+  // Reconciliar con la nómina oficial para evitar nombres obsoletos de fallback previo (ej. Mariana en lugar de Jonathan)
+  const officialList = getOfficialEmployees();
+  const matched = officialList.find(e => e.employee_num === num);
+  const resolvedName = matched ? matched.full_name : name;
+
+  if (matched && matched.full_name !== name) {
+    localStorage.setItem(`jaroje_active_emp_name_${module}`, matched.full_name);
+  }
+
   return {
     employee_num: num,
-    full_name: name,
+    full_name: resolvedName,
     department: module
   };
 }
@@ -309,6 +313,20 @@ export async function syncEmployeesFromServer(): Promise<Employee[]> {
       const body = await res.json();
       if (body.success && Array.isArray(body.data)) {
         localStorage.setItem('jaroje_official_employees', JSON.stringify(body.data));
+
+        // Auto-corregir nombres de empleados activos en sesión si estaban desactualizados
+        if (typeof window !== 'undefined') {
+          (['recepcion', 'limpieza', 'mantenimiento'] as const).forEach(mod => {
+            const activeNum = localStorage.getItem(`jaroje_active_emp_num_${mod}`);
+            if (activeNum) {
+              const matched = body.data.find((e: Employee) => e.employee_num === activeNum);
+              if (matched) {
+                localStorage.setItem(`jaroje_active_emp_name_${mod}`, matched.full_name);
+              }
+            }
+          });
+        }
+
         return body.data;
       }
     }

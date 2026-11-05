@@ -12,7 +12,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { getActiveEmployee, clearActiveEmployee, Employee, verifyAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
+import { getActiveEmployee, clearActiveEmployee, Employee, verifyAdminPin, getRole, getOperatorForLog, syncEmployeesFromServer } from '@/lib/auth';
 import { uploadGuestFile } from '@/lib/files-client';
 import EmployeeModal from '@/components/EmployeeModal';
 import CameraModal from '@/components/CameraModal';
@@ -936,6 +936,14 @@ export default function RecepcionPage() {
     if (!emp) {
       setShowEmployeeModal(true);
     }
+
+    // Sincronizar catálogo oficial y auto-reconciliar nombres de sesión si eran obsoletos
+    syncEmployeesFromServer().then(() => {
+      const refreshed = getActiveEmployee('recepcion');
+      if (refreshed) {
+        setActiveEmployeeState(refreshed);
+      }
+    });
   }, []);
 
   // Interceptor de firma de empleado
