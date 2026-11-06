@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { 
-  fetchAllRawBeds24Bookings, 
   getParentMapping,
   getBeds24Token,
-  fetchBeds24RatesMap,
   getAverageRatesForDates,
   getChildRoomId
 } from '@/lib/beds24';
+import { publicBookings, publicRates, PublicBeds24BusyError } from '@/lib/beds24-public-cache';
 import { normalizePhone } from '@/lib/whatsapp';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { checkBookingWindow } from '@/lib/booking-window';
@@ -230,9 +229,14 @@ export async function GET(req: Request) {
     const checkOut = searchParams.get('checkOut');
     const rawPhone = searchParams.get('phone') || '';
 
-    // La búsqueda de la cotización pendiente por teléfono se limita por IP (120 consultas / 15 min: cada cambio de fechas cuenta)
+    // Límite por IP: 60 búsquedas por minuto (un visitante normal no se acerca; un script sí). Protege CPU y base de datos;
+    // las consultas a Beds24 se protegen aparte con la memoria compartida (beds24-public-cache).
+    const limitedGeneral = await rateLimitResponse(req, 'cotizar', { max: 60, windowMs: 60_000, lockMs: 60_000 });
+    if (limitedGeneral) return limitedGeneral;
+
+    // La búsqueda de la cotización pendiente por teléfono, además, 300 / 15 min por IP (la Wi-Fi del hotel comparte IP)
     if (rawPhone) {
-      const limited = await rateLimitResponse(req, 'cotizar-phone', { max: 120, windowMs: 15 * 60_000, lockMs: 10 * 60_000 });
+      const limited = await rateLimitResponse(req, 'cotizar-phone', { max: 300, windowMs: 15 * 60_000, lockMs: 10 * 60_000 });
       if (limited) return limited;
     }
 
@@ -315,8 +319,6 @@ export async function GET(req: Request) {
     // pricing_unit_settings y reservas locales de Supabase (antes se pedían una tras otra de forma secuencial).
     // Solo hacen falta las reservas que puedan solaparse con la estancia: llegada hasta 180 días antes del check-in
     // y antes del check-out (sin detalle de facturación `includeInvoiceItems: false`, que reduce el payload un 80%).
-    const bookingsFrom = new Date(Date.parse(`${cleanCheckIn}T00:00:00Z`) - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
     let beds24Token: string | null = null;
     try {
       beds24Token = await getBeds24Token();
@@ -325,11 +327,11 @@ export async function GET(req: Request) {
     }
 
     const [bookingsRaw, ratesResult, dynamicSettings, localBookings] = await Promise.all([
-      fetchAllRawBeds24Bookings(bookingsFrom, cleanCheckOut, false, false),
+      publicBookings(cleanCheckIn, cleanCheckOut),
       (async () => {
         if (!beds24Token) return {} as Record<string, Record<string, number>>;
         try {
-          return await fetchBeds24RatesMap(beds24Token, checkIn, checkOut);
+          return await publicRates(beds24Token, cleanCheckIn, cleanCheckOut);
         } catch (ratesErr) {
           console.warn("[Cotizar API] Failed to fetch Beds24 calendar rates:", ratesErr);
           return {} as Record<string, Record<string, number>>;
@@ -491,10 +493,13 @@ export async function GET(req: Request) {
     });
 
   } catch (error: any) {
-    if (error instanceof RatesUnavailableError) {
-      return NextResponse.json({ error: error.message, code: 'RATES_UNAVAILABLE' }, { status: 503 });
+    // Beds24 sin créditos, caído o con el presupuesto público agotado: aviso amable y 503. Nunca se enseña al visitante el texto del error de Beds24.
+    const isBeds24Problem = error instanceof PublicBeds24BusyError || /BEDS24|TOKEN_EXPIRED/i.test(String(error?.message ?? ''));
+    if (error instanceof RatesUnavailableError || isBeds24Problem) {
+      if (isBeds24Problem) console.warn('[Cotizar API] Beds24 no disponible:', String(error?.message ?? '').slice(0, 120));
+      return NextResponse.json({ error: error instanceof RatesUnavailableError || error instanceof PublicBeds24BusyError ? error.message : new RatesUnavailableError().message, code: 'RATES_UNAVAILABLE' }, { status: 503 });
     }
     console.error("[Cotizar API] Error general:", error);
-    return NextResponse.json({ error: error.message || 'Error calculando cotización' }, { status: 500 });
+    return NextResponse.json({ error: 'Error calculando cotización' }, { status: 500 });
   }
 }
