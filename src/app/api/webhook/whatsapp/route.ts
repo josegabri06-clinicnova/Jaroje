@@ -55,21 +55,31 @@ export async function POST(req: Request) {
     const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
     const signatureHeader = req.headers.get('x-hub-signature-256') || '';
 
-    // Si WHATSAPP_APP_SECRET está configurado, validar obligatoriamente la firma HMAC
-    if (appSecret) {
-      if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
-        console.warn('[Meta Webhook POST] ❌ Rechazado: Cabecera x-hub-signature-256 ausente o con formato incorrecto.');
-        return new Response('Unauthorized', { status: 401 });
-      }
-
+    // Meta firma cada aviso con el secreto de la app (HMAC-SHA256 del cuerpo exacto). Se comprueba SIEMPRE y se anota el resultado.
+    // Con WHATSAPP_SIGNATURE_ENFORCE=true se rechaza todo lo que no tenga una firma válida (y también si falta el secreto).
+    // Sin esa variable (modo observación) solo se avisa en el log y se sigue procesando: sirve para comprobar que el secreto
+    // configurado es el correcto antes de empezar a rechazar mensajes reales de huéspedes.
+    const enforce = process.env.WHATSAPP_SIGNATURE_ENFORCE?.trim().toLowerCase() === 'true';
+    let signature: 'valida' | 'invalida' | 'ausente' | 'sin_secreto';
+    if (!appSecret) {
+      signature = 'sin_secreto';
+    } else if (!signatureHeader.startsWith('sha256=')) {
+      signature = 'ausente';
+    } else {
       const expectedSignature = 'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex');
       const expectedBuf = crypto.createHash('sha256').update(expectedSignature).digest();
       const providedBuf = crypto.createHash('sha256').update(signatureHeader).digest();
+      signature = crypto.timingSafeEqual(expectedBuf, providedBuf) ? 'valida' : 'invalida';
+    }
 
-      if (!crypto.timingSafeEqual(expectedBuf, providedBuf)) {
-        console.warn('[Meta Webhook POST] ❌ Rechazado: Firma HMAC de Meta no coincide.');
-        return new Response('Unauthorized: Invalid webhook signature', { status: 401 });
+    if (signature !== 'valida') {
+      if (enforce) {
+        console.warn(`[Meta Webhook POST] ❌ Rechazado: firma ${signature}.`);
+        return new Response('Unauthorized', { status: 401 });
       }
+      console.warn(`[Meta Webhook POST] ⚠️ Firma ${signature} (modo observación: se procesa igualmente).`);
+    } else {
+      console.log('[Meta Webhook POST] ✅ Firma válida.');
     }
 
     let payload: any;
