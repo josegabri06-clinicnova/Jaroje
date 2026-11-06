@@ -3,7 +3,8 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { normalizePhone, sendWhatsAppCTAButtonMessage } from '@/lib/whatsapp';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { checkBookingWindow } from '@/lib/booking-window';
-import { getBeds24Token, fetchBeds24RatesMap, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
+import { getBeds24Token, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
+import { publicRates } from '@/lib/beds24-public-cache';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
 
 export const dynamic = 'force-dynamic';
@@ -159,7 +160,7 @@ export async function POST(req: Request) {
     const [beds24RatesMap, dynamicSettings] = await Promise.all([
       (async () => {
         try {
-          return await fetchBeds24RatesMap(token, cleanCheckIn, cleanCheckOut);
+          return await publicRates(token, cleanCheckIn, cleanCheckOut);
         } catch (tokenErr) {
           console.warn("[Cotizacion API] Failed to fetch Beds24 calendar rates:", tokenErr);
           return {} as Record<string, Record<string, number>>;
