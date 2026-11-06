@@ -4,8 +4,10 @@ import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectA
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
-import { checkGuestAccess, firstNameOf, verificationRequiredResponse } from '@/lib/guest-access';
+import { checkGuestAccess, firstNameOf, requireGuestWriteAccess } from '@/lib/guest-access';
 import { physicalRoomName } from '@/lib/room-names';
+import { isKnownMissingBooking, reserveBeds24Lookup, rememberBookingNotFound } from '@/lib/beds24-public-cache';
+import { rateLimitResponse } from '@/lib/public-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -255,8 +257,19 @@ export async function GET(req: Request) {
     const allBeds24 = await getBeds24Bookings(true, false, false);
     let booking = allBeds24.find(r => String(r.id) === String(bookingId));
 
-    // 2.1. Fallback: Buscar directamente en Beds24 por ID si no está activo (ej: si está cancelada)
-    if (!booking) {
+    // 2.1. Fallback: Buscar directamente en Beds24 por ID si no está activo (ej: si está cancelada).
+    // Es una ruta pública y cada consulta gasta créditos de Beds24: un número inventado NO puede provocarlas sin límite.
+    // (1) si Beds24 ya dijo hace poco que no existe, no se vuelve a preguntar; (2) por IP, 15 consultas cada 15 min
+    // (un huésped real casi nunca llega aquí: sus reservas están en nuestras tablas); (3) presupuesto global de 10 por minuto.
+    let confirmedMissing = false;
+    let cancelFailed = false; // la consulta de canceladas falló: no se puede afirmar que no existe
+    let mayLookup = false;
+    if (!booking && !isKnownMissingBooking(String(bookingId))) {
+      const limited = await rateLimitResponse(req, 'portal-beds24-lookup', { max: 15, windowMs: 15 * 60_000, lockMs: 15 * 60_000 });
+      if (limited) return limited;
+      mayLookup = reserveBeds24Lookup();
+    }
+    if (!booking && mayLookup) {
       try {
         const beds24Token = await getBeds24Token();
         const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true`, {
@@ -277,6 +290,8 @@ export async function GET(req: Request) {
               if (b24JsonCancel.success && b24JsonCancel.data && b24JsonCancel.data.length > 0) {
                 dataList = b24JsonCancel.data;
               }
+            } else {
+              cancelFailed = true;
             }
           }
 
@@ -362,12 +377,15 @@ export async function GET(req: Request) {
               booking_time: rawB.bookingTime || rawB.arrival || null,
               channel: channel
             };
+          } else if (rawBookingData.success && !cancelFailed) {
+            confirmedMissing = true; // Beds24 respondió bien (activas y canceladas) y no existe
           }
         }
       } catch (err) {
         console.error("Error al buscar reserva individual en Beds24:", err);
       }
     }
+    if (!booking && confirmedMissing) rememberBookingNotFound(String(bookingId));
 
     if (booking) {
       const { data: checkinData } = await supabase
@@ -526,7 +544,8 @@ export async function POST(req: Request) {
     const bookingId = Number(guestId); // mismo id que valida la guardia (no el texto crudo del cliente)
 
     // Solo quien ya verificó su teléfono (o personal) puede subir; ya no basta con conocer el número de reserva
-    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
+    const denied = await requireGuestWriteAccess(req, guestId);
+    if (denied) return denied;
 
     // Sustituir un comprobante ya subido solo lo puede hacer quien está autorizado en esta reserva; la primera subida es libre
     const { data: priorCheckin } = await supabase

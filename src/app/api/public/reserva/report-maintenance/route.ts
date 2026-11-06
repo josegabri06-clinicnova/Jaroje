@@ -4,7 +4,7 @@ import { getBeds24Bookings } from '@/lib/beds24';
 import { sendWhatsAppTemplate } from '@/lib/whatsapp';
 
 import { normalizeBookingId } from '@/lib/guest-auth';
-import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
+import { requireGuestWriteAccess } from '@/lib/guest-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,8 @@ export async function POST(req: Request) {
     if (!guestId) {
       return NextResponse.json({ success: false, error: 'ID de reserva no válido' }, { status: 400 });
     }
-    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
+    const denied = await requireGuestWriteAccess(req, guestId);
+    if (denied) return denied;
 
     const id = Number(guestId); // mismo id que valida la guardia
     let roomName = 'General';

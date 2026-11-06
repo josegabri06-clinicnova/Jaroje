@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { normalizeBookingId } from '@/lib/guest-auth';
 import { filesProxyUrl, parseStoredFileUrl } from '@/lib/storage-files';
-import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
+import { requireGuestWriteAccess } from '@/lib/guest-access';
 
 // POST: Upload the constancia PDF to Supabase Storage
 export async function POST(req: NextRequest) {
@@ -23,7 +23,8 @@ export async function POST(req: NextRequest) {
     if (!guestId) {
       return NextResponse.json({ success: false, error: 'ID de reserva no válido.' }, { status: 400 });
     }
-    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
+    const denied = await requireGuestWriteAccess(req, guestId);
+    if (denied) return denied;
 
     const timestamp = Date.now();
     const safeName = (file.name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^[^a-zA-Z0-9]+/, '') || 'constancia.pdf').slice(0, 80);
@@ -64,7 +65,8 @@ export async function PUT(req: NextRequest) {
     if (!putGuestId) {
       return NextResponse.json({ success: false, error: 'ID de reserva no válido.' }, { status: 400 });
     }
-    if (!(await checkGuestAccess(req, putGuestId)).allowed) return verificationRequiredResponse();
+    const deniedPut = await requireGuestWriteAccess(req, putGuestId);
+    if (deniedPut) return deniedPut;
 
     // El enlace debe ser de una constancia subida por nuestro propio sistema (almacén dni_images, carpeta facturas).
     // Se guarda el enlace normalizado del servidor, nunca el texto que envíe el navegador.

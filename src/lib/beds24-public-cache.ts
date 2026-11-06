@@ -111,9 +111,47 @@ export function publicRates(token: string, checkIn: string, checkOut: string): P
   return memo(ratesStore, `${from}|${to}`, () => fetchBeds24RatesMap(token, from, to), (v) => Object.keys(v).length > 0);
 }
 
+// ── Portal del huésped: consulta a Beds24 por número de reserva cuando no está en nuestras tablas ──
+// Un número inventado hacía que cada petición pública llamara a Beds24 (hasta 2 veces). Ahora: memoria de los números que Beds24
+// confirmó que no existen (10 min) y un presupuesto propio y global de 10 consultas por minuto, aparte del de las búsquedas.
+export const LOOKUP_NOT_FOUND_MS = 10 * 60_000;
+export const LOOKUP_BUDGET_MAX_CALLS = 10;
+const lookupTimes: number[] = [];
+const notFoundUntil = new Map<string, number>();
+
+/** true si ese número ya se comprobó en Beds24 hace poco y no existe */
+export function isKnownMissingBooking(id: string): boolean {
+  const until = notFoundUntil.get(id);
+  if (until === undefined) return false;
+  if (until > Date.now()) return true;
+  notFoundUntil.delete(id);
+  return false;
+}
+
+/** Reserva un hueco del presupuesto de consultas por número. false = presupuesto agotado: no se consulta Beds24 */
+export function reserveBeds24Lookup(): boolean {
+  const now = Date.now();
+  while (lookupTimes.length && now - lookupTimes[0] > PUBLIC_BUDGET_WINDOW_MS) lookupTimes.shift();
+  if (lookupTimes.length >= LOOKUP_BUDGET_MAX_CALLS) return false;
+  lookupTimes.push(now);
+  return true;
+}
+
+/** Beds24 respondió bien y dijo que no existe: no se vuelve a preguntar durante 10 minutos */
+export function rememberBookingNotFound(id: string) {
+  const now = Date.now();
+  if (notFoundUntil.size >= 500) {
+    for (const [k, v] of notFoundUntil) if (v <= now) notFoundUntil.delete(k);
+    while (notFoundUntil.size >= 500) notFoundUntil.delete(notFoundUntil.keys().next().value as string);
+  }
+  notFoundUntil.set(id, now + LOOKUP_NOT_FOUND_MS);
+}
+
 /** Solo para pruebas */
 export function resetPublicBeds24Cache() {
   bookingsStore.fresh.clear(); bookingsStore.lastGood.clear();
   ratesStore.fresh.clear(); ratesStore.lastGood.clear();
   missTimes.length = 0;
+  lookupTimes.length = 0;
+  notFoundUntil.clear();
 }
