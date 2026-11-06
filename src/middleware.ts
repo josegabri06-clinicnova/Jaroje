@@ -186,6 +186,14 @@ export async function middleware(req: NextRequest) {
         '/api/room-status'
       ];
       const isAllowed = allowedStaffApis.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
+      // Las reservas son de solo lectura para limpieza y mantenimiento: modificar, crear o cancelar una reserva (con aviso al huésped
+      // por WhatsApp) es cosa de Recepción y Administración. La pantalla del equipo solo consulta (GET).
+      if (isAllowed && !isReadMethod && (pathname === '/api/reservas' || pathname.startsWith('/api/reservas/'))) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Las reservas son de solo lectura para este perfil.' },
+          { status: 403 }
+        );
+      }
       if (!isAllowed) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Permisos insuficientes para este recurso.' },
