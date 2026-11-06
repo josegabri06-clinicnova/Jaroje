@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { normalizePhone, sendWhatsAppCTAButtonMessage } from '@/lib/whatsapp';
+import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { checkBookingWindow } from '@/lib/booking-window';
 import { getBeds24Token, fetchBeds24RatesMap, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
@@ -27,6 +28,10 @@ function formatSpanishDate(dateStr: string): string {
  */
 export async function POST(req: Request) {
   try {
+    // Envía un WhatsApp al número indicado: se limita por IP (20 cotizaciones / 15 min)
+    const limited = await rateLimitResponse(req, 'cotizacion', { max: 20, windowMs: 15 * 60_000, lockMs: 15 * 60_000 });
+    if (limited) return limited;
+
     const body = await req.json();
     const {
       phone,

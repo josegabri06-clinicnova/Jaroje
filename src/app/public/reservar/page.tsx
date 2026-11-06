@@ -59,14 +59,6 @@ interface QuoteItem {
 
 interface ExistingBooking {
   id: string;
-  guest_name: string;
-  check_in: string;
-  check_out: string;
-  room_name: string;
-  price: number;
-  deposit: number;
-  balance: number;
-  status: string;
   portal_url: string;
 }
 
@@ -1103,19 +1095,11 @@ function ReservarContent() {
 
             {existingReservations.map(res => (
               <div key={res.id} className="bg-white rounded-2xl p-5 border border-zinc-200/80 shadow-xs space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                      {res.status === 'confirmed' ? 'Confirmada' : 'En proceso'}
-                    </span>
-                    <h3 className="text-sm font-black text-zinc-900 mt-1.5">{res.room_name}</h3>
-                  </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                    {lang === 'en' ? 'Your booking' : 'Tu reserva'}
+                  </span>
                   <span className="text-xs font-mono font-bold text-zinc-400">#{res.id}</span>
-                </div>
-
-                <div className="flex justify-between text-xs text-zinc-600 border-t border-zinc-100 pt-2">
-                  <span>📅 {formatMexicanDate(res.check_in)} al {formatMexicanDate(res.check_out)}</span>
-                  <span className="font-bold text-zinc-900">${res.price.toLocaleString()} MXN</span>
                 </div>
 
                 <a

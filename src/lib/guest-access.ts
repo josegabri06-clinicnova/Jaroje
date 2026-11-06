@@ -24,6 +24,8 @@ export interface GuestAccess {
   reason: GuestAccessReason;
   /** Solo cuando está bloqueado: datos mínimos para la pantalla de verificación */
   contact?: { phone: string | null; guestName: string | null };
+  /** Solo con reason "no_phone": si la reserva existe de verdad (un número inventado también carece de teléfono) */
+  bookingFound?: boolean;
 }
 
 export async function checkGuestAccess(req: Request, bookingId: string): Promise<GuestAccess> {
@@ -33,7 +35,7 @@ export async function checkGuestAccess(req: Request, bookingId: string): Promise
   if (session && (session.role === 'admin' || session.role === 'recepcion')) return { allowed: true, reason: 'staff' };
 
   const contact = await resolveBookingContact(bookingId);
-  if (!contact.failed && !hasUsablePhone(contact.phone)) return { allowed: true, reason: 'no_phone' };
+  if (!contact.failed && !hasUsablePhone(contact.phone)) return { allowed: true, reason: 'no_phone', bookingFound: contact.found };
 
   return { allowed: false, reason: 'locked', contact: { phone: contact.phone, guestName: contact.guestName } };
 }

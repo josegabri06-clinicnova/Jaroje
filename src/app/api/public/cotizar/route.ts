@@ -9,6 +9,7 @@ import {
   getChildRoomId
 } from '@/lib/beds24';
 import { normalizePhone } from '@/lib/whatsapp';
+import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { checkBookingWindow } from '@/lib/booking-window';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
 import { getRoomPhotos } from '@/lib/room-photos';
@@ -229,6 +230,12 @@ export async function GET(req: Request) {
     const checkOut = searchParams.get('checkOut');
     const rawPhone = searchParams.get('phone') || '';
 
+    // La búsqueda por teléfono confirma si una persona tiene reserva: se limita por IP (120 consultas / 15 min: cada cambio de fechas cuenta)
+    if (rawPhone) {
+      const limited = await rateLimitResponse(req, 'cotizar-phone', { max: 120, windowMs: 15 * 60_000, lockMs: 10 * 60_000 });
+      if (limited) return limited;
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
 
     // 1. Si se proporciona teléfono, verificar si el cliente ya tiene reservaciones activas o futuras
@@ -243,23 +250,16 @@ export async function GET(req: Request) {
         try {
           const { data: dbBookings } = await supabase
             .from('beds24_reservations')
-            .select('id, guest_name, check_in, check_out, room_name, status, price, deposit, balance')
+            .select('id')
             .gte('check_out', todayStr)
             .neq('status', 'cancelled')
             .or(`phone.like.%${last10}%,guest_phone.like.%${last10}%`)
             .order('check_in', { ascending: true });
 
           if (dbBookings && dbBookings.length > 0) {
+            // Solo "tiene reserva" y el enlace a su portal: nombre, fechas e importes se ven allí, tras verificar el teléfono
             existingReservations = dbBookings.map(b => ({
               id: String(b.id),
-              guest_name: b.guest_name,
-              check_in: (b.check_in || '').split('T')[0],
-              check_out: (b.check_out || '').split('T')[0],
-              room_name: b.room_name,
-              price: Number(b.price || 0),
-              deposit: Number(b.deposit || 0),
-              balance: Number(b.balance || 0),
-              status: b.status,
               portal_url: `/public/reserva/${b.id}`
             }));
           }

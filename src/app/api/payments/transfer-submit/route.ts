@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { grantGuestAccess, normalizeBookingId, guestFileUrl } from '@/lib/guest-auth';
+import { grantGuestAccess, normalizeBookingId, guestFileUrl, isGuestAuthorized } from '@/lib/guest-auth';
+import { resolveB24Alias } from '@/lib/guest-phone';
 import { filesProxyUrl } from '@/lib/storage-files';
 import { sendWhatsAppTextMessage } from '@/lib/whatsapp';
+import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
+import { rateLimitResponse } from '@/lib/public-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    // Ruta pública que escribe en la base, guarda archivos y envía WhatsApp: se limita por IP (20 envíos / 15 min)
+    const limited = await rateLimitResponse(req, 'transfer-submit', { max: 20, windowMs: 15 * 60_000, lockMs: 15 * 60_000 });
+    if (limited) return limited;
+
     const formData = await req.formData();
     const bookingId = formData.get('bookingId') as string;
     const amount = formData.get('amount') as string;
@@ -26,10 +33,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'El monto ingresado es inválido.' }, { status: 400 });
     }
 
-    // Validación de ID de reserva
-    const cleanBookingId = String(bookingId).trim();
-    if (cleanBookingId.length > 60 || !/^[a-zA-Z0-9_\-\.]+$/.test(cleanBookingId)) {
+    // Validación de ID de reserva: el mismo número normalizado que usa el portal, para comprobar y actuar sobre la misma reserva
+    const guestId = normalizeBookingId(bookingId);
+    if (!guestId) {
       return NextResponse.json({ error: 'Identificador de reserva con formato inválido.' }, { status: 400 });
+    }
+    const cleanBookingId = guestId;
+
+    // Solo quien verificó los 4 últimos dígitos (o el personal) puede subir un comprobante a una reserva con teléfono.
+    // Un número que no existe tampoco tiene teléfono, así que además se exige que la reserva exista.
+    const access = await checkGuestAccess(req, guestId);
+    if (!access.allowed) {
+      // El portal pudo abrirse con el número de Beds24 de esta misma reserva local: vale esa cookie
+      const alias = await resolveB24Alias(guestId);
+      if (!(alias && (await isGuestAuthorized(req, alias)))) return verificationRequiredResponse();
+    }
+    if (access.reason === 'no_phone' && !access.bookingFound) {
+      return NextResponse.json({ error: 'Reserva no encontrada.' }, { status: 404 });
     }
 
     // Validación de tamaño de archivo (máx 10 MB)
@@ -77,7 +97,7 @@ export async function POST(req: Request) {
     const { data: dbData, error: dbError } = await supabase
       .from('transfer_receipts')
       .insert({
-        booking_id: bookingId,
+        booking_id: guestId,
         amount: Number(amount),
         guest_name: name || 'Invitado',
         guest_email: email || null,
@@ -121,7 +141,7 @@ export async function POST(req: Request) {
     const uniqueAdminPhones = Array.from(new Set(adminPhones.map(p => p.replace(/\D/g, '')).filter(Boolean)));
     const cleanGuestName = name || 'Invitado';
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-    const reviewUrl = `${siteUrl}/reservas?tab=Por+Aprobar&id=${bookingId}`;
+    const reviewUrl = `${siteUrl}/reservas?tab=Por+Aprobar&id=${guestId}`;
 
     const formPaymentType = (formData.get('paymentType') as string || '').toLowerCase().trim();
     const formTotal = Number(formData.get('total') || 0);
@@ -132,7 +152,7 @@ export async function POST(req: Request) {
     const isExplicitTotal = formPaymentType === 'total' || notesStr.includes('TOTAL (100%)');
 
     const paymentLabelForAdmin = isExplicitTotal ? 'Pago Total (100%)' : (isExplicitAnticipo ? 'Anticipo (50%)' : 'Comprobante');
-    const notificationBody = `🔔 *¡Nuevo ${paymentLabelForAdmin} en "POR APROBAR"!* 🔔\n\n👤 *Huésped:* ${cleanGuestName}\n🏷 *Reserva:* #${bookingId}\n💵 *Monto Subido:* $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n\n⚡ *Aprobar o revisar en el panel:*\n👉 ${reviewUrl}\n\n📄 *Ver comprobante adjunto:*\n${publicUrl}`;
+    const notificationBody = `🔔 *¡Nuevo ${paymentLabelForAdmin} en "POR APROBAR"!* 🔔\n\n👤 *Huésped:* ${cleanGuestName}\n🏷 *Reserva:* #${guestId}\n💵 *Monto Subido:* $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n\n⚡ *Aprobar o revisar en el panel:*\n👉 ${reviewUrl}\n\n📄 *Ver comprobante adjunto:*\n${publicUrl}`;
 
     for (const phoneTarget of uniqueAdminPhones) {
       console.log(`[Submit Transfer] Sending WA notification to admin: ${phoneTarget}`);
@@ -152,17 +172,17 @@ export async function POST(req: Request) {
           department: 'recepcion',
           module: 'reservas',
           action: 'transfer_receipt_submitted',
-          details: `Comprobante de ${isExplicitTotal ? 'pago total (100%)' : (isExplicitAnticipo ? 'anticipo (50%)' : 'abono')} subido por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN para Reserva #${bookingId}. Pendiente en pestaña Por Aprobar.`,
+          details: `Comprobante de ${isExplicitTotal ? 'pago total (100%)' : (isExplicitAnticipo ? 'anticipo (50%)' : 'abono')} subido por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN para Reserva #${guestId}. Pendiente en pestaña Por Aprobar.`,
           created_at: new Date().toISOString()
         }]);
     } catch (logErr) {
       console.error("[Submit Transfer] Error registrando employee_log:", logErr);
     }
 
-    // 5. Obtener teléfono y detalles de la reserva para enviar notificación por WhatsApp
-    const formPhone = formData.get('phone') as string;
+    // 5. Obtener teléfono y detalles de la reserva para enviar notificación por WhatsApp.
+    // El teléfono sale SOLO de la reserva guardada: el que llegue en el formulario se ignora (permitiría enviar mensajes a cualquier número).
     const { normalizePhone } = await import('@/lib/whatsapp');
-    let guestPhone = formPhone ? normalizePhone(formPhone) : '';
+    let guestPhone = '';
     let dbGuestName = name || 'Huésped';
     let reservationTotal = formTotal > 0 ? formTotal : 0;
     let reservationDeposit = 0;
@@ -175,7 +195,7 @@ export async function POST(req: Request) {
       const { data: b24Db } = await supabase
         .from('beds24_reservations')
         .select('guest_phone, guest_name, price, deposit, check_in, check_out')
-        .eq('id', String(bookingId))
+        .eq('id', guestId)
         .maybeSingle();
 
       if (b24Db) {
@@ -198,7 +218,7 @@ export async function POST(req: Request) {
         const { data: localRes } = await supabase
           .from('local_reservas')
           .select('phone, guest_name, price, deposit, check_in, check_out')
-          .eq('id', Number(bookingId))
+          .eq('id', Number(guestId))
           .maybeSingle();
 
         if (localRes) {
@@ -219,7 +239,7 @@ export async function POST(req: Request) {
       try {
         const { getBeds24Token } = await import('@/lib/beds24');
         const BEDS24_TOKEN = await getBeds24Token();
-        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
+        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${guestId}`, {
           headers: { 'token': BEDS24_TOKEN }
         });
         if (b24Res.ok) {
@@ -260,7 +280,7 @@ export async function POST(req: Request) {
                                  (sPhone && targetPhone && (sPhone.includes(targetPhone) || targetPhone.includes(sPhone)));
             if (!matchesGuest) return false;
             // Incluir si es la misma reserva o no está cancelada
-            return String(s.id) === String(bookingId) || (String(s.status) !== '0' && s.status !== 'cancelled');
+            return String(s.id) === guestId || (String(s.status) !== '0' && s.status !== 'cancelled');
           });
 
           if (grp.length > 1) {
@@ -313,12 +333,12 @@ export async function POST(req: Request) {
       }
 
       const refText = groupCount > 1 
-        ? `tu grupo de reservaciones (${groupCount} condominios, ref: #${bookingId})` 
-        : `tu reserva #${bookingId}`;
+        ? `tu grupo de reservaciones (${groupCount} condominios, ref: #${guestId})` 
+        : `tu reserva #${guestId}`;
 
       const refTextEn = groupCount > 1
-        ? `your group booking (${groupCount} condos, ref: #${bookingId})`
-        : `your reservation #${bookingId}`;
+        ? `your group booking (${groupCount} condos, ref: #${guestId})`
+        : `your reservation #${guestId}`;
 
       let guestNotificationBody = '';
       if (isEnglish) {
@@ -336,14 +356,13 @@ export async function POST(req: Request) {
     }
 
     // Al huésped solo se le devuelve el enlace propio de su reserva; el registro se devuelve sin el enlace de almacenamiento
-    const guestId = normalizeBookingId(cleanBookingId);
     const { receipt_url: _storedUrl, ...safeRecord } = (dbData || {}) as any;
     const okRes = NextResponse.json({
       success: true,
-      receiptUrl: guestId ? guestFileUrl(guestId, 'transfer', publicUrl, String(dbData?.id ?? '')) : null,
+      receiptUrl: guestFileUrl(guestId, 'transfer', publicUrl, String(dbData?.id ?? '')),
       record: safeRecord
     });
-    if (guestId) await grantGuestAccess(okRes, guestId); // quien sube su comprobante queda autorizado en este dispositivo
+    await grantGuestAccess(okRes, guestId); // quien sube su comprobante queda autorizado en este dispositivo
     return okRes;
 
   } catch (err: any) {
