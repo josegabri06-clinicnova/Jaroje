@@ -48,6 +48,27 @@ export function verificationRequiredResponse() {
   );
 }
 
+/** Reserva que no existe en ninguna de nuestras tablas: un número inventado tampoco tiene teléfono y pasaría como "sin teléfono" */
+export function isUnknownBooking(access: GuestAccess): boolean {
+  return access.reason === 'no_phone' && !access.bookingFound;
+}
+
+export function bookingNotFoundResponse() {
+  return NextResponse.json({ success: false, error: 'Reserva no encontrada.' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+}
+
+/**
+ * Guarda de las rutas de ESCRITURA del portal (documentos, idioma, mantenimiento, factura, comprobantes).
+ * Devuelve la respuesta de rechazo, o null si se puede continuar. Exige acceso (cookie, personal o reserva sin teléfono)
+ * Y que la reserva exista: así no se pueden guardar archivos, ajustes ni tareas para números de reserva inventados.
+ */
+export async function requireGuestWriteAccess(req: Request, bookingId: string): Promise<NextResponse | null> {
+  const access = await checkGuestAccess(req, bookingId);
+  if (!access.allowed) return verificationRequiredResponse();
+  if (isUnknownBooking(access)) return bookingNotFoundResponse();
+  return null;
+}
+
 /** Nombre de pila para saludar sin enseñar el nombre completo */
 export function firstNameOf(fullName: string | null | undefined): string {
   const first = String(fullName ?? '').replace(/\(.*?\)/g, ' ').trim().split(/\s+/)[0] || '';
