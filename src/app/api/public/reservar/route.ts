@@ -13,6 +13,7 @@ import {
 } from '@/lib/beds24';
 import { normalizePhone, cleanPhoneForMeta, sendTemplate1_SolicitudRecibida } from '@/lib/whatsapp';
 import { checkBookingWindow } from '@/lib/booking-window';
+import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
 
 export const dynamic = 'force-dynamic';
@@ -240,6 +241,10 @@ function distributeGuestsAcrossUnits(
 
 export async function POST(req: Request) {
   try {
+    // Crea reservas y envía WhatsApp: se limita por IP (20 solicitudes / 15 min)
+    const limited = await rateLimitResponse(req, 'reservar', { max: 20, windowMs: 15 * 60_000, lockMs: 15 * 60_000 });
+    if (limited) return limited;
+
     const body = await req.json();
     const {
       guestName,
