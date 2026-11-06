@@ -9,7 +9,6 @@ import {
   getChildRoomId
 } from '@/lib/beds24';
 import { normalizePhone } from '@/lib/whatsapp';
-import { hasUsablePhone } from '@/lib/guest-auth';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { checkBookingWindow } from '@/lib/booking-window';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
@@ -244,23 +243,18 @@ export async function GET(req: Request) {
     let pendingQuote: any = null;
     if (rawPhone) {
       const cleanPhone = normalizePhone(rawPhone);
-      // Solo dígitos: evita comodines de LIKE (% y _) y teléfonos tan cortos que coincidirían con media base de datos
-      const last10 = cleanPhone.replace(/\D/g, '').slice(-10);
+      const last10 = cleanPhone.slice(-10);
 
       // Las dos búsquedas por teléfono son independientes: se lanzan a la vez
       const lookupBookings = (async () => {
         try {
-          // Un teléfono inutilizable (muy corto o de relleno, como 0000...) no identifica a nadie: no se busca
-          if (!hasUsablePhone(last10)) return;
-          // La tabla solo tiene guest_phone: buscar también en una columna "phone" que no existe hacía fallar toda la consulta
           const { data: dbBookings } = await supabase
             .from('beds24_reservations')
             .select('id')
             .gte('check_out', todayStr)
             .neq('status', 'cancelled')
-            .like('guest_phone', `%${last10}%`)
-            .order('check_in', { ascending: true })
-            .limit(5);
+            .or(`phone.like.%${last10}%,guest_phone.like.%${last10}%`)
+            .order('check_in', { ascending: true });
 
           if (dbBookings && dbBookings.length > 0) {
             // Solo "tiene reserva" y el enlace a su portal: nombre, fechas e importes se ven allí, tras verificar el teléfono
