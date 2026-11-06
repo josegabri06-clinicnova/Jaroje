@@ -570,7 +570,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     dniError: 'Failed to upload your ID. Please try again.',
     dniChangeButton: 'Change ID 🔄',
     verifyTitle: 'Verify it is you',
-    verifyDesc: 'To view or change your documents, enter the last 4 digits of the phone number on your booking.',
+    verifyDesc: 'To view or change your documents, please enter the last 4 digits of the phone number used for your reservation.',
     verifyButton: 'Verify',
     verifying: 'Verifying…',
     verifyWrong: 'The digits do not match.',
