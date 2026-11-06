@@ -137,25 +137,10 @@ export async function GET(req: Request) {
         const oneMonthAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         // Traer las no canceladas que tengan checkout ayer o posterior (activas y completadas recientes < 24h),
         // y además las canceladas de hasta 1 mes (30 días).
-        localQuery = localQuery.or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,updated_at.gte.${oneMonthAgoIso})`);
+        // local_reservas no tiene columna updated_at: las canceladas se acotan por created_at
+        localQuery = localQuery.or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,created_at.gte.${oneMonthAgoIso})`);
       }
-      let { data, error } = await localQuery;
-
-      if (error && error.message.includes('updated_at')) {
-        console.warn("[Reservas GET] La columna 'updated_at' no existe en 'local_reservas'. Ejecutando fallback a 'created_at'...");
-        const formatter = new Intl.DateTimeFormat('fr-CA', {
-          timeZone: 'America/Mexico_City',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit'
-        });
-        const yesterdayStr = formatter.format(new Date(Date.now() - 24 * 60 * 60 * 1000));
-        const oneMonthAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-        const fallbackRes = await supabase.from('local_reservas').select('*')
-          .or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,created_at.gte.${oneMonthAgoIso})`);
-        data = fallbackRes.data;
-        error = fallbackRes.error;
-      }
+      const { data, error } = await localQuery;
       
       if (data) {
         localRawData = data;
