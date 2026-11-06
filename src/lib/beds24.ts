@@ -2440,9 +2440,83 @@ export function computeOtaSplit(
   return { isOTA: false, netRevenue: totalAmount, commission: 0, taxesRetained: 0, channelLabel: '' };
 }
 
+/**
+ * Detecta si un teléfono es ficticio, dummy o inválido (común en OTAs como Expedia o Booking.com)
+ */
+export function isDummyOrInvalidPhone(
+  phone?: string | null,
+  rawContext?: string | null,
+  channel?: string | null
+): boolean {
+  if (!phone) return true;
+  const digits = String(phone).replace(/\D/g, '');
+  if (digits.length < 8) return true;
+  if (/^(\d)\1+$/.test(digits)) return true; // ej: 11111111111, 0000000000, 9999999999
+  if (digits === '1234567890' || digits === '0123456789' || digits === '9876543210') return true;
+  if (digits === '13108951757' || digits === '3108951757') return true; // Relay virtual telefónico de Booking.com
+
+  // Si se provee contexto (apiMessage, notes, comments), verificar si coincide con Room Reservation Id
+  if (rawContext) {
+    const match = String(rawContext).match(/Room\s*R?servation\s*Id:\s*(\d+)/i);
+    if (match && match[1] && (digits === match[1] || digits.endsWith(match[1]))) {
+      return true;
+    }
+  }
+
+  // Booking.com inyecta Room Reservation IDs (10 dígitos empezando usualmente por 63-67) con prefijo de país (ej: 16617041257, 526615795904)
+  const ch = String(channel || '').toLowerCase();
+  if (ch.includes('booking') && /^(?:1|52|34|44|33|39|49)?(6[3-7]\d{8})$/.test(digits)) {
+    return true;
+  }
+
+  return false;
+}
+
 /** Extrae con máxima precisión números telefónicos de cualquier objeto de reserva de Beds24/OTAs */
 export function extractPhoneFromBookingData(b: any): string | null {
   if (!b) return null;
+
+  // Contexto textual completo para detectar Room Reservation ID o referencias
+  const contextText = [
+    b.apiMessage,
+    b.notes,
+    b.comments,
+    b.guestComments,
+    b.info,
+    b.message,
+    b.groupNote
+  ].filter(Boolean).join(' ');
+
+  const roomResMatch = contextText.match(/Room\s*R?servation\s*Id:\s*(\d+)/i);
+  const roomReservationId = roomResMatch ? roomResMatch[1] : null;
+
+  const bookingIdStr = String(b.id || '').replace(/\D/g, '');
+  const masterIdStr = String(b.masterId || '').replace(/\D/g, '');
+  const apiRefStr = String(b.apiReference || '').replace(/\D/g, '');
+
+  const isCandidateDummy = (candPhone: string): boolean => {
+    if (!candPhone) return true;
+    const digits = candPhone.replace(/\D/g, '');
+    if (digits.length < 8) return true;
+    if (/^(\d)\1+$/.test(digits)) return true; // 11111111111, 0000000000
+    if (digits === '1234567890' || digits === '0123456789' || digits === '9876543210') return true;
+    if (digits === '13108951757' || digits === '3108951757') return true; // Booking proxy relay
+
+    if (bookingIdStr && (digits === bookingIdStr || digits.endsWith(bookingIdStr))) return true;
+    if (masterIdStr && (digits === masterIdStr || digits.endsWith(masterIdStr))) return true;
+    if (apiRefStr && apiRefStr.length >= 6 && (digits === apiRefStr || digits.endsWith(apiRefStr))) return true;
+
+    if (roomReservationId && (digits === roomReservationId || digits.endsWith(roomReservationId))) {
+      return true;
+    }
+
+    const channelLower = String(b.channel || b.referer || b.apiSource || '').toLowerCase();
+    if (channelLower.includes('booking') && /^(?:1|52|34|44|33|39|49)?(6[3-7]\d{8})$/.test(digits)) {
+      return true;
+    }
+
+    return false;
+  };
 
   // 1. Campos telefónicos explícitos
   const explicitCandidates = [
@@ -2458,7 +2532,7 @@ export function extractPhoneFromBookingData(b: any): string | null {
     if (cand) {
       const norm = normalizePhone(String(cand), b.country2 || b.country || b.guestCountry2 || b.guestCountry);
       const digits = norm.replace(/\D/g, '');
-      if (digits.length >= 10 && digits !== '0000000000' && digits !== '1234567890') {
+      if (digits.length >= 9 && !isCandidateDummy(norm)) {
         return norm;
       }
     }
@@ -2500,15 +2574,13 @@ export function extractPhoneFromBookingData(b: any): string | null {
     .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
     .replace(/[\u2010-\u2015\u2212]/g, '-');
 
-  const bookingIdStr = String(b.id || '').replace(/\D/g, '');
-
   // Patrón A: Palabras clave (tel, cel, whats, wapp, contacto, numero, etc.)
   const kwMatch = fullText.match(/(?:tel|cel|phone|whats|wapp|m[oó]vil|contacto|n[uú]mero|num|wa\.me)[\s:=]*([+\d\s().-]{8,25})/i);
   if (kwMatch && kwMatch[1]) {
     const rawCandidate = kwMatch[1].trim();
     const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
     const digits = norm.replace(/\D/g, '');
-    if (digits.length >= 10 && digits !== bookingIdStr && digits !== '0000000000') {
+    if (digits.length >= 9 && !isCandidateDummy(norm)) {
       return norm;
     }
   }
@@ -2519,7 +2591,7 @@ export function extractPhoneFromBookingData(b: any): string | null {
     for (const rawCandidate of intlMatches) {
       const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
       const digits = norm.replace(/\D/g, '');
-      if (digits.length >= 10 && digits !== bookingIdStr) {
+      if (digits.length >= 9 && !isCandidateDummy(norm)) {
         return norm;
       }
     }
@@ -2530,9 +2602,9 @@ export function extractPhoneFromBookingData(b: any): string | null {
   if (flexibleIntlMatches) {
     for (const rawCandidate of flexibleIntlMatches) {
       const digits = rawCandidate.replace(/\D/g, '');
-      if (digits.length >= 9 && digits.length <= 16 && digits !== bookingIdStr && digits !== '0000000000') {
+      if (digits.length >= 9 && digits.length <= 16 && !isCandidateDummy(rawCandidate)) {
         const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
-        if (norm) {
+        if (norm && !isCandidateDummy(norm)) {
           return norm;
         }
       }
@@ -2545,7 +2617,7 @@ export function extractPhoneFromBookingData(b: any): string | null {
     for (const rawCandidate of mxMatches) {
       const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry || 'MX');
       const digits = norm.replace(/\D/g, '');
-      if (digits.length >= 10 && digits !== bookingIdStr) {
+      if (digits.length >= 10 && !isCandidateDummy(norm)) {
         return norm;
       }
     }
@@ -2555,10 +2627,9 @@ export function extractPhoneFromBookingData(b: any): string | null {
   const seqMatches = fullText.match(/\b\d{10,13}\b/g);
   if (seqMatches) {
     for (const rawCandidate of seqMatches) {
-      if (rawCandidate === bookingIdStr) continue;
       const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
       const digits = norm.replace(/\D/g, '');
-      if (digits.length >= 10 && digits !== bookingIdStr) {
+      if (digits.length >= 10 && !isCandidateDummy(norm)) {
         return norm;
       }
     }
@@ -2744,7 +2815,7 @@ export async function syncBeds24BookingLocal(b: any, overrides?: { phone?: strin
 
   let phone = extractPhoneFromBookingData(b);
 
-  // Si Beds24 no devuelve teléfono, consultar si ya teníamos el teléfono guardado en la base de datos
+  // Si Beds24 no devuelve teléfono, consultar si ya teníamos un teléfono real guardado en la base de datos
   if (!phone && b.id) {
     try {
       const { data: prevDb } = await supabase
@@ -2752,8 +2823,9 @@ export async function syncBeds24BookingLocal(b: any, overrides?: { phone?: strin
         .select('guest_phone, phone')
         .eq('id', String(b.id))
         .maybeSingle();
-      if (prevDb?.guest_phone || prevDb?.phone) {
-        phone = prevDb.guest_phone || prevDb.phone;
+      const candidateDb = prevDb?.guest_phone || prevDb?.phone;
+      if (candidateDb && !isDummyOrInvalidPhone(candidateDb, b.notes || b.comments || b.apiMessage, channel)) {
+        phone = candidateDb;
       }
     } catch (_) {}
   }
@@ -3036,7 +3108,7 @@ export async function syncBeds24ReservationsRange(
         check_in: b.arrival,
         check_out: b.departure,
         guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
-        guest_phone: normalizePhone(b.phone || b.mobile || b.guestPhone || b.guestMobile || '', b.country2 || b.country || b.guestCountry2 || b.guestCountry) || null,
+        guest_phone: extractPhoneFromBookingData(b) || null,
         guest_email: b.email || null,
         status: dbStatus,
         source: 'beds24',

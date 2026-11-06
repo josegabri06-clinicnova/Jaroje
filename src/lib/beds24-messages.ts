@@ -1,5 +1,5 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { getBeds24Token, updateBeds24BookingPhone, extractPhoneFromBookingData } from '@/lib/beds24';
+import { getBeds24Token, updateBeds24BookingPhone, extractPhoneFromBookingData, isDummyOrInvalidPhone } from '@/lib/beds24';
 import {
   normalizePhone,
   sendTemplate3_ReservacionConfirmada,
@@ -694,17 +694,8 @@ export function extractPhoneFromMessages(messages: any[], country?: string, book
   return null;
 }
 
-/**
- * Detecta si un teléfono es ficticio, dummy o inválido (común en OTAs como Expedia)
- */
-export function isDummyOrInvalidPhone(phone?: string | null): boolean {
-  if (!phone) return true;
-  const digits = String(phone).replace(/\D/g, '');
-  if (digits.length < 9) return true;
-  if (/^(\d)\1+$/.test(digits)) return true; // ej: 11111111111, 0000000000
-  if (digits === '1234567890' || digits === '0123456789') return true;
-  return false;
-}
+// Re-exportar validador centralizado de teléfonos dummy / inválidos
+export { isDummyOrInvalidPhone };
 
 /**
  * FASE 1: Procesa respuestas de huéspedes en los chats de las OTAs

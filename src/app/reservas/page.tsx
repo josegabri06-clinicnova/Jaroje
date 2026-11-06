@@ -8,7 +8,7 @@ import { uploadGuestFile } from '@/lib/files-client';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
-import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests, areBookingsInSameGroup } from '@/lib/beds24';
+import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests, areBookingsInSameGroup, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
@@ -490,7 +490,8 @@ function ReservasListInner() {
       setIsEditingDepositInline(false);
       setInlineDepositValue('');
       setEditGuestName(selectedRes.guest_name || '');
-      setEditPhone(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '');
+      const rawResPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '';
+      setEditPhone(isDummyOrInvalidPhone(rawResPhone, selectedRes.notes, selectedRes.channel) ? '' : rawResPhone);
       setEditAdults(Number(selectedRes.display_num_adult !== undefined ? selectedRes.display_num_adult : (selectedRes.num_adult || 1)));
       setEditChildren(Number(selectedRes.display_num_child !== undefined ? selectedRes.display_num_child : (selectedRes.num_child || 0)));
       const priceEstimate = selectedRes.price_estimate || 0;
@@ -1057,7 +1058,7 @@ function ReservasListInner() {
     const channel = (selectedRes?.channel || '').toLowerCase();
     const isOta = channel.includes('booking') || channel.includes('expedia') || channel.includes('airbnb') || channel.includes('agoda');
     const cleanDigits = (editPhone || '').replace(/\D/g, '');
-    if (isOta && (cleanDigits.length < 8 || editPhone.includes('@') || cleanDigits.startsWith('0000'))) {
+    if (isOta && (cleanDigits.length < 8 || editPhone.includes('@') || cleanDigits.startsWith('0000') || isDummyOrInvalidPhone(editPhone, selectedRes?.notes, selectedRes?.channel))) {
       alert(`🚨 TELÉFONO OBLIGATORIO:\nEsta reserva proviene de ${selectedRes?.channel || 'Booking / Expedia'}.\nEs estrictamente obligatorio registrar el número de WhatsApp del huésped para enviarle las plantillas de bienvenida, claves de acceso y portal digital.`);
       return;
     }
@@ -5214,6 +5215,7 @@ function ReservasListInner() {
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
                       {(() => {
                         const rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
+                        const isDummy = isDummyOrInvalidPhone(rawPhone, selectedRes.notes, selectedRes.channel);
                         let waDigits = rawPhone.replace(/\D/g, '');
                         if (waDigits.startsWith('521') && waDigits.length === 13) {
                           waDigits = '52' + waDigits.substring(3);
@@ -5226,7 +5228,7 @@ function ReservasListInner() {
                         } else if (waDigits.length === 10) {
                           waDigits = (portalLanguage === 'en' || selectedRes.guest_country === 'US' || selectedRes.country === 'US' || String(rawPhone).startsWith('+1')) ? '1' + waDigits : '52' + waDigits;
                         }
-                        return rawPhone ? (
+                        return (rawPhone && !isDummy) ? (
                           <a 
                             href={`https://wa.me/${waDigits}`} 
                             target="_blank" 
@@ -6539,7 +6541,7 @@ function ReservasListInner() {
                         const channel = (selectedRes.channel || '').toLowerCase();
                         const isOta = channel.includes('booking') || channel.includes('expedia') || channel.includes('airbnb') || channel.includes('agoda');
                         const cleanDigits = (editPhone || '').replace(/\D/g, '');
-                        const isPhoneMissing = isOta && (cleanDigits.length < 8 || editPhone.includes('@') || cleanDigits.startsWith('0000'));
+                        const isPhoneMissing = isOta && (cleanDigits.length < 8 || editPhone.includes('@') || cleanDigits.startsWith('0000') || isDummyOrInvalidPhone(editPhone, selectedRes.notes, selectedRes.channel));
                         if (isPhoneMissing) {
                           return (
                             <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-xl py-2 px-3 text-center flex items-center justify-center gap-1.5 animate-in fade-in duration-200">
@@ -6578,7 +6580,7 @@ function ReservasListInner() {
                             const ch = (selectedRes.channel || '').toLowerCase();
                             const isOtaBooking = ch.includes('booking') || ch.includes('expedia') || ch.includes('airbnb') || ch.includes('agoda');
                             const cleanPhoneDigits = (editPhone || '').replace(/\D/g, '');
-                            if (isOtaBooking && (cleanPhoneDigits.length < 8 || editPhone.includes('@') || cleanPhoneDigits.startsWith('0000'))) {
+                            if (isOtaBooking && (cleanPhoneDigits.length < 8 || editPhone.includes('@') || cleanPhoneDigits.startsWith('0000') || isDummyOrInvalidPhone(editPhone, selectedRes.notes, selectedRes.channel))) {
                               return true;
                             }
                             
