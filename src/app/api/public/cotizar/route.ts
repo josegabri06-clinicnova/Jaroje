@@ -230,46 +230,19 @@ export async function GET(req: Request) {
     const checkOut = searchParams.get('checkOut');
     const rawPhone = searchParams.get('phone') || '';
 
-    // La búsqueda por teléfono confirma si una persona tiene reserva: se limita por IP (120 consultas / 15 min: cada cambio de fechas cuenta)
+    // La búsqueda de la cotización pendiente por teléfono se limita por IP (120 consultas / 15 min: cada cambio de fechas cuenta)
     if (rawPhone) {
       const limited = await rateLimitResponse(req, 'cotizar-phone', { max: 120, windowMs: 15 * 60_000, lockMs: 10 * 60_000 });
       if (limited) return limited;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    // 1. Si se proporciona teléfono, verificar si el cliente ya tiene reservaciones activas o futuras
-    let existingReservations: any[] = [];
+    // 1. Si se proporciona teléfono, recuperar su cotización pendiente. El teléfono NO sirve para buscar reservas: no identifica
+    // a nadie y el portal del huésped se protege aparte (verificación de los 4 últimos dígitos).
     let pendingQuote: any = null;
     if (rawPhone) {
       const cleanPhone = normalizePhone(rawPhone);
-      const last10 = cleanPhone.slice(-10);
-
-      // Las dos búsquedas por teléfono son independientes: se lanzan a la vez
-      const lookupBookings = (async () => {
-        try {
-          const { data: dbBookings } = await supabase
-            .from('beds24_reservations')
-            .select('id')
-            .gte('check_out', todayStr)
-            .neq('status', 'cancelled')
-            .or(`phone.like.%${last10}%,guest_phone.like.%${last10}%`)
-            .order('check_in', { ascending: true });
-
-          if (dbBookings && dbBookings.length > 0) {
-            // Solo "tiene reserva" y el enlace a su portal: nombre, fechas e importes se ven allí, tras verificar el teléfono
-            existingReservations = dbBookings.map(b => ({
-              id: String(b.id),
-              portal_url: `/public/reserva/${b.id}`
-            }));
-          }
-        } catch (errDb) {
-          console.warn("[Cotizar API] Error buscando reservas previas:", errDb);
-        }
-      })();
-
-      // 1.1. Buscar si hay una cotización pendiente reciente (últimas 24 horas) para este teléfono
-      const lookupQuote = (async () => {
+      // Buscar si hay una cotización pendiente reciente (últimas 24 horas) para este teléfono
+      await (async () => {
         try {
           const { data: conv } = await supabase
             .from('conversations')
@@ -294,15 +267,12 @@ export async function GET(req: Request) {
           console.warn("[Cotizar API] Error buscando pendingQuote:", qErr);
         }
       })();
-
-      await Promise.all([lookupBookings, lookupQuote]);
     }
 
     // Si no se pasaron fechas, retornar información general de categorías y reservas existentes
     if (!checkIn || !checkOut) {
       return NextResponse.json({
         success: true,
-        existingReservations,
         pendingQuote,
         categories: CATEGORY_DEFINITIONS.map(c => ({
           key: c.key,
@@ -516,7 +486,6 @@ export async function GET(req: Request) {
       checkIn,
       checkOut,
       nights,
-      existingReservations,
       pendingQuote,
       quotes
     });
