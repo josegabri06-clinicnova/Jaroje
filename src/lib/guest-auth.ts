@@ -87,6 +87,24 @@ export async function isGuestAuthorized(req: Request, bookingId: string): Promis
   return verifyGuestToken(readCookie(req, guestCookieName(bookingId)), bookingId);
 }
 
+/**
+ * Reservas que este dispositivo tiene autorizadas: las de sus cookies jg_<id> con firma válida y vigente.
+ * El número sale del NOMBRE de la cookie, pero solo cuenta si el token firmado dice ese mismo número (no se puede renombrar una cookie).
+ * Máximo 20 cookies leídas, para que una petición con cientos de cookies no cueste nada.
+ */
+export async function listAuthorizedBookingIds(req: Request, max = 20): Promise<string[]> {
+  const candidates = new Map<string, string>();
+  for (const part of (req.headers.get('cookie') || '').split(';')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    const m = /^jg_(\d{1,15})$/.exec(part.slice(0, eq).trim());
+    if (m && !candidates.has(m[1])) candidates.set(m[1], part.slice(eq + 1).trim());
+    if (candidates.size >= max) break;
+  }
+  const checked = await Promise.all([...candidates].map(async ([id, token]) => ((await verifyGuestToken(token, id)) ? id : null)));
+  return checked.filter((id): id is string => id !== null);
+}
+
 /** Autoriza este dispositivo para los archivos de esa reserva (cookie HttpOnly firmada) */
 export async function grantGuestAccess(res: NextResponse, bookingId: string): Promise<void> {
   res.cookies.set({

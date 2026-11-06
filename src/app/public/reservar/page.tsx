@@ -23,7 +23,9 @@ import {
   Compass,
   AlertCircle,
   MessageCircle,
-  ArrowLeft
+  ArrowLeft,
+  Building,
+  ExternalLink
 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -53,6 +55,15 @@ interface QuoteItem {
   totalPrice: number;
   depositRequired: number;
   currency: string;
+}
+
+// Estancia confirmada de este dispositivo (la entrega /api/public/mi-estancia)
+interface MyStay {
+  id: string;
+  room_name: string;
+  check_in: string;
+  check_out: string;
+  phase: 'in_house' | 'upcoming';
 }
 
 function formatMexicanDate(dateStr: string): string {
@@ -254,6 +265,8 @@ function ReservarContent() {
 
   // Pantalla de éxito
   const [bookingSuccess, setBookingSuccess] = useState<any | null>(null);
+  const [myStays, setMyStays] = useState<MyStay[]>([]);
+  const [activeTab, setActiveTab] = useState<'booking' | 'stays'>('booking');
 
   // Diccionario bilingüe
   const t = useMemo(() => {
@@ -303,6 +316,12 @@ function ReservarContent() {
           lockSuccessDesc: 'Your accommodations have been temporarily reserved for 24 hours in our system.',
           bookingIdLabel: 'Reservation #',
           goToPortal: 'Open My Guest Portal',
+          myStayTab: 'My Stay',
+          bookNewTab: 'Book Accommodation',
+          myStayBanner: 'Your confirmed stays on this device:',
+          viewPortalLink: 'Open Guest Portal',
+          stayInHouse: 'In progress',
+          stayUpcoming: 'Upcoming',
           bankTransferTitle: 'Deposit Instructions (50%)',
           bankName: 'Bank: BBVA / STP',
           bankClabe: 'CLABE: 012610015523498762',
@@ -362,6 +381,12 @@ function ReservarContent() {
           lockSuccessDesc: 'Tus habitaciones quedaron aseguradas por 24 horas en nuestro sistema.',
           bookingIdLabel: 'Reservación #',
           goToPortal: 'Ir a mi Portal del Huésped',
+          myStayTab: 'Mi Estancia',
+          bookNewTab: 'Cotizar y Reservar',
+          myStayBanner: 'Tus estancias confirmadas en este dispositivo:',
+          viewPortalLink: 'Ver Portal del Huésped',
+          stayInHouse: 'En curso',
+          stayUpcoming: 'Próxima',
           bankTransferTitle: 'Datos para realizar tu Anticipo (50%)',
           bankName: 'Banco: BBVA / STP',
           bankClabe: 'CLABE: 012610015523498762',
@@ -518,6 +543,17 @@ function ReservarContent() {
       }
     }
   };
+
+  // "Mi estancia": estancias confirmadas de ESTE dispositivo. El servidor las deduce de sus cookies firmadas; no se envía ningún teléfono.
+  // Una sola consulta al abrir la página, aparte de las cotizaciones (no se repite al cambiar fechas).
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetch('/api/public/mi-estancia', { cache: 'no-store', signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.success && Array.isArray(d.stays) && d.stays.length > 0) setMyStays(d.stays); })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, []);
 
   useEffect(() => {
     fetchQuotes();
@@ -963,6 +999,29 @@ function ReservarContent() {
           </button>
         </div>
 
+        {/* ── TABS: "MI ESTANCIA" SOLO SI ESTE DISPOSITIVO TIENE ESTANCIAS CONFIRMADAS ── */}
+        {myStays.length > 0 && !bookingSuccess && (
+          <div className="max-w-xl mx-auto px-4 pt-1 pb-2 flex gap-2">
+            <button
+              onClick={() => setActiveTab('stays')}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeTab === 'stays' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+              }`}
+            >
+              <Building size={14} />
+              <span>{t.myStayTab} ({myStays.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('booking')}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeTab === 'booking' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+              }`}
+            >
+              <Plus size={14} />
+              <span>{t.bookNewTab}</span>
+            </button>
+          </div>
+        )}
       </header>
 
       {/* ── CONTENIDO PRINCIPAL ── */}
@@ -1038,6 +1097,41 @@ function ReservarContent() {
                 <ArrowRight size={14} />
               </a>
             </div>
+          </div>
+        ) : activeTab === 'stays' && myStays.length > 0 ? (
+          /* ── MI ESTANCIA: RESERVAS CONFIRMADAS DE ESTE DISPOSITIVO ── */
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="bg-indigo-50/60 border border-indigo-200/80 rounded-2xl p-4 text-xs font-medium text-indigo-900">
+              {t.myStayBanner}
+            </div>
+
+            {myStays.map((stay) => (
+              <div key={stay.id} className="bg-white rounded-2xl p-5 border border-zinc-200/80 shadow-xs space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                      stay.phase === 'in_house' ? 'text-emerald-700 bg-emerald-50' : 'text-indigo-600 bg-indigo-50'
+                    }`}>
+                      {stay.phase === 'in_house' ? t.stayInHouse : t.stayUpcoming}
+                    </span>
+                    <h3 className="text-sm font-black text-zinc-900 mt-1.5">{stay.room_name}</h3>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-zinc-400">#{stay.id}</span>
+                </div>
+
+                <div className="text-xs text-zinc-600 border-t border-zinc-100 pt-2">
+                  📅 {formatMexicanDate(stay.check_in)} → {formatMexicanDate(stay.check_out)}
+                </div>
+
+                <a
+                  href={`/public/reserva/${stay.id}${lang === 'en' ? '?lang=en' : ''}`}
+                  className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>{t.viewPortalLink}</span>
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            ))}
           </div>
         ) : (
           /* ── MOTOR DE RESERVAS (ESTILO BOOKING) ── */
