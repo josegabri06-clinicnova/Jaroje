@@ -3,7 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
 
 import { normalizeBookingId } from '@/lib/guest-auth';
-import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
+import { requireGuestWriteAccess } from '@/lib/guest-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +35,8 @@ export async function POST(req: Request) {
     if (!guestId) {
       return NextResponse.json({ success: false, error: 'ID de reserva no válido' }, { status: 400 });
     }
-    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
+    const denied = await requireGuestWriteAccess(req, guestId);
+    if (denied) return denied;
 
     const normalizePhoneStr = (p?: string) => (p || '').replace(/\D/g, '');
 

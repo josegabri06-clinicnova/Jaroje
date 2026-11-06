@@ -3,7 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
 import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileUrl } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
-import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
+import { requireGuestWriteAccess } from '@/lib/guest-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +24,8 @@ export async function POST(req: Request) {
     const bookingId = Number(guestId); // mismo id que valida la guardia (no el texto crudo del cliente)
 
     // Solo quien ya verificó su teléfono (o personal) puede subir; ya no basta con conocer el número de reserva
-    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
+    const denied = await requireGuestWriteAccess(req, guestId);
+    if (denied) return denied;
 
     // 1. Obtener detalles de la reservación (Check-in/Check-out/Guest Name) y verificar pago
     let checkInDate = null;
