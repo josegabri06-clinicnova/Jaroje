@@ -5,6 +5,7 @@ import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
 import { checkGuestAccess, firstNameOf, verificationRequiredResponse } from '@/lib/guest-access';
+import { physicalRoomName } from '@/lib/room-names';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,18 +98,7 @@ export async function GET(req: Request) {
     }
 
     if (localRes) {
-      const UNIT_TO_ROOM: Record<string, string> = {
-        '1': '500', '2': '501', '3': '502', '4': '503',
-        '5': '504', '6': '505', '7': '506', '8': '507'
-      };
-      const UNIT_TO_ROOM_600: Record<string, string> = {
-        '1': '601', '2': '602', '3': '603', '4': '604',
-        '5': '605', '6': '606', '7': '607'
-      };
-      const is600 = String(localRes.room_id) === '685543';
-      const physicalName = localRes.unit_id 
-        ? (is600 ? (UNIT_TO_ROOM_600[String(localRes.unit_id)] || localRes.unit_id) : (UNIT_TO_ROOM[String(localRes.unit_id)] || localRes.unit_id))
-        : '';
+      const physicalName = physicalRoomName(localRes.room_id, localRes.unit_id);
       const arrivalDate = localRes.check_in ? new Date(localRes.check_in) : null;
       const departureDate = localRes.check_out ? new Date(localRes.check_out) : null;
       const nights = (arrivalDate && departureDate)
@@ -167,10 +157,7 @@ export async function GET(req: Request) {
       };
       
       const siblingLocalMapped = siblingLocal.map(s => {
-        const isSibling600 = String(s.room_id) === '685543';
-        const siblingPhysicalName = s.unit_id 
-          ? (isSibling600 ? (UNIT_TO_ROOM_600[String(s.unit_id)] || s.unit_id) : (UNIT_TO_ROOM[String(s.unit_id)] || s.unit_id))
-          : '';
+        const siblingPhysicalName = physicalRoomName(s.room_id, s.unit_id);
         return {
           ...s,
           room: siblingPhysicalName
