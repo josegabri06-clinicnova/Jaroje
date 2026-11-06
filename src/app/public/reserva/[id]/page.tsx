@@ -570,7 +570,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     dniError: 'Failed to upload your ID. Please try again.',
     dniChangeButton: 'Change ID 🔄',
     verifyTitle: 'Verify it is you',
-    verifyDesc: 'To view or change your documents, enter the last 4 digits of the phone number on your booking.',
+    verifyDesc: 'To view or change your documents, please enter the last 4 digits of the phone number used for your reservation.',
     verifyButton: 'Verify',
     verifying: 'Verifying…',
     verifyWrong: 'The digits do not match.',
@@ -1318,6 +1318,27 @@ export default function PublicReservaPage() {
         >
           {lang === 'en' ? 'Contact on WhatsApp' : 'Contactar por WhatsApp'}
         </a>
+      </div>
+    );
+  }
+
+  // Portal bloqueado: la reserva tiene un teléfono y este dispositivo aún no lo ha verificado.
+  // El servidor no envía nada de la reserva (solo el nombre de pila); aquí solo se pide verificar.
+  if ((booking as any).locked) {
+    const firstName = (booking as any).guest_first_name as string | undefined;
+    return (
+      <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center p-6 max-w-md mx-auto">
+        <div className="w-full bg-white border border-zinc-100 rounded-3xl shadow-sm p-6 space-y-4 text-center">
+          <h1 className="text-zinc-900 font-extrabold text-lg">
+            {lang === 'en' ? `Hello${firstName ? `, ${firstName}` : ''}!` : `¡Hola${firstName ? `, ${firstName}` : ''}!`}
+          </h1>
+          <p className="text-zinc-600 text-sm">
+            {lang === 'en'
+              ? 'To see your reservation, first confirm that it is you.'
+              : 'Para ver tu reservación, primero confirma que eres tú.'}
+          </p>
+          <div className="text-left">{renderVerifyBox()}</div>
+        </div>
       </div>
     );
   }

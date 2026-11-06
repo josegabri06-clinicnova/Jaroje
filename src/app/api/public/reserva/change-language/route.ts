@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
+import { normalizeBookingId } from '@/lib/guest-auth';
+import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
+
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
@@ -15,10 +18,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Idioma no soportado. Use es o en.' }, { status: 400 });
     }
 
+    const guestId = normalizeBookingId(id);
+    if (!guestId) {
+      return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
+    }
+    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
+
     const { error } = await supabase
       .from('booking_portal_settings')
       .upsert({
-        booking_id: String(id),
+        booking_id: guestId,
         language: language
       });
 

@@ -2,7 +2,20 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
 
+import { normalizeBookingId } from '@/lib/guest-auth';
+import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
+
 export const dynamic = 'force-dynamic';
+
+// Solo se pueden modificar las habitaciones de ESTA reserva o de su grupo, con números de personas válidos.
+// Antes se actualizaba cualquier bookingId que mandara el navegador (también en Beds24).
+function sanitizeRooms(rooms: any[], allowedIds: Set<string>) {
+  return rooms
+    .filter((r: any) => r && allowedIds.has(String(r.bookingId)))
+    .map((r: any) => ({ bookingId: r.bookingId, numAdult: Number(r.numAdult), numChild: Number(r.numChild) }));
+}
+const validGuestCount = (r: { numAdult: number; numChild: number }) =>
+  Number.isInteger(r.numAdult) && Number.isInteger(r.numChild) && r.numAdult >= 0 && r.numChild >= 0 && r.numAdult + r.numChild <= 50;
 
 export async function POST(req: Request) {
   try {
@@ -17,6 +30,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Faltan parámetros obligatorios' }, { status: 400 });
     }
 
+    // Modifica el número de huéspedes (también en Beds24): solo para quien verificó su teléfono o personal
+    const guestId = normalizeBookingId(bookingId);
+    if (!guestId) {
+      return NextResponse.json({ success: false, error: 'ID de reserva no válido' }, { status: 400 });
+    }
+    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
+
     const normalizePhoneStr = (p?: string) => (p || '').replace(/\D/g, '');
 
     if (!rooms || !Array.isArray(rooms)) {
@@ -30,7 +50,7 @@ export async function POST(req: Request) {
       }];
     }
 
-    const id = Number(bookingId);
+    const id = Number(guestId); // mismo id que valida la guardia
 
     // 1. Cargar capacity_settings de la base de datos
     let capacitySettings: any = null;
@@ -112,6 +132,11 @@ export async function POST(req: Request) {
 
       const allLocalMembers = [localResMapped, ...siblingLocalMapped];
       const adjLocal = detectAndAdjustGroupGuests(allLocalMembers, capacitySettings || undefined);
+
+      rooms = sanitizeRooms(rooms, new Set<string>(adjLocal.members.map((m: any) => String(m.id))));
+      if (!rooms.every(validGuestCount)) {
+        return NextResponse.json({ success: false, error: 'Número de personas no válido.' }, { status: 400 });
+      }
 
       let groupBase = 0;
       let groupMax = 0;
@@ -334,6 +359,13 @@ export async function POST(req: Request) {
 
     if (groupOriginalPrice === 0) {
       groupOriginalPrice = Number(currentBooking.price || 0);
+    }
+
+    // Solo las habitaciones de esta reserva o de su grupo; el resto de ids que mande el navegador se ignoran
+    const allowedB24Ids = new Set<string>([String(id), ...(adjB24?.members || []).map((m: any) => String(m.id))]);
+    rooms = sanitizeRooms(rooms, allowedB24Ids);
+    if (!rooms.every(validGuestCount)) {
+      return NextResponse.json({ success: false, error: 'Número de personas no válido.' }, { status: 400 });
     }
 
     // 3.1. Calcular el total de huéspedes del grupo considerando los nuevos valores

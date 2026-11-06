@@ -3,6 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
 import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileUrl } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
+import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,11 +17,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta ID de la reserva o archivo' }, { status: 400 });
     }
 
-    const bookingId = Number(id);
     const guestId = normalizeBookingId(id);
     if (!guestId) {
       return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
     }
+    const bookingId = Number(guestId); // mismo id que valida la guardia (no el texto crudo del cliente)
+
+    // Solo quien ya verificó su teléfono (o personal) puede subir; ya no basta con conocer el número de reserva
+    if (!(await checkGuestAccess(req, guestId)).allowed) return verificationRequiredResponse();
 
     // 1. Obtener detalles de la reservación (Check-in/Check-out/Guest Name) y verificar pago
     let checkInDate = null;
@@ -71,7 +75,7 @@ export async function POST(req: Request) {
 
     // Verificar si ya se subió un comprobante de pago en la tabla checkins
     let hasUploadedReceipt = false;
-    const cleanId = String(id).toLowerCase().trim();
+    const cleanId = guestId;
     const { data: existingCheckin } = await supabase
       .from('checkins')
       .select('*')

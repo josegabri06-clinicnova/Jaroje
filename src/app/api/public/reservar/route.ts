@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { grantGuestAccess, normalizeBookingId } from '@/lib/guest-auth';
 import { 
   getBeds24Token, 
   clearBeds24Cache, 
@@ -782,7 +783,7 @@ export async function POST(req: Request) {
       console.warn("[Reservar API] Error actualizando pendingQuote a confirmed:", qUpdErr);
     }
 
-    return NextResponse.json({
+    const successRes = NextResponse.json({
       success: true,
       masterBookingId,
       bookingIds: successfulBookingIds,
@@ -797,6 +798,12 @@ export async function POST(req: Request) {
       balanceRemaining: grandTotalPrice,
       portalUrl: `/public/reserva/${masterBookingId}`
     });
+
+    // Quien acaba de crear esta reserva es su dueño: este dispositivo queda verificado para SU portal y no se le piden
+    // los 4 dígitos nada más reservar. La cookie vale solo para esa reserva.
+    const portalGuestId = normalizeBookingId(masterBookingId);
+    if (portalGuestId) await grantGuestAccess(successRes, portalGuestId);
+    return successRes;
 
   } catch (error: any) {
     if (error instanceof RatesUnavailableError) {
