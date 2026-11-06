@@ -1,6 +1,7 @@
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { isTesterPhone } from '@/lib/test-phones';
 
 export function getWhatsAppToken(): string {
   const token = process.env.WHATSAPP_TOKEN?.trim();
@@ -480,7 +481,10 @@ export async function sendWhatsAppTemplate(
       try {
         const { isExcludedPersonalContact } = await import('@/lib/personal-contacts');
         const excludedCheck = await isExcludedPersonalContact(cleanedPhone);
-        if (excludedCheck.isExcluded) {
+        // Números de prueba del equipo (variable WHATSAPP_TEST_PHONES): reciben las plantillas como cualquier huésped aunque estén excluidos
+        const isTester = excludedCheck.isExcluded && isTesterPhone(cleanedPhone);
+        if (isTester) console.log(`[WhatsApp API] 🧪 Número de prueba (WHATSAPP_TEST_PHONES): se envía '${templateName}' aunque esté en 'excluded_person'.`);
+        if (excludedCheck.isExcluded && !isTester) {
           const name = excludedCheck.contact?.name || 'Contacto Excluido';
           console.log(`[WhatsApp API] 🛑 Omitiendo plantilla '${templateName}' para ${cleanedPhone} (${name}): número registrado en lista 'excluded_person' (Regla: Cero plantillas automáticas).`);
           return {

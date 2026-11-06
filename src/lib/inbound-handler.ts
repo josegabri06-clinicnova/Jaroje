@@ -1,6 +1,7 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendWhatsAppTextMessage, sendWhatsAppTemplate, normalizePhone, cleanPhoneForMeta } from '@/lib/whatsapp';
 import { maskPhone, describeText } from '@/lib/log-mask';
+import { isTesterPhone } from '@/lib/test-phones';
 
 const requestCache = new Map<string, number>();
 const welcomeSentMemoryCache = new Map<string, number>();
@@ -218,7 +219,8 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   // La conversación se registra en modo humano para que recepción / Rolando atiendan manualmente sin interferencias del bot.
   const { isExcludedPersonalContact } = await import('@/lib/personal-contacts');
   const personalCheck = await isExcludedPersonalContact(phone);
-  if (personalCheck.isExcluded) {
+  // Números de prueba del equipo (variable WHATSAPP_TEST_PHONES): el bot les responde como a cualquier huésped
+  if (personalCheck.isExcluded && !isTesterPhone(phone)) {
     const contactName = personalCheck.contact?.name || 'Contacto Personal';
     console.log(`[Inbound Handler] 🛑 Contacto en lista 'excluded_person' (${maskPhone(phone)}) ${describeText(guestMsgText)}. Se cancela el envío de cualquier plantilla relacionada con palabras clave.`);
 
