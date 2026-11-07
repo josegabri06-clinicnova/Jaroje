@@ -2,13 +2,14 @@
  * Subida de fotos de mantenimiento desde el navegador, a través del servidor (/api/tasks/photo).
  *
  * Vercel rechaza peticiones de más de ~4,5 MB y las fotos de un móvil suelen pesar más, así que:
- *  - si el archivo es una imagen JPG/PNG/WEBP de hasta 3,5 MB, se envía tal cual (el caso más habitual, sin tocarla);
- *  - si es más grande, se reduce a un JPG de 1600 px antes de enviarla;
+ *  - las imágenes de más de 600 KB se reducen a un JPG de 1600 px (pesa ~300 KB y no satura la memoria del móvil al verla);
+ *  - si no se puede reducir, se envía tal cual solo si cabe (hasta 3,5 MB);
  *  - si no se puede reducir (por ejemplo un HEIC que el navegador no sabe abrir), se envía tal cual solo si cabe;
  *  - un PDF se envía tal cual si cabe.
  * Devuelve el enlace público de la foto, o null si no se pudo subir (igual que antes: la tarea se guarda sin foto).
  */
 const MAX_DIRECT_BYTES = 3.5 * 1024 * 1024;
+const REDUCE_ABOVE_BYTES = 600 * 1024; // por encima de esto se reduce siempre: una foto de móvil descomprimida ocupa decenas de MB de memoria al verla
 const MAX_SIDE = 1600;
 
 async function toJpegBlob(file: File): Promise<Blob | null> {
@@ -35,7 +36,7 @@ export async function uploadMaintenancePhoto(file: File, kind: 'incidencia' | 'r
     const fitsAsIs = file.size <= MAX_DIRECT_BYTES;
     const isPlainImage = /^image\/(jpeg|png|webp)$/.test(file.type);
 
-    if (!fitsAsIs || (!isPlainImage && file.type.startsWith('image/'))) {
+    if (!fitsAsIs || file.size > REDUCE_ABOVE_BYTES || (!isPlainImage && file.type.startsWith('image/'))) {
       const compressed = await toJpegBlob(file);
       if (compressed && compressed.size > 0) {
         body = compressed;
