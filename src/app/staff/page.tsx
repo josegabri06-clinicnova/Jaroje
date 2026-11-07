@@ -15,6 +15,7 @@ import { getActiveEmployee, clearActiveEmployee, Employee, syncEmployeesFromServ
 import EmployeeModal from '@/components/EmployeeModal';
 import { getSeason } from '@/lib/beds24';
 import { copyToClipboard, openWhatsAppUrl, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
+import { uploadMaintenancePhoto } from '@/lib/upload-photo';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -968,14 +969,12 @@ export default function StaffPage() {
 
       // Subir foto de resolución si existe (Opcional)
       if (resolvePhotoFile) {
-        const fileExt = resolvePhotoFile.name.split('.').pop();
-        const fileName = `resolucion_${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('maintenance_photos').upload(fileName, resolvePhotoFile);
-        if (!uploadError) {
-          const { data } = supabase.storage.from('maintenance_photos').getPublicUrl(fileName);
-          finalResPhotoUrl = data.publicUrl;
+        // La foto sube por el servidor (/api/tasks/photo), ya no directamente a Supabase con la clave pública
+        const uploadedUrl = await uploadMaintenancePhoto(resolvePhotoFile, 'resolucion');
+        if (uploadedUrl) {
+          finalResPhotoUrl = uploadedUrl;
         } else {
-          console.error("Upload resolution photo error:", uploadError);
+          console.error("Upload resolution photo error");
         }
       }
 

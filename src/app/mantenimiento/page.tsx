@@ -14,6 +14,7 @@ const supabase = createClient(
 import { getActiveEmployee } from '@/lib/auth';
 import CameraModal from '@/components/CameraModal';
 import { copyToClipboard, openWhatsAppUrl, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
+import { uploadMaintenancePhoto } from '@/lib/upload-photo';
 
 const safeFormatDate = (dateVal: any, formatStr: string, options?: any) => {
   if (!dateVal) return '—';
@@ -460,14 +461,12 @@ export default function MantenimientoPage() {
     try {
       // Subir foto de resolución si existe (Opcional)
       if (resolvePhotoFile) {
-        const fileExt = resolvePhotoFile.name.split('.').pop();
-        const fileName = `resolucion_${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('maintenance_photos').upload(fileName, resolvePhotoFile);
-        if (!uploadError) {
-          const { data } = supabase.storage.from('maintenance_photos').getPublicUrl(fileName);
-          finalResPhotoUrl = data.publicUrl;
+        // La foto sube por el servidor (/api/tasks/photo), ya no directamente a Supabase con la clave pública
+        const uploadedUrl = await uploadMaintenancePhoto(resolvePhotoFile, 'resolucion');
+        if (uploadedUrl) {
+          finalResPhotoUrl = uploadedUrl;
         } else {
-          console.error("Upload resolution photo error:", uploadError);
+          console.error("Upload resolution photo error");
         }
       }
 
@@ -669,24 +668,14 @@ export default function MantenimientoPage() {
 
     // Subir foto inicial si existe
     if (photoFile) {
-      const fileExt = photoFile.name.split('.').pop();
-      const fileName = `incidencia_${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('maintenance_photos').upload(fileName, photoFile);
-      if (!uploadError) {
-        const { data } = supabase.storage.from('maintenance_photos').getPublicUrl(fileName);
-        finalPhotoUrl = data.publicUrl;
-      }
+      const uploadedUrl = await uploadMaintenancePhoto(photoFile, 'incidencia');
+      if (uploadedUrl) finalPhotoUrl = uploadedUrl;
     }
 
     // Subir foto de resolución si existe y el estado es resuelta (Opcional)
     if (formStatus === 'resuelta' && resolutionPhotoFile) {
-      const fileExt = resolutionPhotoFile.name.split('.').pop();
-      const fileName = `resolucion_${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('maintenance_photos').upload(fileName, resolutionPhotoFile);
-      if (!uploadError) {
-        const { data } = supabase.storage.from('maintenance_photos').getPublicUrl(fileName);
-        finalResPhotoUrl = data.publicUrl;
-      }
+      const uploadedUrl = await uploadMaintenancePhoto(resolutionPhotoFile, 'resolucion');
+      if (uploadedUrl) finalResPhotoUrl = uploadedUrl;
     }
 
     const payload = {
