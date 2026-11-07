@@ -598,6 +598,7 @@ export default function StaffPage() {
   };
 
   const [activeIndices, setActiveIndices] = useState<Record<string, number>>({});
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
 
   const handleScroll = (taskId: string, e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget;
@@ -635,9 +636,9 @@ export default function StaffPage() {
         >
           {images.map((img, idx) => (
             <div key={idx} className="shrink-0 w-full aspect-video snap-center relative bg-zinc-100 flex items-center justify-center">
-              <a href={img} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="w-full h-full">
+              <div onClick={(e) => { e.stopPropagation(); setZoomImage(img); }} className="w-full h-full cursor-zoom-in">
                 <img src={img} alt={`Evidencia ${idx}`} className="w-full h-full object-cover select-none" />
-              </a>
+              </div>
               {images.length > 1 && (
                 <span className="absolute bottom-2.5 right-2.5 bg-black/60 text-white text-[10px] font-black px-2.5 py-1 rounded-lg select-none tracking-wider z-10">
                   {currentIndex + 1} / {images.length}
@@ -3501,6 +3502,29 @@ export default function StaffPage() {
           </div>
         );
       })()}
+
+
+      {/* Foto a pantalla completa (dentro de la app, sin abrir pestañas nuevas) */}
+      {zoomImage && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setZoomImage(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setZoomImage(null)}
+            className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 text-white flex items-center justify-center rounded-full z-50"
+          >
+            <X size={24} strokeWidth={2.5} />
+          </button>
+          <img
+            src={zoomImage}
+            alt="Detalle Evidencia"
+            className="max-w-full max-h-[85vh] object-contain rounded-2xl select-none shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
 
     </div>
   );
