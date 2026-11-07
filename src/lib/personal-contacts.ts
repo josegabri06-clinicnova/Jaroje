@@ -61,7 +61,7 @@ export function matchesPhone(rawA: string, rawB: string): boolean {
  * Obtiene la lista completa de contactos excluidos de la tabla `settings`:
  * 1. Claves directas: 'excluded_person', 'excluded_persons', 'excluded_personal_contacts'
  * 2. Empleados oficiales (clave: 'official_employees')
- * 3. Teléfono de gerencia / alertas (clave: 'admin_notification_phone')
+ * 3. Teléfono del gerente (clave: 'admin_notification_phone'): queda excluido de las plantillas automáticas
  * 4. Tabla 'excluded_person' (si existe en Supabase)
  */
 export async function getExcludedContacts(forceRefresh = false): Promise<PersonalContact[]> {
@@ -142,7 +142,7 @@ export async function getExcludedContacts(forceRefresh = false): Promise<Persona
       parseAndAddContacts(empRow.value, 'employee');
     }
 
-    // C. Teléfono de Alertas de Gerencia
+    // C. Teléfono del gerente (excluido de las plantillas automáticas)
     const adminPhoneRow = rows?.find(r => r.key === 'admin_notification_phone');
     if (adminPhoneRow?.value) {
       parseAndAddContacts(adminPhoneRow.value, 'admin');
