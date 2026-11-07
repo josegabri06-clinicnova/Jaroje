@@ -160,7 +160,6 @@ export default function AjustesPage() {
   const [savingAutoWA, setSavingAutoWA] = useState(false);
   const [adminNotificationPhone, setAdminNotificationPhone] = useState('');
   const [savingAdminNotificationPhone, setSavingAdminNotificationPhone] = useState(false);
-  const [testingAdminPhone, setTestingAdminPhone] = useState(false);
   const [receptionWaGroupUrl, setReceptionWaGroupUrl] = useState(RECEPTION_WA_GROUP_URL);
   const [savingReceptionWaGroupUrl, setSavingReceptionWaGroupUrl] = useState(false);
   const [maintenanceWaGroupUrl, setMaintenanceWaGroupUrl] = useState(MAINTENANCE_WA_GROUP_URL);
@@ -547,7 +546,7 @@ export default function AjustesPage() {
       if (!error && data && data.value) {
         setAdminNotificationPhone(String(data.value));
       } else {
-        setAdminNotificationPhone('529581168698');
+        setAdminNotificationPhone('');
       }
     } catch (e) {
       console.error('Error fetching admin notification phone setting:', e);
@@ -569,33 +568,6 @@ export default function AjustesPage() {
       alert(`Error al guardar teléfono de alertas: ${err.message}`);
     } finally {
       setSavingAdminNotificationPhone(false);
-    }
-  };
-
-  const handleTestAdminNotificationPhone = async () => {
-    if (!adminNotificationPhone.trim()) {
-      alert("Por favor ingresa al menos un número de teléfono.");
-      return;
-    }
-    setTestingAdminPhone(true);
-    try {
-      const res = await fetch('/api/whatsapp/test-alert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: adminNotificationPhone.trim() })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setToastMessage(`✅ ¡Alerta de prueba enviada con éxito! Revisa tu WhatsApp.`);
-        setTimeout(() => setToastMessage(''), 4000);
-      } else {
-        alert(`Error al enviar prueba: ${data.error || 'Fallo desconocido'}`);
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert(`Error al conectar con el servidor: ${err.message}`);
-    } finally {
-      setTestingAdminPhone(false);
     }
   };
 
@@ -1515,10 +1487,10 @@ export default function AjustesPage() {
             <div className="flex flex-col gap-1 mb-2">
               <span className="text-[14px] font-bold text-zinc-800 flex items-center gap-1.5">
                 <Bell size={14} className="text-amber-500" />
-                Teléfono de Alertas WhatsApp (Gerencia)
+                Teléfono del gerente (excluido de plantillas automáticas)
               </span>
               <span className="text-[11px] text-zinc-400 font-sans leading-normal">
-                Número(s) donde el sistema enviará alertas cuando un cliente responda en el <b>Inbox</b> o suba un anticipo en <b>Por Aprobar</b>. Puedes ingresar uno o más números separados por comas con código de país (ej: <code>529581168698, 529511234567</code>).
+                Número(s) del gerente. Quedan <b>excluidos de las plantillas automáticas</b>, igual que la lista de contactos excluidos. Los avisos de reservas y comprobantes se ven en la campana de la aplicación y ya no se envían por WhatsApp. Puedes ingresar uno o más números separados por comas, con código de país y sin +.
               </span>
             </div>
             <div className="flex items-center gap-2 mt-2 flex-wrap sm:flex-nowrap">
@@ -1526,7 +1498,7 @@ export default function AjustesPage() {
                 type="text"
                 value={adminNotificationPhone}
                 onChange={(e) => setAdminNotificationPhone(e.target.value)}
-                placeholder="529581168698"
+                placeholder="52958XXXXXXX"
                 className="flex-1 min-w-[200px] px-3 py-2 text-[13px] bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
               />
               <button
@@ -1536,24 +1508,6 @@ export default function AjustesPage() {
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-[12px] font-semibold rounded-lg shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0"
               >
                 {savingAdminNotificationPhone ? 'Guardando...' : 'Guardar'}
-              </button>
-              <button
-                type="button"
-                onClick={handleTestAdminNotificationPhone}
-                disabled={testingAdminPhone || savingAdminNotificationPhone}
-                className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 text-[12px] font-semibold rounded-lg shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0 flex items-center gap-1.5"
-                title="Envía una alerta de prueba a este número de WhatsApp"
-              >
-                {testingAdminPhone ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-zinc-400 border-t-zinc-800 rounded-full animate-spin" />
-                    <span>Enviando...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>📲 Probar Alerta</span>
-                  </>
-                )}
               </button>
             </div>
           </div>

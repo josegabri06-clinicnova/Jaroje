@@ -38,7 +38,6 @@ export async function POST(req: Request) {
     if (!guestId) {
       return NextResponse.json({ error: 'Identificador de reserva con formato inválido.' }, { status: 400 });
     }
-    const cleanBookingId = guestId;
 
     // Solo quien verificó los 4 últimos dígitos (o el personal) puede subir un comprobante a una reserva con teléfono.
     // Un número que no existe tampoco tiene teléfono, así que además se exige que la reserva exista.
@@ -76,7 +75,7 @@ export async function POST(req: Request) {
     // 1. Subir el archivo a Supabase Storage en el bucket "transfer-receipts"
     const rawExt = file.name ? file.name.split('.').pop()?.toLowerCase() : 'jpg';
     const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'heic'].includes(rawExt || '') ? rawExt : 'jpg';
-    const filePath = `${cleanBookingId}_${Date.now()}.${safeExt}`;
+    const filePath = `${guestId}_${Date.now()}.${safeExt}`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('transfer-receipts')
@@ -113,35 +112,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Error al registrar la transferencia en base de datos.' }, { status: 500 });
     }
 
-    // 4. Enviar notificación por WhatsApp a Gerencia y Recepción
-    let adminPhones: string[] = [];
-    try {
-      const { data: phoneSetting } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'admin_notification_phone')
-        .maybeSingle();
-
-      if (phoneSetting && phoneSetting.value) {
-        const phones = String(phoneSetting.value).split(',').map(p => p.trim()).filter(Boolean);
-        adminPhones.push(...phones);
-      }
-    } catch (e) {
-      console.error("[Submit Transfer] Error leyendo admin_notification_phone desde settings:", e);
-    }
-
-    if (process.env.OWNER_PERSONAL_PHONE) {
-      adminPhones.push(process.env.OWNER_PERSONAL_PHONE);
-    }
-
-    if (adminPhones.length === 0) {
-      adminPhones.push('529581168698');
-    }
-
-    const uniqueAdminPhones = Array.from(new Set(adminPhones.map(p => p.replace(/\D/g, '')).filter(Boolean)));
+    // 4. Datos del pago, para el aviso interno y el mensaje al huésped.
+    // A Gerencia ya NO se le envía WhatsApp (se enviaba al mismo número que envía las plantillas y Meta lo rechazaba):
+    // el registro de abajo activa la campana y el sonido en el panel, y el huésped y el equipo reciben las plantillas de cada paso.
     const cleanGuestName = name || 'Invitado';
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-    const reviewUrl = `${siteUrl}/reservas?tab=Por+Aprobar&id=${guestId}`;
 
     const formPaymentType = (formData.get('paymentType') as string || '').toLowerCase().trim();
     const formTotal = Number(formData.get('total') || 0);
@@ -151,18 +125,7 @@ export async function POST(req: Request) {
     const isExplicitAnticipo = formPaymentType === 'anticipo' || notesStr.includes('ANTICIPO');
     const isExplicitTotal = formPaymentType === 'total' || notesStr.includes('TOTAL (100%)');
 
-    const paymentLabelForAdmin = isExplicitTotal ? 'Pago Total (100%)' : (isExplicitAnticipo ? 'Anticipo (50%)' : 'Comprobante');
-    const notificationBody = `🔔 *¡Nuevo ${paymentLabelForAdmin} en "POR APROBAR"!* 🔔\n\n👤 *Huésped:* ${cleanGuestName}\n🏷 *Reserva:* #${guestId}\n💵 *Monto Subido:* $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n\n⚡ *Aprobar o revisar en el panel:*\n👉 ${reviewUrl}\n\n📄 *Ver comprobante adjunto:*\n${publicUrl}`;
-
-    for (const phoneTarget of uniqueAdminPhones) {
-      console.log(`[Submit Transfer] Sending WA notification to admin: ${phoneTarget}`);
-      const waRes = await sendWhatsAppTextMessage(phoneTarget, notificationBody);
-      if (!waRes.success) {
-        console.warn(`[Submit Transfer] WhatsApp notification warning for ${phoneTarget}:`, waRes.error);
-      }
-    }
-
-    // 4.1. Registrar log en employee_logs para activar campana y toast sonoro en el Dashboard en tiempo real
+    // Registrar log en employee_logs para activar campana y toast sonoro en el Dashboard en tiempo real
     try {
       await supabase
         .from('employee_logs')
