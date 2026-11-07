@@ -183,7 +183,8 @@ export async function middleware(req: NextRequest) {
         '/api/reservas',
         '/api/auth/logout',
         '/api/employee-logs',
-        '/api/room-status'
+        '/api/room-status',
+        '/api/db' // pasarela de base de datos: ella misma decide por rol qué puede hacer cada perfil
       ];
       const isAllowed = allowedStaffApis.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
       // Las reservas son de solo lectura para limpieza y mantenimiento: modificar, crear o cancelar una reserva (con aviso al huésped
