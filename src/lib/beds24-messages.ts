@@ -50,13 +50,13 @@ export function generateOtaWelcomeMessage(guestName: string = 'Huésped', countr
 
   if (isEnglish) {
     return `Hello, ${cleanName}! 🌴 Thank you for choosing Condominios Jaroje.\n\n` +
-      `To send you arrival instructions, your digital door access code, and WiFi password prior to Check-in, ` +
+      `To send you arrival instructions and WiFi password prior to Check-in, ` +
       `please reply to this message with your WhatsApp phone number (including country code).\n\n` +
       `As soon as you share it, our system will send your complete confirmation. We look forward to welcoming you!`;
   }
 
   return `¡Hola, ${cleanName}! 🌴 Gracias por reservar en Condominios Jaroje.\n\n` +
-    `Para poder enviarte las indicaciones de llegada, el código de acceso a tu condominio y la clave de WiFi antes de tu Check-in, ` +
+    `Para poder enviarte las indicaciones de llegada y la clave de WiFi antes de tu Check-in, ` +
     `por favor respóndenos a este mensaje con tu número de teléfono de WhatsApp (incluyendo clave de país).\n\n` +
     `En cuanto nos lo compartas, nuestro sistema te enviará tu confirmación completa. ¡Te esperamos!`;
 }
