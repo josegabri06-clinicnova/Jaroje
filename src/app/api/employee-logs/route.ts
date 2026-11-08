@@ -67,6 +67,16 @@ export async function GET(req: Request) {
     const moduleParam = searchParams.get('module') || '';
     const limitParam = searchParams.get('limit');
     const limitVal = limitParam ? parseInt(limitParam) : 1000;
+    // `since`: devuelve solo los registros posteriores a esa fecha (los sondeos de la campana e Historial piden solo lo nuevo)
+    const sinceParam = searchParams.get('since');
+    let sinceIso: string | null = null;
+    if (sinceParam) {
+      const sinceMs = Date.parse(sinceParam);
+      if (isNaN(sinceMs)) {
+        return NextResponse.json({ success: false, error: 'Parámetro since inválido' }, { status: 400 });
+      }
+      sinceIso = new Date(sinceMs).toISOString();
+    }
 
     let query = supabase
       .from('employee_logs')
@@ -86,6 +96,9 @@ export async function GET(req: Request) {
 
     if (moduleParam) {
       query = query.eq('module', moduleParam);
+    }
+    if (sinceIso) {
+      query = query.gt('created_at', sinceIso);
     }
 
     const { data, error } = await query

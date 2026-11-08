@@ -12,7 +12,7 @@ const KINDS = new Set(['incidencia', 'resolucion']);
 
 /**
  * Sube una foto (o PDF) de una incidencia de mantenimiento o de su resolución.
- * Solo el administrador y el personal (limpieza y mantenimiento). Antes las páginas subían directamente a Supabase con la
+ * Solo el administrador, recepción y el personal (limpieza y mantenimiento). Antes las páginas subían directamente a Supabase con la
  * clave pública, lo que permitía a cualquiera, sin sesión, llenar el almacén con archivos de cualquier tipo y tamaño.
  *
  * El servidor decide el nombre (único, con parte aleatoria: no hace falta `upsert`) y comprueba el tipo real del archivo por
@@ -20,7 +20,7 @@ const KINDS = new Set(['incidencia', 'resolucion']);
  */
 export async function POST(req: Request) {
   const session = await getSessionFromRequest(req);
-  if (!session || !['admin', 'staff_limpieza', 'staff_mantenimiento'].includes(session.role)) {
+  if (!session || !['admin', 'recepcion', 'staff_limpieza', 'staff_mantenimiento'].includes(session.role)) {
     return NextResponse.json({ success: false, error: 'No autorizado.' }, { status: 403 });
   }
 

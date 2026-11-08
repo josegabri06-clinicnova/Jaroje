@@ -57,3 +57,6 @@ logs_output.txt
 
 # large data files
 /inventario_temp.csv
+
+# copia local del script de migración de fotos de tareas
+task-photos-backup-*.json
