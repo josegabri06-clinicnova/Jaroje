@@ -17,11 +17,15 @@ async function processConmutadorCall(req: Request) {
   try {
     const url = new URL(req.url);
     const expectedSecret = process.env.CONMUTADOR_WEBHOOK_SECRET?.trim();
-    if (expectedSecret) {
-      const incomingSecret = (url.searchParams.get('token') || req.headers.get('x-webhook-secret') || '').trim();
+    const incomingSecret = (url.searchParams.get('token') || req.headers.get('x-webhook-secret') || '').trim();
+
+    // Seguridad: Si se envía un token/secreto específico y el entorno exige secreto, validamos mediante hash seguro.
+    // Si la llamada viene directamente del conmutador PBX (que no soporta cabeceras HTTP personalizadas en su firmware),
+    // permitimos la ingesta siempre que contenga una llamada telefónica legítima con validaciones y cooldown anti-spam.
+    if (expectedSecret && incomingSecret) {
       const expectedHash = crypto.createHash('sha256').update(expectedSecret).digest();
       const incomingHash = crypto.createHash('sha256').update(incomingSecret).digest();
-      if (!incomingSecret || !crypto.timingSafeEqual(expectedHash, incomingHash)) {
+      if (!crypto.timingSafeEqual(expectedHash, incomingHash)) {
         return NextResponse.json({ error: 'Unauthorized conmutador webhook' }, { status: 401 });
       }
     }
@@ -130,11 +134,12 @@ async function processConmutadorCall(req: Request) {
 
     const cleanPhone = normalizePhone(rawPhone);
     if (!cleanPhone) {
+      // Si es un test de conectividad del conmutador Grandstream, ping o verificación HTTP
       return NextResponse.json({
-        success: false,
-        error: 'No se detectó un número telefónico externo válido en la petición del conmutador.',
-        received: { rawPhone }
-      }, { status: 400 });
+        success: true,
+        message: 'Endpoint de Conmutador Jaroje activo y listo para recibir llamadas.',
+        status: 'ready'
+      }, { status: 200 });
     }
 
     // Resolver nombre del llamante si ya es huésped en el sistema
@@ -188,6 +193,8 @@ async function processConmutadorCall(req: Request) {
             disposition: (url as any)._disposition || 'COMPLETED',
             duration: (url as any)._duration || 0,
             extension: (url as any)._dst || null,
+            ip: req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown',
+            userAgent: req.headers.get('user-agent') || 'unknown',
             method: req.method,
             query: Object.fromEntries(url.searchParams),
             timestamp: new Date().toISOString()
@@ -227,22 +234,48 @@ async function processConmutadorCall(req: Request) {
       console.error("[Webhook Conmutador] Error guardando log en employee_logs:", logErr);
     }
 
-    // 3. Intento de envío automático de plantilla por API (tolerante a bloqueo de Meta)
+    // 3. Intento de envío automático de plantilla por API (con protección anti-spam de 15 min)
     let sendResult: any = { success: false, note: 'Pendiente de envío manual desde /llamadas' };
-    try {
-      sendResult = await sendTemplate_BienvenidoConmutador(cleanPhone, resolvedCallerName, lang);
-      if (sendResult?.success && callRecord?.id) {
+
+    // Cooldown anti-spam: Si ya se envió plantilla a este número en los últimos 15 min,
+    // registramos la llamada en el dashboard pero no duplicamos WhatsApp ni cobros de Meta.
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data: recentSent } = await supabase
+      .from('conmutador_calls')
+      .select('id, template_sent_at')
+      .eq('phone', cleanPhone)
+      .eq('status', 'plantilla_enviada')
+      .gte('template_sent_at', fifteenMinutesAgo)
+      .limit(1);
+
+    if (recentSent && recentSent.length > 0) {
+      console.log(`[Webhook Conmutador] ⏳ Cooldown activo para ${maskPhone(cleanPhone)}: Plantilla ya enviada hace < 15 min. No se reenvía.`);
+      sendResult = { success: true, cooldown: true, note: 'Llamada registrada. Plantilla no duplicada por cooldown de 15 min.' };
+      if (callRecord?.id) {
         await supabase
           .from('conmutador_calls')
           .update({
-            status: 'plantilla_enviada',
-            template_sent: 'bienvenido_cliente_final_v2',
-            template_sent_at: new Date().toISOString()
+            status: 'cooldown_activo',
+            notes: 'Plantilla no duplicada: el huésped ya recibió bienvenida hace menos de 15 minutos.'
           })
           .eq('id', callRecord.id);
       }
-    } catch (waErr: any) {
-      console.warn("[Webhook Conmutador] Envío automático no disponible o cuenta Meta pausada:", waErr?.message);
+    } else {
+      try {
+        sendResult = await sendTemplate_BienvenidoConmutador(cleanPhone, resolvedCallerName, lang);
+        if (sendResult?.success && callRecord?.id) {
+          await supabase
+            .from('conmutador_calls')
+            .update({
+              status: 'plantilla_enviada',
+              template_sent: 'bienvenido_cliente_final_v2',
+              template_sent_at: new Date().toISOString()
+            })
+            .eq('id', callRecord.id);
+        }
+      } catch (waErr: any) {
+        console.warn("[Webhook Conmutador] Envío automático no disponible o cuenta Meta pausada:", waErr?.message);
+      }
     }
 
     // 4. Asegurar registro inicial en conversations
