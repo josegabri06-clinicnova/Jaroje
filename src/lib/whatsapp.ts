@@ -2078,6 +2078,10 @@ export async function sendTemplate_ConfirmarReserva(
  * 14.2. Plantilla Oficial de Cotización / Paso 1 (cotizacion_reserva)
  * Aprobada en Meta para saltarse la ventana de 24 horas y despacharse con botón interactivo de reserva.
  */
+// Bandera de activación: false mientras Meta termina de revisar y aprobar 'cotizacion_reserva'.
+// Instrucción de Floren: Mantener el envío interactivo / texto hasta que la plantilla esté oficialmente aprobada.
+const USE_META_TEMPLATE_COTIZACION = false;
+
 export async function sendTemplate_Cotizacion(
   phone: string,
   data: {
@@ -2102,48 +2106,51 @@ export async function sendTemplate_Cotizacion(
   if (!cleanPhone) return { success: false, error: 'Teléfono no válido' };
 
   const targetLang = data.lang || (isSpanishOrLatamPhone(cleanPhone) ? 'es' : 'en');
+  const isEn = targetLang === 'en';
 
-  const parameters = [
-    data.checkInFormatted,
-    data.checkOutFormatted,
-    data.nightsText,
-    data.guestsText,
-    data.roomsText,
-    data.extrasText,
-    data.desgloseSubtotalText,
-    data.totalAmountText,
-    data.depositText,
-    data.balanceText
-  ];
+  if (USE_META_TEMPLATE_COTIZACION) {
+    const parameters = [
+      data.checkInFormatted,
+      data.checkOutFormatted,
+      data.nightsText,
+      data.guestsText,
+      data.roomsText,
+      data.extrasText,
+      data.desgloseSubtotalText,
+      data.totalAmountText,
+      data.depositText,
+      data.balanceText
+    ];
 
-  const buttonParams = [data.reserveQuerySuffix];
+    const buttonParams = [data.reserveQuerySuffix];
 
-  try {
-    console.log(`[WhatsApp API] Despachando plantilla oficial 'cotizacion_reserva' [${targetLang}] a ${cleanPhone}...`);
-    const tplRes = await sendWhatsAppTemplate(
-      cleanPhone,
-      'cotizacion_reserva',
-      parameters,
-      buttonParams,
-      undefined,
-      'url',
-      true, // bypassPause: solicitado expresamente por el cliente en el botón "Cotizar sin bloquear"
-      targetLang,
-      true  // forceResend
-    );
+    try {
+      console.log(`[WhatsApp API] Despachando plantilla oficial 'cotizacion_reserva' [${targetLang}] a ${cleanPhone}...`);
+      const tplRes = await sendWhatsAppTemplate(
+        cleanPhone,
+        'cotizacion_reserva',
+        parameters,
+        buttonParams,
+        undefined,
+        'url',
+        true, // bypassPause: solicitado expresamente por el cliente en el botón "Cotizar sin bloquear"
+        targetLang,
+        true  // forceResend
+      );
 
-    if (tplRes.success) {
-      console.log(`[WhatsApp API] ✅ Plantilla 'cotizacion_reserva' [${targetLang}] entregada con éxito a ${cleanPhone}`);
-      return tplRes;
+      if (tplRes.success) {
+        console.log(`[WhatsApp API] ✅ Plantilla 'cotizacion_reserva' [${targetLang}] entregada con éxito a ${cleanPhone}`);
+        return tplRes;
+      }
+
+      console.warn(`[WhatsApp API] Plantilla 'cotizacion_reserva' no entregada (${tplRes.error}). Aplicando fallback a botón interactivo...`);
+    } catch (err: any) {
+      console.warn(`[WhatsApp API] Error intentando plantilla 'cotizacion_reserva':`, err);
     }
-
-    console.warn(`[WhatsApp API] Plantilla 'cotizacion_reserva' no entregada (${tplRes.error}). Aplicando fallback a botón interactivo...`);
-  } catch (err: any) {
-    console.warn(`[WhatsApp API] Error intentando plantilla 'cotizacion_reserva':`, err);
   }
 
-  // Fallback seguro a mensaje interactivo CTA (o texto)
-  const isEn = targetLang === 'en';
+  // Envío actual por botón interactivo CTA (o texto) sin folio, adaptado a español o inglés
+  console.log(`[WhatsApp Cotización] Enviando por CTA interactivo / texto [${targetLang}] a ${cleanPhone}...`);
   return sendWhatsAppCTAButtonMessage(
     cleanPhone,
     data.fallbackFullText,
