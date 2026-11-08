@@ -73,7 +73,7 @@ async function migrateRow(row) {
 
     const path = `legacy/${row.id}_${i}_${crypto.randomUUID().slice(0, 8)}.${type.ext}`;
     const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, { contentType: type.mime, upsert: false });
-    if (error) return await fail(uploaded, 'error al subir: ' + error.message);
+    if (error) return await fail(uploaded, 'error al subir: ' + describe(error));
     uploaded.push(path);
     const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
     const head = await fetch(publicUrl, { method: 'HEAD' }).catch(() => null);
@@ -86,12 +86,23 @@ async function migrateRow(row) {
   if (!apply) return { status: 'prueba', fotos: out.filter((x) => x === '(se subiría)').length, bytes: bytesTotal };
 
   const newValue = parsed.wasArray ? JSON.stringify(out) : out[0];
-  // Solo se actualiza si la fila sigue exactamente igual que cuando se leyó
-  const { data, error } = await supabase.from('tasks').update({ image_base64: newValue }).eq('id', row.id).eq('image_base64', original).select('id');
+  // Solo se actualiza si la fila sigue igual que cuando se leyó. El valor completo (decenas de miles de caracteres) no cabe en la
+  // dirección de la petición (Supabase la rechaza con "Bad Request"), así que: 1) se vuelve a leer y se compara aquí mismo, y
+  // 2) la actualización lleva además el comienzo del valor como condición (por si cambiara justo entre la relectura y la escritura).
+  const { data: now, error: readErr } = await supabase.from('tasks').select('image_base64').eq('id', row.id).limit(1);
+  if (readErr) return await fail(uploaded, 'error al releer la fila: ' + describe(readErr));
+  if (!now || now.length !== 1 || now[0].image_base64 !== original) return await fail(uploaded, 'la fila cambió mientras se migraba');
+  const prefix = original.slice(0, 120).replace(/[\\%_]/g, '\\$&'); // se escapan los comodines de LIKE
+  const { data, error } = await supabase.from('tasks').update({ image_base64: newValue }).eq('id', row.id).like('image_base64', prefix + '%').select('id');
   if (error || !data || data.length !== 1) {
-    return await fail(uploaded, error ? 'error al actualizar: ' + error.message : 'la fila cambió mientras se migraba');
+    return await fail(uploaded, error ? 'error al actualizar: ' + describe(error) : 'la fila cambió mientras se migraba');
   }
   return { status: 'migrada', fotos: uploaded.length, bytes: bytesTotal };
+}
+
+/** Los errores de Supabase a veces traen el mensaje vacío: se juntan todos los campos con información */
+function describe(e) {
+  return [e.message, e.code, e.details, e.hint].filter(Boolean).join(' | ') || 'sin detalle';
 }
 
 async function fail(uploaded, why) {
