@@ -22,7 +22,7 @@ import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCap
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
-import { normalizePhone } from '@/lib/whatsapp';
+import { normalizePhone } from '@/lib/phone';
 import { uploadDataUrlPhotos } from '@/lib/upload-photo';
 
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase

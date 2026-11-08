@@ -12,7 +12,7 @@ import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests, areBooki
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
-import { normalizePhone } from '@/lib/whatsapp';
+import { normalizePhone } from '@/lib/phone';
 
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
 const supabase = createDbClient();
