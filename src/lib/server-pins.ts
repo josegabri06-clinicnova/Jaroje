@@ -40,25 +40,6 @@ export function safeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ha, hb);
 }
 
-// Control de fuerza bruta en memoria por IP (máx 5 intentos fallidos cada 15 minutos), uno por ruta
-export function createFailLimiter(maxAttempts = 5, windowMs = 15 * 60 * 1000) {
-  const map = new Map<string, { attempts: number; resetAt: number }>();
-  return {
-    isLimited(ip: string): boolean {
-      const rec = map.get(ip);
-      if (!rec) return false;
-      if (Date.now() > rec.resetAt) { map.delete(ip); return false; }
-      return rec.attempts >= maxAttempts;
-    },
-    fail(ip: string) {
-      const rec = map.get(ip) || { attempts: 0, resetAt: Date.now() + windowMs };
-      rec.attempts += 1;
-      map.set(ip, rec);
-    },
-    clear(ip: string) { map.delete(ip); },
-  };
-}
-
 export function clientIp(req: Request): string {
   return req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
 }
