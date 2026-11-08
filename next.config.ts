@@ -18,6 +18,12 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      // Imágenes fijas de public/: por defecto el navegador las revalida en cada visita; así las reutiliza hasta un día
+      // (y se sirve la copia guardada mientras se actualiza durante una semana). Si se cambia el logo, tarda como mucho un día en verse.
+      ...['/logo-jaroje.png', '/icon-192.png', '/icon-512.png'].map((source) => ({
+        source,
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }],
+      })),
       {
         source: '/:path*',
         headers: [

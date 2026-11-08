@@ -2664,7 +2664,7 @@ export default function PublicReservaPage() {
                   onClick={() => handleOpenLightbox(index)}
                   className="flex-shrink-0 w-64 h-44 rounded-2xl overflow-hidden snap-center relative cursor-pointer border border-zinc-200/70 shadow-sm hover:scale-[1.02] transition-transform duration-300"
                 >
-                  <img src={src} alt="Alojamiento" className="w-full h-full object-cover" />
+                  <img src={src} alt="Alojamiento" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                 </div>
               ))}
             </div>
