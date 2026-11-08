@@ -7,7 +7,10 @@ import { getActiveEmployee, verifyAdminPin } from '@/lib/auth';
 import { getUnitName, getRoomMetadata, getParentMapping, getCapacityRules } from '@/lib/beds24';
 import { format, parseISO, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { supabase } from '@/lib/supabase';
+import { createDbClient } from '@/lib/db-client';
+
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
 
 const PRICES: Record<string, Record<string, number>> = {
   '679077': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },

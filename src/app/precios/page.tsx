@@ -6,6 +6,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown
 } from 'lucide-react';
 import { JAROJE_PRICES } from '@/lib/beds24';
+import { createDbClient } from '@/lib/db-client';
 
 const fmtDate = (isoStr: string) => {
   if (!isoStr) return '';
@@ -38,11 +39,7 @@ export default function PreciosPage() {
   const loadSeasonBasePrices = async () => {
     setLoadingSeasonBasePrices(true);
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      const sb = createDbClient();
       const { data } = await sb.from('settings').select('value').eq('key', 'season_base_prices').maybeSingle();
       if (data?.value) {
         const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
@@ -577,11 +574,7 @@ export default function PreciosPage() {
 
   const loadTempDiscounts = async () => {
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      const sb = createDbClient();
       const { data } = await sb.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle();
       if (data?.value && Array.isArray(data.value)) {
         setTempDiscounts(data.value);
