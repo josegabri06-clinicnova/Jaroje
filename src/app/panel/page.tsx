@@ -10,15 +10,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format, addDays, formatDistanceToNow, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { createClient } from '@supabase/supabase-js';
+import { createDbClient } from '@/lib/db-client';
 import { getSeason } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 import { copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 
-// Inicializar Supabase cliente
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
 
 const ROOMS = [
   '101', '102', '103', '104', '105', '106', '107',

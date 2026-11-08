@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createDbClient } from '@/lib/db-client';
 import { Package, Search, Plus, Minus, AlertTriangle, Edit2, Trash2, X, History, Settings, Download, ArrowUp, ArrowDown, Eye, Share2 } from 'lucide-react';
 import { getActiveEmployee, verifyAdminPin } from '@/lib/auth';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
 
 const normalizeText = (text: string) => 
   (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
