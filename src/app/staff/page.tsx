@@ -11,15 +11,20 @@ import {
   History, ChevronLeft, Calendar, Moon, Users, Upload
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { createDbClient } from '@/lib/db-client';
 import { getActiveEmployee, clearActiveEmployee, Employee, syncEmployeesFromServer, getOfficialEmployees } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import { getSeason } from '@/lib/beds24';
 import { copyToClipboard, openWhatsAppUrl, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
 import { uploadMaintenancePhoto } from '@/lib/upload-photo';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
+
+// Solo para el tiempo real de room_status (la pasarela no admite suscripciones): cliente con la clave pública
+const supabaseRealtime = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+});
 
 const safeFormatDate = (dateVal: any, formatStr: string, options?: any) => {
   if (!dateVal) return '—';
@@ -754,7 +759,7 @@ export default function StaffPage() {
     fetchSchedules();
 
     // ── SUPABASE REALTIME EN TIEMPO REAL PARA ROOM_STATUS ──
-    const channel = supabase
+    const channel = supabaseRealtime
       .channel('room_status_changes')
       .on(
         'postgres_changes',
@@ -780,7 +785,7 @@ export default function StaffPage() {
     
     return () => {
       clearInterval(iv);
-      supabase.removeChannel(channel);
+      supabaseRealtime.removeChannel(channel);
       window.removeEventListener('refresh-data', handleRefresh);
     };
   }, []);
