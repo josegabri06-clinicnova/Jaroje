@@ -1,5 +1,5 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { normalizePhone } from '@/lib/whatsapp';
+import { normalizePhone } from '@/lib/phone';
 
 export interface PersonalContact {
   phone: string;
