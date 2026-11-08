@@ -1198,16 +1198,56 @@ export async function getBeds24Bookings(
   }
 }
 
+// ── Reservas de UNA fecha de llegada (portal del huésped) ────────────────────────────────────────────────────────────────────────
+// Una reserva y sus "hermanas" de grupo comparten siempre la fecha de llegada (areBookingsInSameGroup lo exige), así que para
+// mostrar el portal basta con pedir esa fecha en vez de las ~1.700 reservas de -180 a +1.000 días, que se bajan de 99 en 99 y,
+// además, reescriben la copia de Supabase. Solo lectura. Caché de 90 s por fecha, igual que la del listado completo.
+const arrivalCache = new Map<string, { ts: number; promise: Promise<any[]> }>();
+
+export async function getBeds24BookingsForArrival(arrivalDate: string): Promise<any[]> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(arrivalDate)) throw new Error('Fecha de llegada no válida');
+  const now = Date.now();
+  const hit = arrivalCache.get(arrivalDate);
+  if (hit && now - hit.ts < CACHE_TTL_MS) return hit.promise;
+
+  for (const [k, v] of arrivalCache) if (now - v.ts >= CACHE_TTL_MS) arrivalCache.delete(k);
+  if (arrivalCache.size >= 50) arrivalCache.delete(arrivalCache.keys().next().value as string);
+
+  const promise = doFetchAndMapBeds24Bookings(true, false, arrivalDate).catch((err) => {
+    arrivalCache.delete(arrivalDate); // un fallo no se guarda: el siguiente intento vuelve a pedir
+    throw err;
+  });
+  arrivalCache.set(arrivalDate, { ts: now, promise });
+  return promise;
+}
+
+/** ¿La fecha cae dentro de la ventana que cubre el listado completo (-180 a +1.000 días)? Fuera de ella el listado completo no la trae. */
+export function isWithinFullListingWindow(arrivalDate: string): boolean {
+  const t = Date.parse(arrivalDate + 'T00:00:00Z');
+  if (isNaN(t)) return false;
+  const day = 24 * 60 * 60 * 1000;
+  const today = Date.now();
+  return t >= today - 180 * day && t <= today + 1000 * day;
+}
+
 // Realizar la llamada HTTP real y procesar el mapeado
-async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancelled: boolean = false): Promise<any[]> {
+// `onlyArrival` (AAAA-MM-DD): versión de SOLO LECTURA para el portal del huésped. Pide a Beds24 únicamente las reservas con esa fecha
+// de llegada y NO toca nada más: ni reescribe la copia `beds24_reservations`, ni cancela reservas "desaparecidas", ni borra finanzas,
+// ni cambia la lista de la habitación 500. Esos efectos dependen de haber visto el listado completo y solo deben ocurrir con él.
+async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancelled: boolean = false, onlyArrival?: string): Promise<any[]> {
   const today = new Date();
   const fromDate = new Date(today);
   fromDate.setDate(today.getDate() - 180);
-  const arrivalFrom = fromDate.toISOString().split('T')[0];
+  let arrivalFrom = fromDate.toISOString().split('T')[0];
 
   const toDate = new Date(today);
   toDate.setDate(today.getDate() + 1000);
-  const arrivalTo = toDate.toISOString().split('T')[0];
+  let arrivalTo = toDate.toISOString().split('T')[0];
+
+  if (onlyArrival) {
+    arrivalFrom = onlyArrival;
+    arrivalTo = onlyArrival;
+  }
 
   // 1. Obtener token y reservas raw
   const token = await getBeds24Token();
@@ -1303,8 +1343,8 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
     };
   });
 
-  // Almacenar en variable de módulo para que route.ts pueda accederla
-  _lastOtaRoom500Bookings = otaRoom500Bookings;
+  // Almacenar en variable de módulo para que route.ts pueda accederla (solo con el listado completo: uno parcial la vaciaría)
+  if (!onlyArrival) _lastOtaRoom500Bookings = otaRoom500Bookings;
 
   // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
   let rulesList: any[] = [];
@@ -1498,7 +1538,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       };
     }));
 
-  if (mappedBookings.length > 0) {
+  if (!onlyArrival && mappedBookings.length > 0) {
     try {
       const upsertRows = mappedBookings.map((mb: any) => {
         let dbUpdatedAt = new Date().toISOString();
