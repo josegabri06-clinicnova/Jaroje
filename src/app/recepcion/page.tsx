@@ -6322,7 +6322,7 @@ export default function RecepcionPage() {
                         <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">N. Móvil</label>
                         <input
                           type="text"
-                          value={isDummyOrInvalidPhone(selectedReserva.guest_phone, selectedReserva.notes, selectedReserva.channel) ? '' : (selectedReserva.guest_phone || '')}
+                          value={selectedReserva.guest_phone ?? ''}
                           onChange={e => setSelectedReserva({ ...selectedReserva, guest_phone: e.target.value })}
                           placeholder="Ej. +52 55 1234 5678"
                           className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400"
