@@ -23,6 +23,7 @@ import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 import { normalizePhone } from '@/lib/whatsapp';
+import { uploadDataUrlPhotos } from '@/lib/upload-photo';
 
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
 const supabase = createDbClient();
@@ -8972,6 +8973,8 @@ export default function RecepcionPage() {
                     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepción';
                     
                     let createdTaskId: string | null = null;
+                    // La foto se sube al almacén y la tarea guarda solo el enlace (antes guardaba el texto de la imagen dentro de la fila)
+                    const photoValue = photoBase64 ? (await uploadDataUrlPhotos([photoBase64], 'incidencia'))[0] : undefined;
                     const res = await fetch('/api/tasks', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -8979,7 +8982,7 @@ export default function RecepcionPage() {
                         ...form, 
                         reported_by: operatorName, 
                         direction: 'staff_to_admin',
-                        image_base64: photoBase64 || undefined
+                        image_base64: photoValue || undefined
                       }),
                     });
                     const data = await res.json();

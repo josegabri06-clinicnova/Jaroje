@@ -16,7 +16,7 @@ import { getActiveEmployee, clearActiveEmployee, Employee, syncEmployeesFromServ
 import EmployeeModal from '@/components/EmployeeModal';
 import { getSeason } from '@/lib/beds24';
 import { copyToClipboard, openWhatsAppUrl, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
-import { uploadMaintenancePhoto } from '@/lib/upload-photo';
+import { uploadMaintenancePhoto, uploadDataUrlPhotos } from '@/lib/upload-photo';
 
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
 const supabase = createDbClient();
@@ -1234,7 +1234,9 @@ export default function StaffPage() {
     const isEditing = !!editingTask;
     const emp = getActiveEmployee(currentDept);
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : staffName;
-    const finalImagePayload = imagePreviews.length > 0 ? JSON.stringify(imagePreviews) : imagePreview;
+    // Las fotos se suben al almacén y la tarea guarda solo los enlaces (antes guardaba el texto de la imagen dentro de la fila)
+    const uploadedPhotos = imagePreviews.length > 0 && !isEditing ? await uploadDataUrlPhotos(imagePreviews, 'incidencia') : null;
+    const finalImagePayload = uploadedPhotos ? JSON.stringify(uploadedPhotos) : (imagePreviews.length > 0 ? JSON.stringify(imagePreviews) : imagePreview);
 
     let createdTaskId: string | null = null;
 

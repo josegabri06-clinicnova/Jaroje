@@ -317,6 +317,7 @@ function isAllowedAuditLog(log: any): boolean {
 export default function HistorialPage() {
   const router = useRouter();
   const [rawLogs, setRawLogs] = useState<any[]>([]);
+  const latestLogAtRef = useRef<string | null>(null);
   const [events, setEvents] = useState<HistoryEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -805,6 +806,7 @@ export default function HistorialPage() {
       const json = await res.json();
       
       if (json.success && Array.isArray(json.data)) {
+        latestLogAtRef.current = json.data.find((l: any) => l?.created_at)?.created_at ?? latestLogAtRef.current;
         setRawLogs(json.data);
         setEvents(mapLogsToEvents(json.data));
       }
@@ -819,12 +821,20 @@ export default function HistorialPage() {
   useEffect(() => {
     fetchLogs();
 
+    // Cada 5 s se piden solo los registros posteriores al último visto (con 2 min de margen; los repetidos se descartan por id);
+    // cada 5 min se recarga la lista entera para recoger también los borrados. Antes bajaba hasta 1.000 registros cada 5 s.
+    let tick = 0;
     const pollInterval = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      fetch('/api/employee-logs')
+      tick++;
+      if (tick % 60 === 0 || !latestLogAtRef.current) { fetchLogs(true); return; }
+      const sinceIso = new Date(Date.parse(latestLogAtRef.current) - 120_000).toISOString();
+      fetch(`/api/employee-logs?since=${encodeURIComponent(sinceIso)}`)
         .then(r => r.json())
         .then(json => {
           if (json.success && Array.isArray(json.data)) {
+            const newest = json.data.find((l: any) => l?.created_at)?.created_at;
+            if (newest && Date.parse(newest) > Date.parse(latestLogAtRef.current as string)) latestLogAtRef.current = newest;
             setRawLogs(prev => {
               // Buscar si hay algún ID nuevo en la respuesta
               const existingIds = new Set(prev.map(x => String(x.id)));

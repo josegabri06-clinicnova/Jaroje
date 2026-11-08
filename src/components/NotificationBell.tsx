@@ -449,6 +449,9 @@ export function NotificationBell() {
   const [events, setEvents]       = useState<HistoryEvent[]>([]);
   const openRef = useRef(false);
   const seenLogIdsRef = useRef<Set<string> | null>(null);
+  // Última fecha vista y lista actual: los sondeos piden solo los registros posteriores y los fusionan (antes bajaban 100 cada 5 s)
+  const latestLogAtRef = useRef<string | null>(null);
+  const logsRef = useRef<any[]>([]);
   useEffect(() => { openRef.current = open; }, [open]);
 
   // Filtros reactivos
@@ -510,11 +513,20 @@ export function NotificationBell() {
     } catch {}
   }, []);
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (full = false) => {
     try {
-      const res = await fetch('/api/employee-logs?limit=100');
+      // 2 minutos de margen hacia atrás: un registro con fecha algo anterior a otro ya visto no se pierde (se descartan los repetidos por id)
+      const sinceMs = latestLogAtRef.current ? Date.parse(latestLogAtRef.current) - 120_000 : NaN;
+      const partial = !full && !isNaN(sinceMs);
+      const res = await fetch(partial
+        ? `/api/employee-logs?limit=100&since=${encodeURIComponent(new Date(sinceMs).toISOString())}`
+        : '/api/employee-logs?limit=100');
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
+        const newest = json.data.find((l: any) => l?.created_at)?.created_at;
+        if (newest && (!latestLogAtRef.current || Date.parse(newest) > Date.parse(latestLogAtRef.current))) {
+          latestLogAtRef.current = newest;
+        }
         const filtered = json.data.filter((log: any) => !shouldIgnoreLogForNotifications(log));
         // Avisos de eventos nuevos (antes llegaban por tiempo real): en la primera carga solo se anotan los ya existentes
         const seen = seenLogIdsRef.current;
@@ -528,8 +540,16 @@ export function NotificationBell() {
             playPremiumLogSound();
           }
         }
-        setLogs(filtered);
-        setEvents(mapLogsToEvents(filtered));
+        let merged = filtered;
+        if (partial) {
+          const known = new Set(filtered.map((l: any) => String(l.id)));
+          merged = [...filtered, ...logsRef.current.filter((l: any) => !known.has(String(l.id)))]
+            .sort((a: any, b: any) => Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0))
+            .slice(0, 100);
+        }
+        logsRef.current = merged;
+        setLogs(merged);
+        setEvents(mapLogsToEvents(merged));
       }
     } catch {}
   }, []);
@@ -538,13 +558,14 @@ export function NotificationBell() {
     fetchTasks();
     fetchLogs();
 
-    // Sondeo a rutas autenticadas (ya no hay suscripción en tiempo real con la clave pública):
-    // registros cada 5 s y tareas cada 15 s, solo con la pestaña visible
+    // Sondeo a rutas autenticadas (ya no hay suscripción en tiempo real con la clave pública), solo con la pestaña visible:
+    // registros nuevos cada 5 s (solo lo posterior a lo ya visto; cada 5 min se recarga la lista entera) y tareas cada 60 s
     let tick = 0;
     const iv = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      fetchLogs();
-      if (++tick % 3 === 0) fetchTasks();
+      tick++;
+      fetchLogs(tick % 60 === 0);
+      if (tick % 12 === 0) fetchTasks();
     }, 5_000);
 
     return () => {

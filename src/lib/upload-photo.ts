@@ -56,3 +56,21 @@ export async function uploadMaintenancePhoto(file: File, kind: 'incidencia' | 'r
     return null;
   }
 }
+
+/**
+ * Las pantallas muestran la vista previa de la foto como texto (data URL). Antes ese texto se guardaba tal cual en la tarea:
+ * cada foto pesaba ~70 KB dentro de la fila y se descargaba entera en cada lectura de la tabla. Ahora, al enviar, se sube la foto
+ * al almacén y en la tarea solo se guarda el enlace. Si una foto no se puede subir se conserva el texto (no se pierde la evidencia).
+ */
+export async function uploadDataUrlPhotos(photos: string[], kind: 'incidencia' | 'resolucion'): Promise<string[]> {
+  return Promise.all(photos.map(async (photo) => {
+    if (!photo.startsWith('data:image/')) return photo; // ya es un enlace
+    try {
+      const blob = await (await fetch(photo)).blob();
+      const url = await uploadMaintenancePhoto(new File([blob], 'foto.jpg', { type: blob.type || 'image/jpeg' }), kind);
+      return url || photo;
+    } catch {
+      return photo;
+    }
+  }));
+}
