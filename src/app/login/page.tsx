@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { checkPinAsync, setRole } from '@/lib/auth';
+import { safeFilesNext } from '@/lib/safe-next';
 import { Shield, Wrench, Sparkles, KeyRound, Fingerprint } from 'lucide-react';
 // @ts-ignore
 import { startAuthentication } from '@simplewebauthn/browser';
@@ -122,6 +123,11 @@ export default function LoginPage() {
             if (typeof window !== 'undefined') {
               sessionStorage.setItem('jaroje_session_pin', next);
             }
+            // Si se llegó desde un enlace a un archivo (DNI, comprobante), se vuelve a él; solo para administrador y recepción
+            const fileNext = (mode === 'admin' || mode === 'recepcion') && typeof window !== 'undefined'
+              ? safeFilesNext(new URLSearchParams(window.location.search).get('next'))
+              : null;
+            if (fileNext) { window.location.assign(fileNext); return; }
             if (mode === 'admin') router.replace('/calendario');
             else if (mode === 'recepcion') router.replace('/calendario');
             else router.replace('/staff');

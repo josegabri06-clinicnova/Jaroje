@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/session';
+import { safeFilesNext } from '@/lib/safe-next';
 
 // Rutas públicas que no requieren sesión
 const PUBLIC_FILE_EXTENSIONS = /\.(png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|pdf)$/i;
@@ -76,6 +77,18 @@ export async function middleware(req: NextRequest) {
 
   // 3. Si no hay sesión válida:
   if (!session) {
+    // Un enlace a un archivo de huésped (DNI, comprobante) abierto desde WhatsApp u otro navegador sin sesión: se lleva al inicio de
+    // sesión y, tras entrar con el PIN, se vuelve al archivo. Solo para navegaciones del navegador; las demás peticiones reciben el 401.
+    if (pathname.startsWith('/api/files/') && req.method === 'GET') {
+      const isNavigation = req.headers.get('sec-fetch-mode') === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
+      const next = safeFilesNext(pathname);
+      if (isNavigation && next) {
+        const loginUrl = new URL('/login', req.url);
+        loginUrl.searchParams.set('next', next);
+        return NextResponse.redirect(loginUrl);
+      }
+    }
+
     // Si es petición a la API, rechazar con 401 Unauthorized
     if (pathname.startsWith('/api/')) {
       return NextResponse.json(
