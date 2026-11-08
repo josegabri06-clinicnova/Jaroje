@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useChat } from "ai/react";
+import { useCopilotChat } from "@/lib/use-copilot-chat";
 import { Bot, X, Send, Sparkles, Loader2, User, ShieldAlert, KeyRound, CheckCircle2, Lock, ArrowRight } from "lucide-react";
 import { validatePinAsync } from "@/lib/auth";
 
@@ -58,8 +58,8 @@ export default function CopilotWidget() {
   // Determinar rol efectivo enviado a la IA
   const effectiveRole = role === 'admin' && !sessionPin && bypassPin ? 'recepcion' : (role || 'recepcion');
 
-  // useChat con inyección reactiva del PIN y Rol en el cuerpo del JSON POST
-  const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useChat({
+  // useCopilotChat con inyección reactiva del PIN y Rol en el cuerpo del JSON POST
+  const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useCopilotChat({
     api: "/api/copilot",
     body: { 
       role: effectiveRole,
