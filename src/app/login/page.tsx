@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { validatePinAsync, setRole } from '@/lib/auth';
+import { checkPinAsync, setRole } from '@/lib/auth';
 import { Shield, Wrench, Sparkles, KeyRound, Fingerprint } from 'lucide-react';
 // @ts-ignore
 import { startAuthentication } from '@simplewebauthn/browser';
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>('select');
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
+  const [locked, setLocked] = useState(false);
   const [shake, setShake] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -104,15 +105,17 @@ export default function LoginPage() {
     const next = pin + d;
     setPin(next);
     setError(false);
+    setLocked(false);
 
     if (next.length === 4) {
       setLoading(true);
       setTimeout(async () => {
         try {
-          const valid = await validatePinAsync(next, mode as any);
-          if (!valid) {
+          const check = await checkPinAsync(next, mode as any);
+          if (check !== 'ok') {
             setShake(true);
             setError(true);
+            setLocked(check === 'locked');
             setTimeout(() => { setPin(''); setShake(false); setLoading(false); }, 600);
           } else {
             setRole(mode as any);
@@ -313,7 +316,9 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <p className="text-red-500 text-xs font-medium -mt-4">PIN incorrecto</p>
+                <p className="text-red-500 text-xs font-medium -mt-4 text-center">
+                  {locked ? 'Demasiados intentos. Acceso bloqueado 15 minutos.' : 'PIN incorrecto'}
+                </p>
               )}
 
               {/* Teclado numérico */}

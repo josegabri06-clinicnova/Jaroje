@@ -104,23 +104,31 @@ export async function logout() {
 }
 
 // ── Validación de PIN (servidor seguro con emisión de cookie HttpOnly) ────────
-export async function validatePinAsync(pin: string, expectedRole: Role): Promise<boolean> {
-  if (!expectedRole || !pin) return false;
+export type PinCheck = 'ok' | 'wrong' | 'locked';
+
+/** Igual que validatePinAsync pero distingue un PIN incorrecto de un bloqueo temporal por demasiados intentos (429) */
+export async function checkPinAsync(pin: string, expectedRole: Role): Promise<PinCheck> {
+  if (!expectedRole || !pin) return 'wrong';
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin, role: expectedRole })
     });
+    if (res.status === 429) return 'locked';
     if (res.ok) {
       const data = await res.json();
-      return Boolean(data.success);
+      return data.success ? 'ok' : 'wrong';
     }
-    return false;
+    return 'wrong';
   } catch (e) {
     console.error('Error validando PIN contra el servidor:', e);
-    return false;
+    return 'wrong';
   }
+}
+
+export async function validatePinAsync(pin: string, expectedRole: Role): Promise<boolean> {
+  return (await checkPinAsync(pin, expectedRole)) === 'ok';
 }
 
 // ─── Sistema de Seguimiento de Empleados (Auditoría de 3 Dígitos) ─────────────
