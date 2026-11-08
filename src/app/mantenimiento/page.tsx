@@ -1437,6 +1437,8 @@ export default function MantenimientoPage() {
                             src={srcUrl} 
                             alt={`Incidencia ${idx + 1}`} 
                             className="w-full h-24 object-cover rounded-xl border border-zinc-200" 
+                            loading="lazy"
+                            decoding="async"
                           />
                         </a>
                       );

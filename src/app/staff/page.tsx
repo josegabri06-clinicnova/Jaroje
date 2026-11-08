@@ -642,7 +642,7 @@ export default function StaffPage() {
           {images.map((img, idx) => (
             <div key={idx} className="shrink-0 w-full aspect-video snap-center relative bg-zinc-100 flex items-center justify-center">
               <div onClick={(e) => { e.stopPropagation(); setZoomImage(img); }} className="w-full h-full cursor-zoom-in">
-                <img src={img} alt={`Evidencia ${idx}`} className="w-full h-full object-cover select-none" />
+                <img src={img} alt={`Evidencia ${idx}`} className="w-full h-full object-cover select-none" loading="lazy" decoding="async" />
               </div>
               {images.length > 1 && (
                 <span className="absolute bottom-2.5 right-2.5 bg-black/60 text-white text-[10px] font-black px-2.5 py-1 rounded-lg select-none tracking-wider z-10">
