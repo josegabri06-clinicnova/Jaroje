@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
  * así que las páginas casi no cambian: solo cambia cómo se crea el cliente.
  *
  * - La petición lleva la cookie de sesión (misma web) y una cabecera propia que la pasarela exige.
- * - No sirve para tiempo real (`.channel()`) ni para Storage: eso sigue por el cliente de siempre (src/lib/supabase.ts).
+ * - No sirve para tiempo real (`.channel()`) ni para Storage: eso va aparte: el tiempo real de room_status (Staff y Recepción) usa su propio cliente con la clave pública y Storage va por rutas del servidor.
  * - La "clave" que se le pasa es un texto cualquiera: la pasarela la ignora y usa la suya, que nunca sale del servidor.
  */
 export function createDbClient() {
