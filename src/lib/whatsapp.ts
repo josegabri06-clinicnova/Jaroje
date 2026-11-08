@@ -763,7 +763,7 @@ export async function sendWhatsAppTemplate(
       finalButtonParams = [metaCleanPhone];
     }
 
-    // Único proveedor: Meta Cloud API (YCloud fue bloqueado por Meta y su código se eliminó).
+    // Único proveedor: Meta Cloud API.
     let response: Response;
     let status: number;
     let resBody: any;
