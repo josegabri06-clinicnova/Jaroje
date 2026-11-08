@@ -1702,76 +1702,6 @@ export async function sendTemplate_BienvenidoConmutador(
 }
 
 /**
- * 13.9. Invitación Interactiva al Portal de Reservas (In-App Browser nativo)
- * Réplica exacta de la arquitectura de Clinicnova (sendPatientPortalInvitation):
- * Envía un mensaje interactivo con botón 'cta_url' que activa de forma nativa
- * el WebView / In-App Browser dentro de WhatsApp en iOS y Android.
- * Si la ventana de 24 horas está cerrada o Meta no permite la interacción directa,
- * aplica fallback automático a la plantilla oficial aprobada 'bienvenido_cliente_whatsaap_v4'.
- */
-export async function sendJarojeBookingPortalInvitation(
-  phone: string,
-  langOverride?: string
-): Promise<{ success: boolean; error?: string; data?: any }> {
-  if (!phone) return { success: false, error: 'Sin teléfono' };
-  const cleanPhone = cleanPhoneForMeta(phone);
-  const isEnglish = langOverride === 'en' || !isSpanishOrLatamPhone(phone);
-  const portalUrl = `${getSiteUrl()}/public/reservar?phone=${cleanPhone}`;
-
-  const header = 'Condominios Jaroje';
-  const footer = isEnglish ? 'Official Booking Portal 24/7' : 'Portal Oficial de Reservas 24/7';
-  const buttonText = isEnglish ? 'Check Availability' : 'Ver Disponibilidad';
-  const bodyText = isEnglish
-    ? '👋 Welcome to Condominios Jaroje 🌴\n\nCheck live availability, suite photos, and book with exclusive direct rates:\n\n• 🛏️ *Select your dates & suites*\n• 📸 *Real photos & amenities in live HD*\n• 🔒 *24-Hour Instant Hold Guarantee*\n• ⚡ *No agency fees / best direct rate*'
-    : '👋 ¡Hola! Te damos la bienvenida a Condominios Jaroje 🌴\n\nConsulta disponibilidad en tiempo real, fotos de cada suite y reserva con tarifa directa neta:\n\n• 🛏️ *Elige tus fechas y suites*\n• 📸 *Fotos reales y amenidades en vivo*\n• 🔒 *Garantía de bloqueo por 24 horas*\n• ⚡ *Sin comisiones de agencias intermediarias*';
-
-  console.log(`[WhatsApp In-App] 🚀 Enviando invitación interactiva CTA_URL (In-App Browser) a ${maskPhone(cleanPhone)}...`);
-  const ctaRes = await sendWhatsAppCTAButtonMessage(
-    phone,
-    bodyText,
-    buttonText,
-    portalUrl,
-    header,
-    footer
-  );
-
-  if (ctaRes.success) {
-    try {
-      const summaryText = `🏨 [Portal de Reservas Directas: ${buttonText}] ${portalUrl}`;
-      const newMsg = {
-        role_manager: summaryText,
-        role_guest: null,
-        role_bot: null,
-        timestamp: new Date().toISOString(),
-      };
-      const cleaned = normalizePhone(phone);
-      const { data: existing } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('guest_phone', cleaned)
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (existing) {
-        const newMessages = [...(existing.messages || []), newMsg];
-        await supabase
-          .from('conversations')
-          .update({ messages: newMessages, timestamp: new Date().toISOString() })
-          .eq('id', existing.id);
-      }
-    } catch (logErr) {
-      console.warn('[WhatsApp In-App] Error registrando en conversations:', logErr);
-    }
-    return ctaRes;
-  }
-
-  // Fallback si la sesión de 24h está cerrada en Meta: usar la plantilla oficial bienvenido_cliente_whatsaap_v4
-  console.warn(`[WhatsApp In-App] Sesión 24h posiblemente cerrada (${ctaRes.error}), aplicando fallback a plantilla oficial...`);
-  return sendTemplate_BienvenidoWhatsApp(phone, undefined, isEnglish ? 'en' : 'es');
-}
-
-/**
  * 14. Plantilla de Bienvenida a WhatsApp (bienvenido_cliente_whatsaap_v4)
  * Se envía automáticamente cuando un cliente escribe por WhatsApp y no había interactuado en 1 semana.
  * Contiene botón directo con enlace dinámico al portal de reservas (?phone={{1}}).
@@ -1791,24 +1721,6 @@ export async function sendTemplate_BienvenidoWhatsApp(
     return sendTemplate3_ReservacionConfirmada({ id: bookingId, guest_name: name, phone }, true);
   }
   return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap_v4', [], [cleanPhone], undefined, 'url', false, lang);
-}
-
-/**
- * 14.1. Plantilla de Confirmación de Reserva / Paso 2 (confirmar_reserva)
- * Se envía al instante cuando el cliente finaliza la selección de fechas y habitaciones en el portal.
- * Invita al cliente a pulsar el botón "Confirmar Reserva" para abrir el portal y solicitar su nombre completo.
- */
-export async function sendTemplate_ConfirmarReserva(
-  phone: string,
-  langOverride?: string
-): Promise<{ success: boolean; error?: string; data?: any }> {
-  if (!phone) return { success: false, error: 'Sin teléfono' };
-  const cleanPhone = cleanPhoneForMeta(phone);
-  // La plantilla 'confirmar_reserva' está aprobada en Meta WhatsApp Business exclusivamente en idioma español ('es')
-  const lang = (langOverride || 'es') as 'es' | 'en';
-  // El botón URL dinámico en Meta es: https://jaroje-app.vercel.app/public/reservar?phone={{1}}
-  // Pasamos `${cleanPhone}&step=confirm` para que la web reconozca exclusivamente que es el Paso 2 de confirmación
-  return sendWhatsAppTemplate(phone, 'confirmar_reserva', [], [`${cleanPhone}&step=confirm`], undefined, 'url', false, lang);
 }
 
 /**
