@@ -1084,7 +1084,6 @@ export async function sendWhatsAppTemplate(
       // Plantillas que SOLO existen en español ('es') en Meta WhatsApp Business
       const SPANISH_ONLY_TEMPLATES = new Set([
         'confirmar_reserva',
-        'cotizacion_reserva',
         'portal_huesped_link',
         'test_mixed_buttons_no_emoji'
       ]);
@@ -2095,11 +2094,14 @@ export async function sendTemplate_Cotizacion(
     reserveQuerySuffix: string;
     fallbackFullText: string;
     fallbackReserveUrl: string;
+    lang?: 'es' | 'en';
   }
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
   const cleanPhone = normalizePhone(phone);
   if (!cleanPhone) return { success: false, error: 'Teléfono no válido' };
+
+  const targetLang = data.lang || (isSpanishOrLatamPhone(cleanPhone) ? 'es' : 'en');
 
   const parameters = [
     data.checkInFormatted,
@@ -2117,7 +2119,7 @@ export async function sendTemplate_Cotizacion(
   const buttonParams = [data.reserveQuerySuffix];
 
   try {
-    console.log(`[WhatsApp API] Despachando plantilla oficial 'cotizacion_reserva' a ${cleanPhone}...`);
+    console.log(`[WhatsApp API] Despachando plantilla oficial 'cotizacion_reserva' [${targetLang}] a ${cleanPhone}...`);
     const tplRes = await sendWhatsAppTemplate(
       cleanPhone,
       'cotizacion_reserva',
@@ -2126,12 +2128,12 @@ export async function sendTemplate_Cotizacion(
       undefined,
       'url',
       true, // bypassPause: solicitado expresamente por el cliente en el botón "Cotizar sin bloquear"
-      'es',
+      targetLang,
       true  // forceResend
     );
 
     if (tplRes.success) {
-      console.log(`[WhatsApp API] ✅ Plantilla 'cotizacion_reserva' entregada con éxito a ${cleanPhone}`);
+      console.log(`[WhatsApp API] ✅ Plantilla 'cotizacion_reserva' [${targetLang}] entregada con éxito a ${cleanPhone}`);
       return tplRes;
     }
 
@@ -2141,13 +2143,14 @@ export async function sendTemplate_Cotizacion(
   }
 
   // Fallback seguro a mensaje interactivo CTA (o texto)
+  const isEn = targetLang === 'en';
   return sendWhatsAppCTAButtonMessage(
     cleanPhone,
     data.fallbackFullText,
-    '¡¡¡ RESERVA YA !!!',
+    isEn ? 'Book Now' : '¡¡¡ RESERVA YA !!!',
     data.fallbackReserveUrl,
-    '🏨 COTIZACIÓN Condominios Jaroje',
-    'Sujeta a disponibilidad al momento de reservar'
+    isEn ? 'YOUR QUOTE – Condominios Jaroje' : '🏨 COTIZACIÓN Condominios Jaroje',
+    isEn ? 'Rates and availability are subject to change' : 'Sujeta a disponibilidad al momento de reservar'
   );
 }
 

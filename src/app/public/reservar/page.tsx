@@ -851,6 +851,7 @@ function ReservarContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: phoneToUse,
+          lang,
           checkIn,
           checkOut,
           nights: activeSummary.nights,
