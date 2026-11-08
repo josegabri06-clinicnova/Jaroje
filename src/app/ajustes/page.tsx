@@ -14,7 +14,10 @@ import {
 } from 'lucide-react';
 import { RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
 import { changePin, logout } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
+import { createDbClient } from '@/lib/db-client';
+
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
 import { format, subDays, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 
