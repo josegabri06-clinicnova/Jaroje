@@ -10,6 +10,7 @@ import {
   MessageCircle, CreditCard, Copy, ExternalLink, AlertCircle
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { createDbClient } from '@/lib/db-client';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getActiveEmployee, clearActiveEmployee, Employee, verifyAdminPin, getRole, getOperatorForLog, syncEmployeesFromServer } from '@/lib/auth';
@@ -23,9 +24,13 @@ import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROU
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 import { normalizePhone } from '@/lib/whatsapp';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
+
+// Solo para el tiempo real de room_status (la pasarela no admite suscripciones): cliente con la clave pública
+const supabaseRealtime = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+});
 
 function getFinanceAccountFields(selectedVal: string, baseDesc: string): { accountId: string | null, description: string } {
   if (!selectedVal) {
@@ -3049,7 +3054,7 @@ export default function RecepcionPage() {
     }, 45000);
 
     // Suscripción Realtime en Supabase para cambios de estado de cuartos
-    const channel = supabase
+    const channel = supabaseRealtime
       .channel('room_status_changes_recepcion')
       .on(
         'postgres_changes',
@@ -3076,7 +3081,7 @@ export default function RecepcionPage() {
 
     return () => {
       clearInterval(iv);
-      supabase.removeChannel(channel);
+      supabaseRealtime.removeChannel(channel);
       window.removeEventListener('click', unlock);
       window.removeEventListener('touchstart', unlock);
       window.removeEventListener('refresh-data', handleRefresh);
