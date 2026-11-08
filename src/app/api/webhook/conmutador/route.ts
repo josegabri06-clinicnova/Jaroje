@@ -33,6 +33,7 @@ async function processConmutadorCall(req: Request) {
                    url.searchParams.get('caller') || 
                    url.searchParams.get('Caller') || 
                    url.searchParams.get('From') || 
+                   url.searchParams.get('ani') || 
                    url.searchParams.get('numero') || 
                    url.searchParams.get('telefono');
     const qName = url.searchParams.get('name') || 
@@ -66,15 +67,15 @@ async function processConmutadorCall(req: Request) {
           }
 
           if (item && typeof item === 'object') {
-            // Teléfono: Grandstream usa 'src' o 'caller_id_number' o 'clid'
-            rawPhone = item.src || item.caller_id_number || item.cid_num || 
+            // Teléfono: Grandstream usa 'ani', 'src' o 'caller_id_number' o 'clid'
+            rawPhone = item.ani || item.src || item.caller_id_number || item.cid_num || 
                        item.phone || item.from || item.caller || item.caller_id || 
                        item.Caller || item.From || item.numero || item.telefono || 
-                       item.contact || item.data?.phone || item.data?.caller || '';
+                       item.contact || item.data?.ani || item.data?.phone || item.data?.caller || '';
 
             // Nombre: Grandstream usa 'caller_name', 'caller_id_name', o viene dentro de 'clid'
             callerName = item.caller_name || item.caller_id_name || item.name || 
-                         item.CallerName || item.nombre || '';
+                         item.CallerName || item.nombre || item.data?.caller_name || '';
 
             // Si viene el campo 'clid' (Caller ID) con formato: "Nombre Huésped" <9581168698>
             if (item.clid && typeof item.clid === 'string') {
@@ -103,7 +104,7 @@ async function processConmutadorCall(req: Request) {
       } else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
         try {
           const formData = await req.formData();
-          rawPhone = (formData.get('src') || formData.get('caller_id_number') ||
+          rawPhone = (formData.get('ani') || formData.get('src') || formData.get('caller_id_number') ||
                       formData.get('phone') || formData.get('from') || formData.get('caller') || 
                       formData.get('Caller') || formData.get('From') || formData.get('numero') || 
                       formData.get('telefono')) as string || '';
