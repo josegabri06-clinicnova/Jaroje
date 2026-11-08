@@ -1018,6 +1018,7 @@ export async function sendWhatsAppTemplate(
         'bienvenido_cliente_whatsaap_v3': 'bienvenido_cliente_whatsaap_v4',
         'bienvenido_cliente_whatsaap_v4': 'bienvenido_cliente_whatsaap_v4',
         'confirmar_reserva': 'confirmar_reserva',
+        'cotizacion_reserva': 'cotizacion_reserva',
         'portal_huesped_link_en': 'portal_huesped_link',
       };
       const actualMetaTemplate = META_TEMPLATE_ALIASES[templateName] || templateName;
@@ -1083,6 +1084,7 @@ export async function sendWhatsAppTemplate(
       // Plantillas que SOLO existen en español ('es') en Meta WhatsApp Business
       const SPANISH_ONLY_TEMPLATES = new Set([
         'confirmar_reserva',
+        'cotizacion_reserva',
         'portal_huesped_link',
         'test_mixed_buttons_no_emoji'
       ]);
@@ -1376,6 +1378,8 @@ export async function sendWhatsAppTemplate(
             return `👋 ¡Hola! Bienvenido a Condominios Jaroje 🌴\n\nCon gusto te compartimos nuestras opciones de alojamiento, tarifas y disponibilidad.\n\n[Botón: Disponibilidad y Cotización] [Botón: Fotos y Tarifas] [Botón: Ubicación]`;
           case 'confirmar_reserva':
             return `🎉 ¡Excelente! 🎉\n\nHemos recibido tu cotización. Para confirmar tu reserva, necesitamos que introduzcas tu nombre y apellidos.\n\nPulsa el botón para completar tu reserva 👇\n\n[Botón: Confirmar Reserva]`;
+          case 'cotizacion_reserva':
+            return `🏨 Cotización Condominios Jaroje\n\n(Sujeta a disponibilidad a la hora de Reservar)\n\n✅ *Tarifa de Miembro Jaroje aplicada*\n\n📅 *Check in:* ${params[0] || ''}\n   *Check out:* ${params[1] || ''} (${params[2] || ''})\n\n👥 *Huéspedes:* ${params[3] || ''}\n\n🛏️ *Alojamientos seleccionados:*\n${params[4] || ''}\n\n👤 *Personas adicionales:* ${params[5] || ''}\n\n💰 *DESGLOSE TOTAL:*\n${params[6] || ''}\n• *Total de la estancia (impuestos incluidos):* ${params[7] || ''}\n• *Anticipo requerido para apartar (50%):* ${params[8] || ''}\n• *Saldo restante al check-in (50%):* ${params[9] || ''}\n\n[Botón: ¡¡¡ RESERVA YA !!!]`;
           default:
             return `[Plantilla: ${tName}]` + (params.length > 0 ? ` (Parámetros: ${params.join(', ')})` : '');
         }
@@ -2069,6 +2073,82 @@ export async function sendTemplate_ConfirmarReserva(
   // El botón URL dinámico en Meta es: https://jaroje-app.vercel.app/public/reservar?phone={{1}}
   // Pasamos `${cleanPhone}&step=confirm` para que la web reconozca exclusivamente que es el Paso 2 de confirmación
   return sendWhatsAppTemplate(phone, 'confirmar_reserva', [], [`${cleanPhone}&step=confirm`], undefined, 'url', false, lang);
+}
+
+/**
+ * 14.2. Plantilla Oficial de Cotización / Paso 1 (cotizacion_reserva)
+ * Aprobada en Meta para saltarse la ventana de 24 horas y despacharse con botón interactivo de reserva.
+ */
+export async function sendTemplate_Cotizacion(
+  phone: string,
+  data: {
+    checkInFormatted: string;
+    checkOutFormatted: string;
+    nightsText: string;
+    guestsText: string;
+    roomsText: string;
+    extrasText: string;
+    desgloseSubtotalText: string;
+    totalAmountText: string;
+    depositText: string;
+    balanceText: string;
+    reserveQuerySuffix: string;
+    fallbackFullText: string;
+    fallbackReserveUrl: string;
+  }
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+  const cleanPhone = normalizePhone(phone);
+  if (!cleanPhone) return { success: false, error: 'Teléfono no válido' };
+
+  const parameters = [
+    data.checkInFormatted,
+    data.checkOutFormatted,
+    data.nightsText,
+    data.guestsText,
+    data.roomsText,
+    data.extrasText,
+    data.desgloseSubtotalText,
+    data.totalAmountText,
+    data.depositText,
+    data.balanceText
+  ];
+
+  const buttonParams = [data.reserveQuerySuffix];
+
+  try {
+    console.log(`[WhatsApp API] Despachando plantilla oficial 'cotizacion_reserva' a ${cleanPhone}...`);
+    const tplRes = await sendWhatsAppTemplate(
+      cleanPhone,
+      'cotizacion_reserva',
+      parameters,
+      buttonParams,
+      undefined,
+      'url',
+      true, // bypassPause: solicitado expresamente por el cliente en el botón "Cotizar sin bloquear"
+      'es',
+      true  // forceResend
+    );
+
+    if (tplRes.success) {
+      console.log(`[WhatsApp API] ✅ Plantilla 'cotizacion_reserva' entregada con éxito a ${cleanPhone}`);
+      return tplRes;
+    }
+
+    console.warn(`[WhatsApp API] Plantilla 'cotizacion_reserva' no entregada (${tplRes.error}). Aplicando fallback a botón interactivo...`);
+  } catch (err: any) {
+    console.warn(`[WhatsApp API] Error intentando plantilla 'cotizacion_reserva':`, err);
+  }
+
+  // Fallback seguro a mensaje interactivo CTA (o texto)
+  return sendWhatsAppCTAButtonMessage(
+    cleanPhone,
+    data.fallbackFullText,
+    '¡¡¡ RESERVA YA !!!',
+    data.fallbackReserveUrl,
+    '🏨 COTIZACIÓN Condominios Jaroje',
+    'Sujeta a disponibilidad al momento de reservar'
+  );
 }
 
 /**

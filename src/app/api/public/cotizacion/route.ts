@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { normalizePhone, sendWhatsAppCTAButtonMessage } from '@/lib/whatsapp';
+import { normalizePhone, sendTemplate_Cotizacion, sendWhatsAppCTAButtonMessage } from '@/lib/whatsapp';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { checkBookingWindow } from '@/lib/booking-window';
 import { getBeds24Token, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
@@ -260,7 +260,7 @@ export async function POST(req: Request) {
 
       const quoteMessage = {
         role_guest: null,
-        role_bot: `🎉 ¡Cotización generada! Folio: #${quoteId}. Total: $${finalTotal.toLocaleString()} MXN (50% anticipo: $${finalDeposit.toLocaleString()} MXN). Pendiente de nombre completo.`,
+        role_bot: `🎉 ¡Cotización generada! Total: $${finalTotal.toLocaleString()} MXN (50% anticipo: $${finalDeposit.toLocaleString()} MXN). Pendiente de formalizar.`,
         role_manager: null,
         quote_data: quoteData,
         timestamp: nowIso
@@ -293,7 +293,7 @@ export async function POST(req: Request) {
       console.error("[Cotizacion API] Error guardando cotización en BD:", dbErr);
     }
 
-    // 2. Enviar por WhatsApp el resumen completo con desglose detallado y botón interactivo CTA
+    // 2. Enviar por WhatsApp la plantilla oficial Meta 'cotizacion_reserva' (bypasea ventana de 24h)
     const roomsText = sanitizedRooms.map((r: any) => {
       const itemSub = (r.pricePerNight * nights * r.quantity);
       return `• *${r.quantity}x ${r.name}*\n  $${r.pricePerNight.toLocaleString()} MXN / noche × ${nights} ${nights === 1 ? 'noche' : 'noches'} = $${itemSub.toLocaleString()} MXN`;
@@ -301,43 +301,62 @@ export async function POST(req: Request) {
 
     const checkInFormatted = formatSpanishDate(cleanCheckIn);
     const checkOutFormatted = formatSpanishDate(cleanCheckOut);
-    const roomsParam = sanitizedRooms.map((r: any) => `${r.key}:${r.quantity}`).join(',');
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-    const reserveUrl = `${siteUrl}/public/reservar?phone=${cleanPhone}&checkIn=${cleanCheckIn}&checkOut=${cleanCheckOut}&adults=${effectiveAdults}&children=${cleanChildren}&rooms=${encodeURIComponent(roomsParam)}&extras=${extraGuests}&quoteId=${quoteId}&action=reserve&step=confirm`;
+    const nightsText = `${nights} ${nights === 1 ? 'noche' : 'noches'}`;
+    const guestsText = `${effectiveGuests} personas (${effectiveAdults} adultos${cleanChildren > 0 ? `, ${cleanChildren} niños` : ''})`;
+    const extrasText = extraGuests > 0 
+      ? `${extraGuests} adicionales ($500 MXN / noche × ${extraGuests} pers. × ${nights} noches = $${extraGuestsFee.toLocaleString()} MXN)\n⚠️ *Nota importante:* No contamos con camas adicionales, el sillón de la sala NO cuenta con aire acondicionado.`
+      : '0 adicionales (incluidas en capacidad base sin costo)';
+    const desgloseSubtotalText = extraGuestsFee > 0
+      ? `• Subtotal hospedaje: $${baseLodgingTotal.toLocaleString()} MXN\n• Suplemento adicionales: $${extraGuestsFee.toLocaleString()} MXN`
+      : `• Subtotal hospedaje: $${baseLodgingTotal.toLocaleString()} MXN`;
+    const totalAmountText = `$${finalTotal.toLocaleString()} MXN`;
+    const depositText = `$${finalDeposit.toLocaleString()} MXN`;
+    const balanceText = `$${balanceRemaining.toLocaleString()} MXN`;
 
-    const whatsappSummaryText =
+    const roomsParam = sanitizedRooms.map((r: any) => `${r.key}:${r.quantity}`).join(',');
+    const reserveQuerySuffix = `?phone=${cleanPhone}&checkIn=${cleanCheckIn}&checkOut=${cleanCheckOut}&adults=${effectiveAdults}&children=${cleanChildren}&rooms=${encodeURIComponent(roomsParam)}&extras=${extraGuests}&action=reserve&step=confirm`;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
+    const fallbackReserveUrl = `${siteUrl}/public/reservar${reserveQuerySuffix}`;
+
+    const fallbackFullText =
 `*(Sujeta a disponibilidad a la hora de Reservar)*
-Folio: *#${quoteId}*
 
 ✅ *Tarifa de Miembro Jaroje aplicada*
 
 📅 *Check in:* ${checkInFormatted}
-	*Check out:* ${checkOutFormatted} (${nights} ${nights === 1 ? 'noche' : 'noches'})
+	*Check out:* ${checkOutFormatted} (${nightsText})
 
-👥 *Huéspedes:* ${effectiveGuests} personas (${effectiveAdults} adultos${cleanChildren > 0 ? `, ${cleanChildren} niños` : ''})
+👥 *Huéspedes:* ${guestsText}
 
 🛏️ *Alojamientos seleccionados:*
 ${roomsText}
 
-👤 *Personas adicionales:* ${extraGuests > 0 ? `${extraGuests} adicionales ($500 MXN / noche × ${extraGuests} pers. × ${nights} noches = $${extraGuestsFee.toLocaleString()} MXN)` : '0 adicionales (incluidas en capacidad base sin costo)'}
-${extraGuests > 0 ? `⚠️ *Nota importante:* No contamos con camas adicionales, el sillón de la sala NO cuenta con aire acondicionado.\n` : ''}
+👤 *Personas adicionales:* ${extrasText}
+
 💰 *DESGLOSE TOTAL:*
-• Subtotal hospedaje: $${baseLodgingTotal.toLocaleString()} MXN
-${extraGuestsFee > 0 ? `• Suplemento adicionales: $${extraGuestsFee.toLocaleString()} MXN\n` : ''}• *Total de la estancia (impuestos incluidos):* $${finalTotal.toLocaleString()} MXN
-• *Anticipo requerido para apartar (50%):* $${finalDeposit.toLocaleString()} MXN
-• Saldo restante al check-in (50%): $${balanceRemaining.toLocaleString()} MXN`;
+${desgloseSubtotalText}
+• *Total de la estancia (impuestos incluidos):* ${totalAmountText}
+• *Anticipo requerido para apartar (50%):* ${depositText}
+• *Saldo restante al check-in (50%):* ${balanceText}`;
 
     let waResult: any = { success: false };
     try {
-      console.log(`[Cotizacion API] Enviando cotización oficial interactiva a ${cleanPhone}...`);
-      waResult = await sendWhatsAppCTAButtonMessage(
-        cleanPhone,
-        whatsappSummaryText,
-        '¡¡¡ RESERVA YA !!!',
-        reserveUrl,
-        '🏨 COTIZACIÓN Condominios Jaroje',
-        'Sujeta a disponibilidad al momento de reservar'
-      );
+      console.log(`[Cotizacion API] Enviando cotización oficial por WhatsApp a ${cleanPhone}...`);
+      waResult = await sendTemplate_Cotizacion(cleanPhone, {
+        checkInFormatted,
+        checkOutFormatted,
+        nightsText,
+        guestsText,
+        roomsText,
+        extrasText,
+        desgloseSubtotalText,
+        totalAmountText,
+        depositText,
+        balanceText,
+        reserveQuerySuffix,
+        fallbackFullText,
+        fallbackReserveUrl
+      });
       console.log(`[Cotizacion API] Resultado envío WhatsApp:`, waResult);
     } catch (waErr: any) {
       console.error("[Cotizacion API] Error enviando cotización por WhatsApp:", waErr);
