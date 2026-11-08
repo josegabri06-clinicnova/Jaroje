@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
-import { getExpectedPin, safeEqual, createFailLimiter, clientIp } from '@/lib/server-pins';
+import { isPinLocked, registerPinFailure, clearPinFailures } from '@/lib/login-throttle';
+import { getExpectedPin, safeEqual, clientIp } from '@/lib/server-pins';
 
 export const dynamic = 'force-dynamic';
-
-const limiter = createFailLimiter();
 
 /**
  * Comprueba el PIN de administrador (desbloquear precios, borrar inventario…) SIN tocar la sesión:
@@ -17,7 +16,7 @@ export async function POST(req: Request) {
   }
 
   const ip = clientIp(req);
-  if (limiter.isLimited(ip)) {
+  if (await isPinLocked('admin', ip)) {
     return NextResponse.json({ success: false, error: 'Demasiados intentos fallidos. Intenta de nuevo en 15 minutos.' }, { status: 429 });
   }
 
@@ -33,10 +32,10 @@ export async function POST(req: Request) {
   }
 
   if (!safeEqual(pin, expected)) {
-    limiter.fail(ip);
+    await registerPinFailure('admin', ip);
     return NextResponse.json({ success: false, error: 'PIN incorrecto.' }, { status: 401 });
   }
 
-  limiter.clear(ip);
+  await clearPinFailures(ip);
   return NextResponse.json({ success: true });
 }
