@@ -4,12 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Plus, CheckCircle2, AlertTriangle, Wrench, Sparkles, X, Edit2, Download, Upload, Trash2, Bell, Camera, Video, Image as ImageIcon } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { createDbClient } from '@/lib/db-client';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
 
 import { getActiveEmployee } from '@/lib/auth';
 import CameraModal from '@/components/CameraModal';
