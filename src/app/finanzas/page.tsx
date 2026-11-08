@@ -1,7 +1,7 @@
 "use client";
  
 import { useState, useEffect, useMemo } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createDbClient } from '@/lib/db-client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
@@ -16,10 +16,8 @@ import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync, getActiveEmployee } from '@/lib/auth';
 import { computeOtaSplit } from '@/lib/beds24';
  
-// Inicializar Supabase cliente
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
 
 const normalizeText = (text: string) => 
   (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -403,13 +401,9 @@ export default function FinanzasPage() {
         }
       }
 
+      // (Antes había un respaldo que leía beds24_reservations con la clave pública; esa tabla está cerrada y siempre venía vacía)
       if (rawList.length > 0) {
         setReservations(rawList);
-      } else {
-        const { data: b24Data } = await supabase.from('beds24_reservations').select('*').order('check_in', { ascending: false });
-        if (b24Data && b24Data.length > 0) {
-          setReservations(b24Data);
-        }
       }
     } catch (err) {
       console.error("[Finanzas] Error al cargar datos:", err);
