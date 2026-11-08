@@ -9,7 +9,8 @@ import {
   Star, Key, X, Check, Eye, EyeOff, LogOut,
   Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown,
   Database, Sparkles, History, AlertTriangle, CheckCircle2, Download, Wrench,
-  TrendingUp, RotateCcw, Bell, ExternalLink, UserCheck, UploadCloud, Search, Landmark
+  TrendingUp, RotateCcw, Bell, ExternalLink, UserCheck, UploadCloud, Search, Landmark,
+  Activity, Clock, Cpu, Zap, RefreshCw
 } from 'lucide-react';
 import { RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
 import { changePin, logout } from '@/lib/auth';
@@ -146,6 +147,7 @@ export default function AjustesPage() {
     perfil: false,
     seguridad: false,
     whatsapp: false,
+    crons: false,
     portal_pagos: false,
     contable: false,
     tarifas: false,
@@ -192,6 +194,57 @@ export default function AjustesPage() {
   const [purgeBackedUpConfirmed, setPurgeBackedUpConfirmed] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+
+  // Crons & Automations state
+  const [cronStatus, setCronStatus] = useState<any>(null);
+  const [loadingCronStatus, setLoadingCronStatus] = useState(false);
+  const [cronLogsModal, setCronLogsModal] = useState<'whatsapp' | 'ota' | null>(null);
+
+  const fetchCronStatus = async () => {
+    try {
+      setLoadingCronStatus(true);
+      const res = await fetch('/api/settings/cron-status');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setCronStatus(data);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching cron status:', e);
+    } finally {
+      setLoadingCronStatus(false);
+    }
+  };
+
+  const formatRelativeTime = (isoString?: string) => {
+    if (!isoString) return 'Sin registros';
+    try {
+      const d = new Date(isoString);
+      const diffMs = Date.now() - d.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return 'Hace unos segundos';
+      if (diffMins < 60) return `Hace ${diffMins} min`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `Hace ${diffHours}h ${diffMins % 60}m`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `Hace ${diffDays}d (${d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })})`;
+    } catch {
+      return isoString;
+    }
+  };
+
+  const formatTemplateBadge = (templateName: string) => {
+    const map: Record<string, { label: string; color: string }> = {
+      bienvenida_hotel_jaroje: { label: 'Bienvenida', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+      recordatorio_checkin_jaroje: { label: 'Recordatorio', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+      salida_huesped_jaroje: { label: 'Check-out / Despedida', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+      instrucciones_llegada_jaroje: { label: 'Instrucciones', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+      aviso_limpieza_jaroje: { label: 'Limpieza', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+      default: { label: templateName || 'Plantilla', color: 'bg-zinc-100 text-zinc-700 border-zinc-200' }
+    };
+    return map[templateName] || map.default;
+  };
 
   // PIN states
   const [pinModal, setPinModal]     = useState<PinTarget>(null);
@@ -288,6 +341,12 @@ export default function AjustesPage() {
       fetchDepurarData();
     }
   }, [expandedSections.depuracion]);
+
+  useEffect(() => {
+    if (expandedSections.crons) {
+      fetchCronStatus();
+    }
+  }, [expandedSections.crons]);
 
   const activeDepurarData = depurarTab === 'logs' ? depurarLogs : depurarTasks;
 
@@ -913,6 +972,7 @@ export default function AjustesPage() {
         fetchMaintenanceWaGroupUrl(),
         fetchPersonalContacts(),
         fetchDefaultTransferAccount(),
+        fetchCronStatus(),
         expandedSections.depuracion ? fetchDepurarData() : Promise.resolve()
       ]);
     } catch (e) {
@@ -936,12 +996,13 @@ export default function AjustesPage() {
     fetchMaintenanceWaGroupUrl();
     fetchPersonalContacts();
     fetchDefaultTransferAccount();
+    fetchCronStatus();
 
     // Check section parameter on load
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const section = params.get('section');
-      if (section && ['perfil', 'seguridad', 'whatsapp', 'portal_pagos', 'contable', 'tarifas', 'empleados', 'depuracion'].includes(section)) {
+      if (section && ['perfil', 'seguridad', 'whatsapp', 'crons', 'portal_pagos', 'contable', 'tarifas', 'empleados', 'depuracion'].includes(section)) {
         setExpandedSections(prev => ({
           ...prev,
           [section]: true
@@ -1723,6 +1784,251 @@ export default function AjustesPage() {
                     No hay contactos registrados todavía.
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* 2.7. ESTADO DE AUTOMATIZACIONES Y CRONS */}
+      <CollapsibleSection
+        id="crons"
+        icon={<Activity size={15} strokeWidth={2.5} />}
+        title="Automatizaciones y Crons (Vercel)"
+        isOpen={expandedSections.crons}
+        onToggle={() => toggleSection('crons')}
+        headerAddon={
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Vercel Pro
+            </span>
+          </div>
+        }
+      >
+        <div className="space-y-4 py-1">
+          {/* Top Banner & Refresh */}
+          <div className="bg-gradient-to-r from-zinc-900 to-zinc-800 text-white rounded-2xl p-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <Cpu size={18} className="text-emerald-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-[13.5px] font-black tracking-wide">Motor de Tareas Programadas</h3>
+                    <span className="px-1.5 py-0.5 text-[10px] font-mono bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30">
+                      Sin n8n • Vercel Nativo
+                    </span>
+                  </div>
+                  <p className="text-[11.5px] text-zinc-300 mt-0.5 leading-relaxed">
+                    Las 4 automatizaciones operan directamente en Vercel Serverless (hasta 300s de ejecución). Monitoreo en vivo de cadencia y actividad.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                {cronStatus?.latencyMs !== undefined && (
+                  <span className="text-[11px] font-mono text-zinc-400 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
+                    {cronStatus.latencyMs}ms
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={fetchCronStatus}
+                  disabled={loadingCronStatus}
+                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-xl text-[11.5px] font-bold transition flex items-center gap-1.5 border border-white/10 cursor-pointer disabled:opacity-50"
+                  title="Actualizar estado ahora"
+                >
+                  <RefreshCw size={13} className={loadingCronStatus ? 'animate-spin' : ''} />
+                  <span>{loadingCronStatus ? 'Verificando...' : 'Actualizar'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Cards Grid: 4 Automations */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Card 1: WhatsApp Lifecycle Engine */}
+            <div className="p-4 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 hover:bg-white hover:border-zinc-300 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <Zap size={14} />
+                    </div>
+                    <div>
+                      <h4 className="text-[12.5px] font-bold text-zinc-900 leading-tight">WhatsApp Huéspedes</h4>
+                      <span className="text-[10px] font-mono text-zinc-500">/api/cron/whatsapp</span>
+                    </div>
+                  </div>
+                  {cronStatus?.whatsapp?.isPaused ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                      Pausado
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                      Activo
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11.5px] text-zinc-600 leading-snug mb-3">
+                  Envío automático de confirmaciones, códigos de acceso e instrucciones de check-in / check-out.
+                </p>
+                <div className="space-y-1 text-[11px] text-zinc-600 bg-white p-2.5 rounded-xl border border-zinc-200/60 mb-3">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Frecuencia:</span>
+                    <span className="font-semibold text-zinc-800">Cada 5 minutos</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Envíos últimas 24h:</span>
+                    <span className="font-bold text-emerald-700">
+                      {cronStatus?.whatsapp?.sent24h ?? '...'} mensajes
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Último procesado:</span>
+                    <span className="font-medium text-zinc-700">
+                      {cronStatus?.whatsapp?.recentLogs?.[0]?.sent_at 
+                        ? formatRelativeTime(cronStatus.whatsapp.recentLogs[0].sent_at) 
+                        : 'Sin registros recientes'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCronLogsModal('whatsapp')}
+                className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11.5px] font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Eye size={13} />
+                <span>Ver historial reciente ({cronStatus?.whatsapp?.recentLogs?.length || 0})</span>
+              </button>
+            </div>
+
+            {/* Card 2: OTA Guest Messaging */}
+            <div className="p-4 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 hover:bg-white hover:border-zinc-300 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                      <Clock size={14} />
+                    </div>
+                    <div>
+                      <h4 className="text-[12.5px] font-bold text-zinc-900 leading-tight">Mensajería OTA / Channel</h4>
+                      <span className="text-[10px] font-mono text-zinc-500">/api/cron/ota-messages</span>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                    Activo
+                  </span>
+                </div>
+                <p className="text-[11.5px] text-zinc-600 leading-snug mb-3">
+                  Sincronización y respuesta directa en la bandeja de Booking.com, Airbnb y Expedia mediante Beds24.
+                </p>
+                <div className="space-y-1 text-[11px] text-zinc-600 bg-white p-2.5 rounded-xl border border-zinc-200/60 mb-3">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Frecuencia:</span>
+                    <span className="font-semibold text-zinc-800">Cada 5 minutos</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Acciones últimas 24h:</span>
+                    <span className="font-bold text-blue-700">
+                      {cronStatus?.ota?.actions24h ?? '...'} acciones
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Última acción:</span>
+                    <span className="font-medium text-zinc-700">
+                      {cronStatus?.ota?.recentLogs?.[0]?.created_at 
+                        ? formatRelativeTime(cronStatus.ota.recentLogs[0].created_at) 
+                        : 'Sin registros recientes'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCronLogsModal('ota')}
+                className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11.5px] font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Eye size={13} />
+                <span>Ver historial OTA ({cronStatus?.ota?.recentLogs?.length || 0})</span>
+              </button>
+            </div>
+
+            {/* Card 3: Storage Hygiene & File Cleanup */}
+            <div className="p-4 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 hover:bg-white hover:border-zinc-300 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                      <Database size={14} />
+                    </div>
+                    <div>
+                      <h4 className="text-[12.5px] font-bold text-zinc-900 leading-tight">Higiene de Archivos</h4>
+                      <span className="text-[10px] font-mono text-zinc-500">/api/cron/cleanup-files</span>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-200">
+                    Programado
+                  </span>
+                </div>
+                <p className="text-[11.5px] text-zinc-600 leading-snug mb-3">
+                  Purga automática de fotos de identificaciones y recibos temporales de más de 1 año para mantener el almacenamiento óptimo.
+                </p>
+                <div className="space-y-1 text-[11px] text-zinc-600 bg-white p-2.5 rounded-xl border border-zinc-200/60">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Horario Huatulco:</span>
+                    <span className="font-semibold text-zinc-800">11:00 PM diario</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Expresión UTC:</span>
+                    <span className="font-mono text-zinc-700">0 5 * * *</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Criterio:</span>
+                    <span className="font-medium text-amber-700">Identificaciones &gt; 365 días</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 4: Analytics & Financial Sync */}
+            <div className="p-4 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 hover:bg-white hover:border-zinc-300 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                      <TrendingUp size={14} />
+                    </div>
+                    <div>
+                      <h4 className="text-[12.5px] font-bold text-zinc-900 leading-tight">Analítica y Sincronización</h4>
+                      <span className="text-[10px] font-mono text-zinc-500">/api/cron/analytics-sync</span>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-200">
+                    Programado
+                  </span>
+                </div>
+                <p className="text-[11.5px] text-zinc-600 leading-snug mb-3">
+                  Consolidación de ocupación y conciliación de saldos de Beds24 para el dashboard financiero de gerencia.
+                </p>
+                <div className="space-y-1 text-[11px] text-zinc-600 bg-white p-2.5 rounded-xl border border-zinc-200/60">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Horario Huatulco:</span>
+                    <span className="font-semibold text-zinc-800">10:00 PM diario</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Expresión UTC:</span>
+                    <span className="font-mono text-zinc-700">0 4 * * *</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Impacto:</span>
+                    <span className="font-medium text-indigo-700">Balance histórico &amp; reportes</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2550,6 +2856,107 @@ export default function AjustesPage() {
                   {isPurging ? 'Borrando...' : `Purgar permanentemente ✓`}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Logs de Crons (WhatsApp u OTA) */}
+      {cronLogsModal && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-[28px] p-5 sm:p-6 shadow-2xl animate-in slide-in-from-bottom-6 duration-300 border border-zinc-200 max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-zinc-150">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${cronLogsModal === 'whatsapp' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {cronLogsModal === 'whatsapp' ? <Zap size={16} /> : <Clock size={16} />}
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-zinc-900">
+                    {cronLogsModal === 'whatsapp' ? 'Últimos Envíos de WhatsApp' : 'Últimas Acciones OTA'}
+                  </h3>
+                  <p className="text-[11px] text-zinc-500">Procesados automáticamente por Vercel Cron</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setCronLogsModal(null)} 
+                className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors"
+              >
+                <X size={16} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto py-3 space-y-2.5 flex-1 pr-1">
+              {cronLogsModal === 'whatsapp' ? (
+                cronStatus?.whatsapp?.recentLogs?.length > 0 ? (
+                  cronStatus.whatsapp.recentLogs.map((log: any) => {
+                    const badge = formatTemplateBadge(log.template_name);
+                    return (
+                      <div key={log.id} className="p-3 bg-zinc-50 rounded-xl border border-zinc-200/80 flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${badge.color}`}>
+                            {badge.label}
+                          </span>
+                          <span className="text-[11px] text-zinc-500 font-medium">
+                            {formatRelativeTime(log.sent_at)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[12px] text-zinc-700 pt-0.5">
+                          <span className="font-mono text-zinc-800 font-semibold">{log.phone || 'Sin teléfono'}</span>
+                          <span className="text-[11px] font-mono text-zinc-400">Reserva: #{log.reservation_id || 'N/A'}</span>
+                        </div>
+                        {log.status && (
+                          <div className="text-[10.5px] text-emerald-600 font-medium flex items-center gap-1">
+                            <Check size={12} strokeWidth={3} />
+                            <span className="capitalize">{log.status}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-zinc-400 text-[13px]">
+                    No hay envíos registrados en el historial reciente.
+                  </div>
+                )
+              ) : (
+                cronStatus?.ota?.recentLogs?.length > 0 ? (
+                  cronStatus.ota.recentLogs.map((log: any) => (
+                    <div key={log.id} className="p-3 bg-zinc-50 rounded-xl border border-zinc-200/80 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-blue-100 text-blue-800 border-blue-200">
+                          {log.channel || 'Canal OTA'}
+                        </span>
+                        <span className="text-[11px] text-zinc-500 font-medium">
+                          {formatRelativeTime(log.created_at)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[12px] text-zinc-800 font-bold">
+                        <span>{log.guest_name || 'Huésped'}</span>
+                        <span className="text-[11px] font-mono text-zinc-400 font-normal">ID: {log.booking_id || 'N/A'}</span>
+                      </div>
+                      {log.template_type && (
+                        <span className="text-[11px] text-zinc-600 italic">
+                          Tipo: {log.template_type}
+                        </span>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-zinc-400 text-[13px]">
+                    No hay registros de mensajería OTA reciente.
+                  </div>
+                )
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-zinc-150">
+              <button
+                type="button"
+                onClick={() => setCronLogsModal(null)}
+                className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl text-[12.5px] transition cursor-pointer"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
