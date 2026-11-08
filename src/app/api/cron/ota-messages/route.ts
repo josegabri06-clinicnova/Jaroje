@@ -11,6 +11,7 @@ import {
 } from '@/lib/beds24-messages';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // Hasta 5 minutos en Vercel Pro
 
 export async function GET(req: Request) {
   try {

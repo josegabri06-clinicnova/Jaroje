@@ -4,6 +4,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { parseStoredFileUrl } from '@/lib/storage-files';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // Hasta 5 minutos en Vercel Pro
 
 function getStoragePath(url: string) {
   if (!url) return null;

@@ -19,6 +19,9 @@ import {
 } from '@/lib/whatsapp';
 import { isOtaChannel, sendOfficialOtaTemplate, isDummyOrInvalidPhone } from '@/lib/beds24-messages';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // Hasta 5 minutos de ejecución continua en Vercel Pro
+
 // Limpia y normaliza el número de habitación (por ejemplo, extrae "401" de "Casa Vacacional de 3 dormitorios (401)")
 function getCleanRoom(roomName: string, roomField: string): string {
   const parenMatch = String(roomName || '').match(/\((\d{3})\)/);

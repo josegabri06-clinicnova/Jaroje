@@ -4,6 +4,7 @@ import { syncBeds24ReservationsRange } from '@/lib/beds24';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // Hasta 5 minutos en Vercel Pro
 
 export async function GET(req: Request) {
   try {
