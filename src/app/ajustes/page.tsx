@@ -1821,7 +1821,7 @@ export default function AjustesPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-[13.5px] font-black tracking-wide">Motor de Tareas Programadas</h3>
                     <span className="px-1.5 py-0.5 text-[10px] font-mono bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30">
-                      Sin n8n • Vercel Nativo
+                      Vercel Nativo
                     </span>
                   </div>
                   <p className="text-[11.5px] text-zinc-300 mt-0.5 leading-relaxed">

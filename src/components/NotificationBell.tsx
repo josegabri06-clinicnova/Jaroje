@@ -398,9 +398,7 @@ function shouldIgnoreLogForNotifications(log: any): boolean {
     action === 'guest_message_received' ||
     empNum === 'wa-bot' ||
     empNum === 'wa-guest' ||
-    empNum === 'ycloud-webhook' ||
     empNum === 'webhook-debug' ||
-    empName.includes('ycloud') ||
     empName.includes('whatsapp')
   ) {
     return true;
