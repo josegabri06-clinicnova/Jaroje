@@ -10,7 +10,7 @@ import {
   CircleDot, ChevronDown, LogIn, FileText, AlertCircle, Trash2, Loader2, CreditCard, Copy, MessageCircle, Check
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { createDbClient } from '@/lib/db-client';
 import { getActiveEmployee, verifyAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
 import { uploadGuestFile } from '@/lib/files-client';
 import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules, areBookingsInSameGroup } from '@/lib/beds24';
@@ -18,9 +18,8 @@ import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
 
 
 // ─── ROOM STRUCTURE ──────────────────────────────────────────────────────────
@@ -357,13 +356,7 @@ export default function CalendarPage() {
       const rawVal = editedPhone.trim();
       const primaryId = selectedReserva.id;
 
-      // 1. Guardar en Supabase beds24_reservations
-      await supabase
-        .from('beds24_reservations')
-        .update({ guest_phone: rawVal })
-        .eq('id', primaryId);
-
-      // 2. Sincronizar vía API PUT /api/reservas para Beds24
+      // Sincronizar vía API PUT /api/reservas para Beds24
       try {
         await fetch('/api/reservas', {
           method: 'PUT',
@@ -1506,11 +1499,6 @@ export default function CalendarPage() {
     const trimmedPhone = editedPhone.trim();
     if (trimmedPhone && selectedReserva) {
       try {
-        await supabase
-          .from('beds24_reservations')
-          .update({ guest_phone: trimmedPhone })
-          .eq('id', selectedReserva.id);
-
         fetch('/api/reservas', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
