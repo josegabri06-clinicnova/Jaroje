@@ -7,12 +7,20 @@ import { validatePinAsync } from "@/lib/auth";
 
 import { usePathname } from "next/navigation";
 
+/**
+ * El asistente no se muestra en las páginas públicas (huéspedes). Esa decisión se toma en este envoltorio y no con un `return`
+ * antes de los hooks del componente: así el número de hooks no cambia entre renders, y navegar de una página pública a una
+ * privada (o al revés) no provoca el error de React "Rendered more/fewer hooks than expected" que tumba toda la pantalla.
+ */
 export default function CopilotWidget() {
   const pathname = usePathname();
+  if (pathname?.startsWith('/public')) return null;
+  return <CopilotWidgetInner />;
+}
+
+function CopilotWidgetInner() {
   const [isOpen, setIsOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
-
-  if (pathname?.startsWith('/public')) return null;
   const [panelOpen, setPanelOpen] = useState(false);
   
   // PIN de sesión en memoria reactiva
