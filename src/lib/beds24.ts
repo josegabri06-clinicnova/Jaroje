@@ -1,5 +1,6 @@
 import { supabaseAdmin as supabase } from './supabase-admin';
 import { normalizePhone } from './whatsapp';
+import { maskPhone } from '@/lib/log-mask';
 
 // ─── SERVICIO CENTRALIZADO DE BEDS24 JAROJE ─────────────────────────────────────
 // Fuente de verdad para reservas del Hotel Condominios Jaroje.
@@ -2662,7 +2663,7 @@ export async function updateBeds24BookingPhone(bookingId: string | number, phone
     });
 
     if (res.ok) {
-      console.log(`[Beds24 API] ✅ Teléfono ${phone} sincronizado con éxito para reserva ${bookingId}`);
+      console.log(`[Beds24 API] ✅ Teléfono ${maskPhone(phone)} sincronizado con éxito para reserva ${bookingId}`);
       return true;
     } else {
       const errText = await res.text();

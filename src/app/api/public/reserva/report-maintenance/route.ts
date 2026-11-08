@@ -5,6 +5,7 @@ import { sendWhatsAppTemplate } from '@/lib/whatsapp';
 
 import { normalizeBookingId } from '@/lib/guest-auth';
 import { requireGuestWriteAccess } from '@/lib/guest-access';
+import { maskPhone } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -116,7 +117,7 @@ export async function POST(req: Request) {
       description
     ];
 
-    console.log(`[Report Maintenance] Sending WA template notification to manager: ${managerPhone}`);
+    console.log(`[Report Maintenance] Sending WA template notification to manager: ${maskPhone(managerPhone)}`);
     const waRes = await sendWhatsAppTemplate(
       managerPhone,
       'incidencia_mantenimiento',

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { maskPhone } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -181,7 +182,7 @@ export async function POST(req: Request) {
           if (isConfirmed && matchedRes.status !== 'request' && matchedRes.status !== '0') {
             const phone = matchedRes.phone || matchedRes.mobile || matchedRes.guest_phone || '';
             if (phone) {
-              console.log(`[Room Status -> Limpia] Sending 'alojamiento_listo' WhatsApp to ${phone} for room ${room_number}`);
+              console.log(`[Room Status -> Limpia] Sending 'alojamiento_listo' WhatsApp to ${maskPhone(phone)} for room ${room_number}`);
               const { sendTemplate_AlojamientoListo } = await import('@/lib/whatsapp');
               const waRes = await sendTemplate_AlojamientoListo({
                 id: String(matchedRes.id),
@@ -194,7 +195,7 @@ export async function POST(req: Request) {
                   template_name: 'alojamiento_listo',
                   phone: phone
                 }]);
-                console.log(`[Room Status -> Limpia] WhatsApp notification sent and logged successfully to ${phone}`);
+                console.log(`[Room Status -> Limpia] WhatsApp notification sent and logged successfully to ${maskPhone(phone)}`);
               } else {
                 console.warn(`[Room Status -> Limpia] WhatsApp notification failed:`, waRes.error);
               }

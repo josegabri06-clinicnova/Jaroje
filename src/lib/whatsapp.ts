@@ -2,6 +2,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { isTesterPhone } from '@/lib/test-phones';
+import { maskPhone } from '@/lib/log-mask';
 
 export function getWhatsAppToken(): string {
   const token = process.env.WHATSAPP_TOKEN?.trim();
@@ -221,7 +222,7 @@ function countryNameToCode(name: string): string {
 }
 
 // Normaliza un número mexicano al formato canónico único de esta app: '52' + 10 dígitos (12 en total).
-// WhatsApp (Meta y YCloud) dejó de requerir el '1' extra tras el '52' desde 2021; mantenerlo generaba
+// WhatsApp (Meta) dejó de requerir el '1' extra tras el '52' desde 2021; mantenerlo generaba
 // un doble formato interno (guardar con '521' y despojarlo recién al llamar a la API). Si el número ya
 // trae ese '1' heredado (datos antiguos, u otro sistema que todavía lo añade), se elimina aquí mismo.
 function toCanonicalMx(tenDigits: string): string {
@@ -359,7 +360,7 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
   return cleaned;
 }
 
-// Limpia el teléfono específicamente para la llamada de Meta, YCloud y enlaces wa.me (removiendo el '1' legado de México y asegurando formato E.164 limpio sin símbolos)
+// Limpia el teléfono específicamente para la llamada de Meta y enlaces wa.me (removiendo el '1' legado de México y asegurando formato E.164 limpio sin símbolos)
 export function cleanPhoneForMeta(phone: string): string {
   const sanitized = String(phone || '')
     .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E]/g, '')
@@ -447,7 +448,7 @@ export async function isWhatsAppAutomationsPaused(): Promise<boolean> {
   }
 }
 
-// Envía una plantilla genérica de WhatsApp llamando a YCloud o Meta Cloud API
+// Envía una plantilla genérica de WhatsApp llamando a Meta Cloud API
 export async function sendWhatsAppTemplate(
   phone: string,
   templateName: string,
@@ -486,7 +487,7 @@ export async function sendWhatsAppTemplate(
         if (isTester) console.log(`[WhatsApp API] 🧪 Número de prueba (WHATSAPP_TEST_PHONES): se envía '${templateName}' aunque esté en 'excluded_person'.`);
         if (excludedCheck.isExcluded && !isTester) {
           const name = excludedCheck.contact?.name || 'Contacto Excluido';
-          console.log(`[WhatsApp API] 🛑 Omitiendo plantilla '${templateName}' para ${cleanedPhone} (${name}): número registrado en lista 'excluded_person' (Regla: Cero plantillas automáticas).`);
+          console.log(`[WhatsApp API] 🛑 Omitiendo plantilla '${templateName}' para ${maskPhone(cleanedPhone)} (${name}): número registrado en lista 'excluded_person' (Regla: Cero plantillas automáticas).`);
           return {
             success: false,
             error: 'excluded_person',
@@ -505,7 +506,7 @@ export async function sendWhatsAppTemplate(
     if (!bypassPause) {
       const isPaused = await isWhatsAppAutomationsPaused();
       if (isPaused) {
-        console.log(`[WhatsApp API] ⏸️ Envíos automáticos PAUSADOS por configuración (disable_automatic_whatsapp: true). Omitiendo plantilla '${templateName}' para ${cleanedPhone}.`);
+        console.log(`[WhatsApp API] ⏸️ Envíos automáticos PAUSADOS por configuración (disable_automatic_whatsapp: true). Omitiendo plantilla '${templateName}' para ${maskPhone(cleanedPhone)}.`);
         return { 
           success: false, 
           error: 'paused', 
@@ -517,7 +518,7 @@ export async function sendWhatsAppTemplate(
     // Candado anti-duplicados en memoria para reservaciones de grupo y envíos masivos simultáneos (30 segundos)
     const lockKey = `${cleanedPhone}_${templateName}`;
     if (isGroupMessageLocked(lockKey)) {
-      console.log(`[WhatsApp Deduplicador Memoria] Omitiendo mensaje duplicado para ${cleanedPhone} (plantilla: ${templateName})`);
+      console.log(`[WhatsApp Deduplicador Memoria] Omitiendo mensaje duplicado para ${maskPhone(cleanedPhone)} (plantilla: ${templateName})`);
       return { success: true, data: { deduplicated: true, message: 'Mensaje duplicado omitido por deduplicador en memoria.' } };
     }
 
@@ -603,7 +604,7 @@ export async function sendWhatsAppTemplate(
         });
 
         if (alreadySentToPhone) {
-          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName} para teléfono ${cleanedPhone}, ya se envió esta misma plantilla en los últimos 10 minutos.`);
+          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName} para teléfono ${maskPhone(cleanedPhone)}, ya se envió esta misma plantilla en los últimos 10 minutos.`);
           return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} omitida por duplicidad reciente a este número de teléfono.` } };
         }
       } catch (phoneChkErr) {
@@ -762,232 +763,12 @@ export async function sendWhatsAppTemplate(
       finalButtonParams = [metaCleanPhone];
     }
 
-    // Prioridad absoluta: Si existen credenciales de Meta Cloud API, usar 'meta'.
-    // La cuenta de YCloud fue bloqueada por Meta (Error 131031) y no debe usarse bajo ninguna circunstancia.
-    const isMetaConfigured = Boolean(getWhatsAppToken() && getWhatsAppPhoneId());
-    const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
-
+    // Único proveedor: Meta Cloud API (YCloud fue bloqueado por Meta y su código se eliminó).
     let response: Response;
     let status: number;
     let resBody: any;
-    let executeMeta = provider === 'meta';
 
-    if (provider === 'ycloud') {
-      const ycloudApiKey = process.env.YCLOUD_API_KEY;
-      const ycloudFrom = process.env.YCLOUD_FROM_PHONE || '+529581168698';
-      
-      if (!ycloudApiKey) {
-        if (lockLogId) {
-          try { await supabase.from('whatsapp_logs').delete().eq('id', lockLogId); } catch (_) {}
-        }
-        return { success: false, error: 'Credenciales de YCloud (YCLOUD_API_KEY) no configuradas en el servidor' };
-      }
-
-      const ycloudUrl = 'https://api.ycloud.com/v2/whatsapp/messages';
-      const standardPhone = cleanPhoneForMeta(cleanedPhone);
-      const toPhone = standardPhone.startsWith('+') ? standardPhone : `+${standardPhone}`;
-
-      const ycloudComponents: any[] = [];
-
-      if (templateName === 'bienvenido_cliente_final_v2' || templateName === 'bienvenido_cliente_whatsaap') {
-        const imageUrl = detectedLang === 'en'
-          ? (templateName === 'bienvenido_cliente_whatsaap'
-              ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/e0abe9ca-b97d-4d88-ad86-8da55f4b18f0.jpg'
-              : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/09/29/423d7a83-1e4f-47de-ad3b-aebcc59016ed.jpg')
-          : (templateName === 'bienvenido_cliente_whatsaap'
-              ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/a7251aab-6406-4a82-8a44-170a405bc466.jpg'
-              : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/633b619b-41d4-4c6f-ad76-4ac0ba3bb924.jpg');
-
-        ycloudComponents.push({
-          type: 'header',
-          parameters: [
-            {
-              type: 'image',
-              image: {
-                link: imageUrl
-              }
-            }
-          ]
-        });
-      }
-
-      if (parameters && parameters.length > 0) {
-        ycloudComponents.push({
-          type: 'body',
-          parameters: parameters.map(p => ({
-            type: 'text',
-            text: p || '—'
-          }))
-        });
-      }
-
-      if (finalButtonParams && finalButtonParams.length > 0) {
-        const isQuickReply = resolvedButtonType === 'quick_reply' || finalButtonParams[0].startsWith('VIEW_BOOKING_');
-        
-        if (isQuickReply) {
-          ycloudComponents.push({
-            type: 'button',
-            sub_type: 'quick_reply',
-            index: 0,
-            parameters: [
-              {
-                type: 'payload',
-                payload: finalButtonParams[0]
-              }
-            ]
-          });
-        } else {
-          if ((templateName === 'bienvenida_checkin' || templateName === 'seguimiento_satisfaccion') && bookingId) {
-            ycloudComponents.push({
-              type: 'button',
-              sub_type: 'url',
-              index: 0,
-              parameters: [
-                {
-                  type: 'text',
-                  text: `${bookingId}?lang=${detectedLang}`
-                }
-              ]
-            });
-            ycloudComponents.push({
-              type: 'button',
-              sub_type: 'url',
-              index: 1,
-              parameters: [
-                {
-                  type: 'text',
-                  text: `&id=${bookingId}&lang=${detectedLang}`
-                }
-              ]
-            });
-          } else {
-            ycloudComponents.push({
-              type: 'button',
-              sub_type: 'url',
-              index: 0,
-              parameters: [
-                {
-                  type: 'text',
-                  text: finalButtonParams[0] || ''
-                }
-              ]
-            });
-          }
-        }
-      }
-
-      const ycloudLang = detectedLang === 'en' ? 'en' : 'es';
-      let targetTemplate = templateName;
-      if (templateName === 'reservacion_confirmada' && (toPhone.startsWith('+1') || cleanedPhone.startsWith('1'))) {
-        targetTemplate = 'confirmacion_reserva_util';
-      }
-
-      const ycloudPayload: any = {
-        from: ycloudFrom,
-        to: toPhone,
-        type: 'template',
-        template: {
-          name: targetTemplate,
-          language: { code: ycloudLang }
-        }
-      };
-
-      if (ycloudComponents.length > 0) {
-        ycloudPayload.template.components = ycloudComponents;
-      }
-
-      response = await fetch(ycloudUrl, {
-        method: 'POST',
-        headers: {
-          'X-API-Key': ycloudApiKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(ycloudPayload)
-      });
-
-      status = response.status;
-      resBody = await response.json();
-
-      // Si falla por plantilla no disponible (ej: 'confirmacion_reserva_util' PENDING o 'disponibilidad_liberada' vs 'disponibilidad_liberada_'), reintentar con el nombre alternativo
-      if (!response.ok && (resBody.error?.code === 'WHATSAPP_TEMPLATE_UNAVAILABLE' || String(resBody.error?.message || '').includes('PENDING'))) {
-        let altName = targetTemplate.endsWith('_') ? targetTemplate.slice(0, -1) : `${targetTemplate}_`;
-        if (targetTemplate === 'confirmacion_reserva_util') {
-          altName = 'reservacion_confirmada';
-        } else if (targetTemplate === 'reservacion_confirmada') {
-          altName = 'confirmacion_reserva_util';
-        }
-        console.warn(`[YCloud] Plantilla '${targetTemplate}' no disponible. Reintentando con alias '${altName}'...`);
-        const ycloudAltNamePayload = {
-          ...ycloudPayload,
-          template: {
-            ...ycloudPayload.template,
-            name: altName
-          }
-        };
-
-        try {
-          const retryNameRes = await fetch(ycloudUrl, {
-            method: 'POST',
-            headers: {
-              'X-API-Key': ycloudApiKey,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(ycloudAltNamePayload)
-          });
-
-          if (retryNameRes.ok) {
-            response = retryNameRes;
-            status = retryNameRes.status;
-            resBody = await retryNameRes.json();
-            console.log(`✅ [YCloud] Éxito enviando con plantilla alternativa: ${altName}`);
-          }
-        } catch (retryNameErr) {
-          console.error(`[YCloud] Error reintentando plantilla alternativa:`, retryNameErr);
-        }
-      }
-
-      // Retry without buttons for YCloud if it fails due to button structure mismatch
-      if (!response.ok && finalButtonParams && finalButtonParams.length > 0) {
-        console.warn(`YCloud API failed with ${status} for template ${templateName} (with buttons). Retrying without button parameters...`);
-        const bodyComponents = ycloudComponents.filter(c => c.type === 'body');
-        const ycloudNoButtonsPayload: any = {
-          ...ycloudPayload,
-          template: {
-            ...ycloudPayload.template
-          }
-        };
-        if (bodyComponents.length > 0) {
-          ycloudNoButtonsPayload.template.components = bodyComponents;
-        }
-
-        try {
-          const retryRes = await fetch(ycloudUrl, {
-            method: 'POST',
-            headers: {
-              'X-API-Key': ycloudApiKey,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(ycloudNoButtonsPayload)
-          });
-
-          if (retryRes.ok) {
-            response = retryRes;
-            status = retryRes.status;
-            resBody = await retryRes.json();
-            console.log(`✅ Success retrying YCloud template ${templateName} without buttons.`);
-          }
-        } catch (retryErr) {
-          console.error(`Error retrying YCloud template ${templateName}:`, retryErr);
-        }
-      }
-
-      if (!response.ok) {
-        console.warn(`[YCloud] Error al enviar plantilla '${templateName}' (${status}):`, resBody);
-        executeMeta = true;
-      }
-    }
-
-    if (executeMeta) {
+    {
       // ── DRIVER META CLOUD API (RESPALDO AUTOMÁTICO O PROVEEDOR PRINCIPAL) ──
       const token = getWhatsAppToken();
       const phoneId = getWhatsAppPhoneId();
@@ -1443,7 +1224,7 @@ export async function sendWhatsAppTemplate(
             sent_at: new Date().toISOString()
           })
           .eq('id', lockLogId);
-        console.log(`[WhatsApp Logs] ✅ Confirmado envío de plantilla ${templateName} para reserva ${bookingId || ''} al teléfono ${cleanedPhone}`);
+        console.log(`[WhatsApp Logs] ✅ Confirmado envío de plantilla ${templateName} para reserva ${bookingId || ''} al teléfono ${maskPhone(cleanedPhone)}`);
       } catch (logErr) {
         console.error("[WhatsApp Logs] Error al actualizar status en whatsapp_logs:", logErr);
       }
@@ -1456,7 +1237,7 @@ export async function sendWhatsAppTemplate(
           sent_at: new Date().toISOString(),
           status: 'sent'
         }]);
-        console.log(`[WhatsApp Logs] ✅ Registrado envío de plantilla ${templateName} al teléfono ${cleanedPhone}`);
+        console.log(`[WhatsApp Logs] ✅ Registrado envío de plantilla ${templateName} al teléfono ${maskPhone(cleanedPhone)}`);
       } catch (logErr) {
         console.error("[WhatsApp Logs] Error al registrar en whatsapp_logs:", logErr);
       }
@@ -1472,7 +1253,7 @@ export async function sendWhatsAppTemplate(
   }
 }
 
-// Envía un mensaje de texto libre por WhatsApp (soporta YCloud y Meta)
+// Envía un mensaje de texto libre por WhatsApp (Meta Cloud API)
 export async function sendWhatsAppTextMessage(
   phone: string,
   body: string
@@ -1485,51 +1266,7 @@ export async function sendWhatsAppTextMessage(
 
     const standardPhone = cleanPhoneForMeta(cleanedPhone);
     const toPhone = standardPhone.startsWith('+') ? standardPhone : `+${standardPhone}`;
-    const isMetaConfigured = Boolean(getWhatsAppToken() && getWhatsAppPhoneId());
-    const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
 
-    // 1. Intentar con YCloud si es el proveedor seleccionado
-    if (provider === 'ycloud') {
-      const ycloudApiKey = process.env.YCLOUD_API_KEY;
-      const ycloudFrom = process.env.YCLOUD_FROM_PHONE || '+529581168698';
-
-      if (ycloudApiKey) {
-        try {
-          const ycloudUrl = 'https://api.ycloud.com/v2/whatsapp/messages';
-          const payload = {
-            from: ycloudFrom,
-            to: toPhone,
-            type: 'text',
-            text: {
-              body: body
-            }
-          };
-
-          const response = await fetch(ycloudUrl, {
-            method: 'POST',
-            headers: {
-              'X-API-Key': ycloudApiKey,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          });
-
-          const status = response.status;
-          const resBody = await response.json();
-
-          if (response.ok) {
-            console.log(`[WhatsApp Text] ✅ Mensaje entregado vía YCloud a ${toPhone}`);
-            return { success: true, data: resBody };
-          }
-
-          console.warn(`[YCloud Text] Error enviando a ${toPhone} (${status}). Activando fallback a Meta:`, resBody);
-        } catch (ycloudErr) {
-          console.error(`[YCloud Text] Excepción conectando con YCloud para ${toPhone}:`, ycloudErr);
-        }
-      }
-    }
-
-    // 2. Fallback automático a Meta Cloud API (o si provider === 'meta')
     const token = getWhatsAppToken();
     const phoneId = getWhatsAppPhoneId();
 
@@ -1559,21 +1296,21 @@ export async function sendWhatsAppTextMessage(
         const resBody = await response.json();
 
         if (status === 200) {
-          console.log(`[WhatsApp Text] ✅ Mensaje entregado vía Meta Cloud API a ${standardPhone}`);
+          console.log(`[WhatsApp Text] ✅ Mensaje entregado vía Meta Cloud API a ${maskPhone(standardPhone)}`);
           return { success: true, data: resBody };
         }
 
-        console.error(`Meta API error text message to ${standardPhone}:`, resBody);
+        console.error(`Meta API error text message to ${maskPhone(standardPhone)}:`, resBody);
         return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
       } catch (metaErr: any) {
-        console.error(`Excepción enviando texto por Meta a ${standardPhone}:`, metaErr);
+        console.error(`Excepción enviando texto por Meta a ${maskPhone(standardPhone)}:`, metaErr);
         return { success: false, error: metaErr.message || 'Error de conexión con Meta' };
       }
     }
 
-    return { success: false, error: 'No se pudo enviar el mensaje por YCloud ni por Meta (verificar credenciales)' };
+    return { success: false, error: 'No se pudo enviar el mensaje por Meta (verificar credenciales)' };
   } catch (err: any) {
-    console.error(`Exception sending WhatsApp text message to ${phone}:`, err);
+    console.error(`Exception sending WhatsApp text message to ${maskPhone(phone)}:`, err);
     return { success: false, error: err.message || 'Error de red' };
   }
 }
@@ -1641,7 +1378,7 @@ export async function sendWhatsAppCTAButtonMessage(
 
       const resBody = await response.json();
       if (response.ok) {
-        console.log(`[WhatsApp CTA] ✅ Botón CTA In-App Browser enviado a ${standardPhone}:`, buttonText);
+        console.log(`[WhatsApp CTA] ✅ Botón CTA In-App Browser enviado a ${maskPhone(standardPhone)}:`, buttonText);
         return { success: true, data: resBody };
       }
 
@@ -1654,7 +1391,7 @@ export async function sendWhatsAppCTAButtonMessage(
       : `${bodyText}\n\n*BOTÓN*\n👉 *${buttonText}*:\n${url}`;
     return sendWhatsAppTextMessage(phone, fallbackFormatted);
   } catch (err: any) {
-    console.error(`Error en sendWhatsAppCTAButtonMessage para ${phone}:`, err);
+    console.error(`Error en sendWhatsAppCTAButtonMessage para ${maskPhone(phone)}:`, err);
     const fallbackFormatted = bodyText.includes(url)
       ? bodyText
       : `${bodyText}\n\n*BOTÓN*\n👉 *${buttonText}*:\n${url}`;
@@ -1988,7 +1725,7 @@ export async function sendJarojeBookingPortalInvitation(
     ? '👋 Welcome to Condominios Jaroje 🌴\n\nCheck live availability, suite photos, and book with exclusive direct rates:\n\n• 🛏️ *Select your dates & suites*\n• 📸 *Real photos & amenities in live HD*\n• 🔒 *24-Hour Instant Hold Guarantee*\n• ⚡ *No agency fees / best direct rate*'
     : '👋 ¡Hola! Te damos la bienvenida a Condominios Jaroje 🌴\n\nConsulta disponibilidad en tiempo real, fotos de cada suite y reserva con tarifa directa neta:\n\n• 🛏️ *Elige tus fechas y suites*\n• 📸 *Fotos reales y amenidades en vivo*\n• 🔒 *Garantía de bloqueo por 24 horas*\n• ⚡ *Sin comisiones de agencias intermediarias*';
 
-  console.log(`[WhatsApp In-App] 🚀 Enviando invitación interactiva CTA_URL (In-App Browser) a ${cleanPhone}...`);
+  console.log(`[WhatsApp In-App] 🚀 Enviando invitación interactiva CTA_URL (In-App Browser) a ${maskPhone(cleanPhone)}...`);
   const ctaRes = await sendWhatsAppCTAButtonMessage(
     phone,
     bodyText,
@@ -2125,7 +1862,7 @@ export async function sendTemplate_Cotizacion(
     const buttonParams = [data.reserveQuerySuffix];
 
     try {
-      console.log(`[WhatsApp API] Despachando plantilla oficial 'cotizacion_reserva' [${targetLang}] a ${cleanPhone}...`);
+      console.log(`[WhatsApp API] Despachando plantilla oficial 'cotizacion_reserva' [${targetLang}] a ${maskPhone(cleanPhone)}...`);
       const tplRes = await sendWhatsAppTemplate(
         cleanPhone,
         'cotizacion_reserva',
@@ -2139,7 +1876,7 @@ export async function sendTemplate_Cotizacion(
       );
 
       if (tplRes.success) {
-        console.log(`[WhatsApp API] ✅ Plantilla 'cotizacion_reserva' [${targetLang}] entregada con éxito a ${cleanPhone}`);
+        console.log(`[WhatsApp API] ✅ Plantilla 'cotizacion_reserva' [${targetLang}] entregada con éxito a ${maskPhone(cleanPhone)}`);
         return tplRes;
       }
 
@@ -2150,7 +1887,7 @@ export async function sendTemplate_Cotizacion(
   }
 
   // Envío actual por botón interactivo CTA (o texto) sin folio, adaptado a español o inglés
-  console.log(`[WhatsApp Cotización] Enviando por CTA interactivo / texto [${targetLang}] a ${cleanPhone}...`);
+  console.log(`[WhatsApp Cotización] Enviando por CTA interactivo / texto [${targetLang}] a ${maskPhone(cleanPhone)}...`);
   return sendWhatsAppCTAButtonMessage(
     cleanPhone,
     data.fallbackFullText,

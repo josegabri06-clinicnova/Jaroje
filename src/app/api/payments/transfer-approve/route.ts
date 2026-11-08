@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token } from '@/lib/beds24';
 import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage } from '@/lib/whatsapp';
+import { maskPhone } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -474,11 +475,11 @@ export async function POST(req: Request) {
 
         if (!isAlreadyConfirmed) {
           if (isMin50Met) {
-            console.log(`[Approve Transfer] Mínimo 50% cubierto por primera vez ($${effectiveDeposit}/$${effectivePrice}). Enviando reservacion_confirmada (Mensaje 3) a ${phone} (grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
+            console.log(`[Approve Transfer] Mínimo 50% cubierto por primera vez ($${effectiveDeposit}/$${effectivePrice}). Enviando reservacion_confirmada (Mensaje 3) a ${maskPhone(phone)} (grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
             waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
             templateLogged = 'reservacion_confirmada';
           } else {
-            console.log(`[Approve Transfer] Anticipo parcial inferior al 50% ($${effectiveDeposit}/$${effectivePrice}). Enviando pago_anticipo_recibido (Mensaje 11) a ${phone}`);
+            console.log(`[Approve Transfer] Anticipo parcial inferior al 50% ($${effectiveDeposit}/$${effectivePrice}). Enviando pago_anticipo_recibido (Mensaje 11) a ${maskPhone(phone)}`);
             waRes = await sendTemplate11_PagoAnticipoRecibido(bookingForWA, true);
             templateLogged = 'pago_anticipo_recibido';
           }
@@ -510,14 +511,14 @@ export async function POST(req: Request) {
             const fullPaymentMsg = isGroupBooking
               ? `🎉 ¡Excelente noticia, ${firstName}! Confirmamos la aprobación de tu pago por $${formattedAmount} ${currLabel}.\n\nTu grupo de reservaciones (${groupTotalCount} condominios, ref: #${bookingId}) en Condominios Jaroje se encuentra **100% PAGADO Y LIQUIDADO** (Saldo restante: $0.00).\n\n¡Todo está listo para tu llegada${checkIn ? ` el ${checkIn}` : ''}! Puedes consultar las amenidades, WiFi y detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴`
               : `🎉 ¡Excelente noticia, ${firstName}! Confirmamos la aprobación de tu pago por $${formattedAmount} ${currLabel}.\n\nTu reservación #${bookingId} en Condominios Jaroje se encuentra **100% PAGADA Y LIQUIDADA** (Saldo restante: $0.00).\n\n¡Todo está listo para tu llegada${checkIn ? ` el ${checkIn}` : ''}! Puedes consultar las amenidades, WiFi y detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴`;
-            console.log(`[Approve Transfer] Sending 100% full payment confirmation message to ${phone}`);
+            console.log(`[Approve Transfer] Sending 100% full payment confirmation message to ${maskPhone(phone)}`);
             await sendWhatsAppTextMessage(phone, fullPaymentMsg);
           } else {
             // Anticipo Aprobado (50% u otro abono)
             const partialPaymentMsg = isGroupBooking
               ? `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para tu grupo de reservaciones (${groupTotalCount} condominios, ref: #${bookingId}).\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`
               : `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para la reserva #${bookingId}.\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`;
-            console.log(`[Approve Transfer] Sending partial payment approval confirmation message to ${phone}`);
+            console.log(`[Approve Transfer] Sending partial payment approval confirmation message to ${maskPhone(phone)}`);
             await sendWhatsAppTextMessage(phone, partialPaymentMsg);
           }
         } catch (msgErr) {
@@ -606,7 +607,7 @@ export async function POST(req: Request) {
 
       // Notificar rechazo vía WhatsApp con los motivos personalizados escritos por el Administrador y los botones interactivos
       if (phone) {
-        console.log(`[Reject Transfer] Sending WhatsApp rejection notification to ${phone} with notes: ${notes}`);
+        console.log(`[Reject Transfer] Sending WhatsApp rejection notification to ${maskPhone(phone)} with notes: ${notes}`);
         const waRes = await sendTemplate_ComprobanteRechazado(
           { id: String(bookingId), guest_name: guestName, phone: phone, deposit: 0 },
           notes,

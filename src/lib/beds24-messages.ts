@@ -1,5 +1,6 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Token, updateBeds24BookingPhone, extractPhoneFromBookingData, isDummyOrInvalidPhone } from '@/lib/beds24';
+import { maskPhone } from '@/lib/log-mask';
 import {
   normalizePhone,
   sendTemplate3_ReservacionConfirmada,
@@ -759,7 +760,7 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
       const detectedPhone = extractPhoneFromMessages(messages, undefined, bId);
 
       if (detectedPhone) {
-        console.log(`[OTA Replies Worker] 🎯 ¡Teléfono detectado para reserva ${bId} (${b.guest_name}): ${detectedPhone}!`);
+        console.log(`[OTA Replies Worker] 🎯 ¡Teléfono detectado para reserva ${bId} (${b.guest_name}): ${maskPhone(detectedPhone)}!`);
 
         // 1. Guardar en Supabase
         await supabase
@@ -801,10 +802,10 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
           deposit: b.deposit
         };
 
-        console.log(`[OTA Replies Worker] 🚀 Enviando plantilla de reserva confirmada por WhatsApp a ${detectedPhone} (reserva ${bId})...`);
+        console.log(`[OTA Replies Worker] 🚀 Enviando plantilla de reserva confirmada por WhatsApp a ${maskPhone(detectedPhone)} (reserva ${bId})...`);
         const waResult = await sendTemplate3_ReservacionConfirmada(bookingForWA, true, true);
         if (waResult?.success) {
-          console.log(`[OTA Replies Worker] ✅ WhatsApp reservacion_confirmada entregado exitosamente a ${detectedPhone} para reserva ${bId}.`);
+          console.log(`[OTA Replies Worker] ✅ WhatsApp reservacion_confirmada entregado exitosamente a ${maskPhone(detectedPhone)} para reserva ${bId}.`);
         } else {
           console.warn(`[OTA Replies Worker] ⚠️ Resultado envío WhatsApp para ${bId}:`, waResult?.error);
         }

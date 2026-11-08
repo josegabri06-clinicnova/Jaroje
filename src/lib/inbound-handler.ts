@@ -98,7 +98,7 @@ export interface InboundMessageParams {
 }
 
 /**
- * Procesa un mensaje entrante de WhatsApp recibido vía YCloud / Meta Webhooks.
+ * Procesa un mensaje entrante de WhatsApp recibido vía Meta Webhooks.
  * Responde automáticamente a comandos rápidos como "WiFi y Claves", "Ver mi reserva" o "Administrador".
  */
 export async function handleInboundMessage(params: InboundMessageParams) {
