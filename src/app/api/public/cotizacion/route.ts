@@ -6,6 +6,7 @@ import { checkBookingWindow } from '@/lib/booking-window';
 import { getBeds24Token, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
 import { publicRates } from '@/lib/beds24-public-cache';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
+import { maskPhone } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -399,7 +400,7 @@ ${desgloseSubtotalText}
 
     let waResult: any = { success: false };
     try {
-      console.log(`[Cotizacion API] Enviando cotización oficial por WhatsApp [${isEn ? 'en' : 'es'}] a ${cleanPhone}...`);
+      console.log(`[Cotizacion API] Enviando cotización oficial por WhatsApp [${isEn ? 'en' : 'es'}] a ${maskPhone(cleanPhone)}...`);
       waResult = await sendTemplate_Cotizacion(cleanPhone, {
         checkInFormatted,
         checkOutFormatted,

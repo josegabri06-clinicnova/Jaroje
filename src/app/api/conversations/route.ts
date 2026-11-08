@@ -74,7 +74,7 @@ export async function POST(req: Request) {
       const { guestName, guestPhone } = body;
       const cleanPhone = normalizePhone(guestPhone);
 
-      // Enviar plantilla de WhatsApp mediante el driver unificado (YCloud o Meta)
+      // Enviar plantilla de WhatsApp mediante el driver de Meta
       const waRes = await sendWhatsAppTemplate(
         cleanPhone,
         'presentacion_cliente_jaroje_2',
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
     if (body.action === 'send_manual_reply') {
       const { conversationId, message, guestPhone } = body;
 
-      // Enviar mensaje real por WhatsApp mediante el driver unificado (YCloud o Meta)
+      // Enviar mensaje real por WhatsApp mediante el driver de Meta
       const waRes = await sendWhatsAppTextMessage(guestPhone, message);
 
       if (!waRes.success) {
@@ -206,7 +206,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, archived: body.archived });
     }
 
-    // ── MODO: Recibir mensaje de huésped (Webhook YCloud / n8n) ─────────────
+    // ── MODO: Recibir mensaje de huésped (Webhook Meta / n8n) ─────────────
     const result = await handleInboundMessage(body);
     return NextResponse.json(result);
 

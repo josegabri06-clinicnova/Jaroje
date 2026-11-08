@@ -123,7 +123,7 @@ async function processConmutadorCall(req: Request) {
     // Filtrar llamadas internas entre extensiones del conmutador (ej. Ext 101 llamando a 102)
     const rawDigits = (rawPhone || '').replace(/\D/g, '');
     if (rawDigits.length > 0 && rawDigits.length < 7) {
-      console.log(`[Webhook Conmutador] Llamada interna entre extensiones (${rawPhone}). Ignorada para plantillas de clientes.`);
+      console.log(`[Webhook Conmutador] Llamada interna entre extensiones (${maskPhone(rawPhone)}). Ignorada para plantillas de clientes.`);
       return NextResponse.json({
         success: true,
         message: 'Llamada interna entre extensiones del conmutador ignorada.',

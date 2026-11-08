@@ -15,6 +15,7 @@ import { normalizePhone, cleanPhoneForMeta, sendTemplate1_SolicitudRecibida } fr
 import { checkBookingWindow } from '@/lib/booking-window';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
+import { maskPhone } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -742,7 +743,7 @@ export async function POST(req: Request) {
         deposit: 0
       };
       const waRes = await sendTemplate1_SolicitudRecibida(bookingForWhatsApp, false);
-      console.log(`[Reservar API] Plantilla 1 enviada a ${cleanPhone} (Reserva ${masterBookingId}):`, waRes);
+      console.log(`[Reservar API] Plantilla 1 enviada a ${maskPhone(cleanPhone)} (Reserva ${masterBookingId}): ${waRes?.success ? 'ok' : (waRes?.error || 'fallo')}`);
     } catch (waErr) {
       console.error("[Reservar API] Error al disparar Plantilla 1 de WhatsApp:", waErr);
     }

@@ -229,41 +229,8 @@ Este documento sirve como desglose quincenal de nómina generado de forma autom�
       }
     ];
 
-    // Enviar WhatsApp usando el proveedor activo (YCloud o Meta)
-    const isMetaConfigured = Boolean(getWhatsAppToken() && getWhatsAppPhoneId());
-    const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
-
-    if (provider === 'ycloud') {
-      const ycloudApiKey = process.env.YCLOUD_API_KEY;
-      const ycloudFrom = process.env.YCLOUD_FROM_PHONE || '+529581168698';
-      const toPhone = cleanPhone.startsWith('+') ? cleanPhone : `+${cleanPhone}`;
-
-      const waResponse = await fetch('https://api.ycloud.com/v2/whatsapp/messages', {
-        method: 'POST',
-        headers: {
-          'X-API-Key': ycloudApiKey || '',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: ycloudFrom,
-          to: toPhone,
-          type: "template",
-          template: {
-            name: finalTemplateName,
-            language: { code: "es" },
-            components
-          }
-        })
-      });
-
-      const waData = await waResponse.json();
-      if (!waResponse.ok) {
-        throw new Error(`Error YCloud API: ${JSON.stringify(waData)}`);
-      }
-      return NextResponse.json({ success: true, message: 'WhatsApp enviado al empleado vía YCloud' });
-    }
-
-    // ── DRIVER META CLOUD API (100% ORIGINAL E INTACTO) ──────────────────────
+    // Enviar WhatsApp por Meta Cloud API
+    // ── DRIVER META CLOUD API ──────────────────────
     const waResponse = await fetch(`https://graph.facebook.com/v17.0/${PHONE_ID}/messages`, {
       method: 'POST',
       headers: {

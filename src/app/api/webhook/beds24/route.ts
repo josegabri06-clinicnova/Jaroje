@@ -11,6 +11,7 @@ import {
 import { getBeds24Token, clearBeds24Cache, syncBeds24BookingLocal, isInvoicePayment, extractPhoneFromBookingData, updateBeds24BookingPhone } from '@/lib/beds24';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
 import { isOtaChannel, sendOtaWelcomeMessage, sendOfficialOtaTemplate } from '@/lib/beds24-messages';
+import { maskPhone } from '@/lib/log-mask';
 
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking/Google/Directo o se cancela
 export async function POST(req: Request) {
@@ -308,7 +309,7 @@ export async function POST(req: Request) {
               sent_at: new Date().toISOString(),
               status: 'sent'
             }]);
-            console.log(`[Webhook Beds24] Omitiendo duplicado simultáneo multi-habitación para teléfono ${phone} (reserva ${bookingIdStr})`);
+            console.log(`[Webhook Beds24] Omitiendo duplicado simultáneo multi-habitación para teléfono ${maskPhone(phone)} (reserva ${bookingIdStr})`);
             return NextResponse.json({ success: true, message: 'Notificación inicial ya enviada a la habitación principal del grupo.' });
           }
 

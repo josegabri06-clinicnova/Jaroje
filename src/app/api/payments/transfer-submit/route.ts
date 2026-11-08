@@ -6,6 +6,7 @@ import { filesProxyUrl } from '@/lib/storage-files';
 import { sendWhatsAppTextMessage } from '@/lib/whatsapp';
 import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
+import { maskPhone } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -314,7 +315,7 @@ export async function POST(req: Request) {
           : `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} como anticipo para ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!`;
       }
 
-      console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${guestPhone} (isFullPayment: ${isFullPayment}, group: ${groupCount}, paymentType: ${formPaymentType || 'inferred'})`);
+      console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${maskPhone(guestPhone)} (isFullPayment: ${isFullPayment}, group: ${groupCount}, paymentType: ${formPaymentType || 'inferred'})`);
       await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
     }
 
