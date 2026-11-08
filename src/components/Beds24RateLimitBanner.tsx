@@ -19,7 +19,8 @@ export function Beds24RateLimitBanner() {
         if (response.status === 429) {
           const urlStr = typeof args[0] === 'string' ? args[0] : (args[0] instanceof Request ? args[0].url : '');
           // Omitir peticiones de fondo como conversaciones o analytics
-          if (!urlStr.includes('/api/conversations') && !urlStr.includes('/api/analytics')) {
+          // Tampoco el login: un 429 ahí es el bloqueo por intentos de PIN, no un límite de Beds24
+          if (!urlStr.includes('/api/conversations') && !urlStr.includes('/api/analytics') && !urlStr.includes('/api/auth/')) {
             const now = Date.now();
             // Cooldown de 3 minutos para no saturar al usuario
             if (now - lastShownRef.current > 180000) {
