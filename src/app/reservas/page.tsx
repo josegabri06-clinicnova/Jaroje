@@ -7,16 +7,15 @@ import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { uploadGuestFile } from '@/lib/files-client';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { createClient } from '@supabase/supabase-js';
+import { createDbClient } from '@/lib/db-client';
 import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests, areBookingsInSameGroup, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 import { normalizePhone } from '@/lib/whatsapp';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
+const supabase = createDbClient();
 
 const ENVELOPES = Array.from({ length: 99 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
 
@@ -386,12 +385,8 @@ function ReservasListInner() {
         ? selectedRes.group_members.map((m: any) => m.id)
         : [primaryId];
 
-      // 1. Guardar en Supabase beds24_reservations y local_reservas
+      // 1. Guardar en local_reservas (beds24_reservations está cerrada y esa escritura no hacía nada)
       await Promise.all(memberIds.map(async (mId: any) => {
-        await supabase
-          .from('beds24_reservations')
-          .update({ guest_phone: cleanPhone })
-          .eq('id', mId);
         try {
           await supabase
             .from('local_reservas')
@@ -1105,10 +1100,6 @@ function ReservasListInner() {
           : [pId];
         try {
           await Promise.all(mIds.map(async (mId: any) => {
-            await supabase
-              .from('beds24_reservations')
-              .update({ guest_phone: trimmedPhone })
-              .eq('id', mId);
             try {
               await supabase
                 .from('local_reservas')
@@ -3183,11 +3174,6 @@ function ReservasListInner() {
 
       // 1. Actualizar estado en Supabase para todos los miembros para indicar aviso enviado y marcado revisado
       for (const member of members) {
-        await supabase
-          .from('beds24_reservations')
-          .update({ last_notice_sent: true, is_acknowledged: true })
-          .eq('id', String(member.id));
-
         await supabase
           .from('checkins')
           .upsert({
@@ -7215,9 +7201,8 @@ function ReservasListInner() {
                             const data = await res.json();
                             if (data.success) {
                               try {
-                                const { supabase } = await import('@/lib/supabase');
                                 await supabase.from('employee_logs').insert([{
-                                  employee_email: (await supabase.auth.getUser()).data.user?.email || 'admin',
+                                  employee_email: 'admin',
                                   action: `Envío plantilla oficial Meta WhatsApp: ${apiTemplateKey}`,
                                   details: `Enviado a ${selectedRes.guest_name || 'Huésped'} (${cleanPhone}) para reserva #${selectedRes.id} [${portalLanguage.toUpperCase()}]`,
                                   booking_id: String(selectedRes.id),
@@ -7272,9 +7257,8 @@ function ReservasListInner() {
                           }
 
                           try {
-                            const { supabase } = await import('@/lib/supabase');
                             await supabase.from('employee_logs').insert([{
-                              employee_email: (await supabase.auth.getUser()).data.user?.email || 'admin',
+                              employee_email: 'admin',
                               action: `Copia manual plantilla WhatsApp #${selectedMessageIndex} (${apiTemplateKey || 'manual'})`,
                               details: `Copiado para ${selectedRes.guest_name || 'Huésped'} (${cleanPhone}) para reserva #${selectedRes.id}`,
                               booking_id: String(selectedRes.id),
