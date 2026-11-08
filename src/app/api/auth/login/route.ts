@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { isPinLocked, registerPinFailure, clearPinFailures } from '@/lib/login-throttle';
+import { clientIp } from '@/lib/server-pins';
 import { createSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS, SessionPayload } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -12,41 +14,9 @@ const DB_KEY_MAP: Record<string, string> = {
   recepcion: 'pin_recepcion',
 };
 
-// Control de fuerza bruta en memoria por IP (máx 5 intentos fallidos cada 15 minutos)
-const loginRateLimitMap = new Map<string, { attempts: number; resetAt: number }>();
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const record = loginRateLimitMap.get(ip);
-  if (!record) return false;
-  if (now > record.resetAt) {
-    loginRateLimitMap.delete(ip);
-    return false;
-  }
-  return record.attempts >= 5;
-}
-
-function recordFailedAttempt(ip: string) {
-  const now = Date.now();
-  const record = loginRateLimitMap.get(ip) || { attempts: 0, resetAt: now + 15 * 60 * 1000 };
-  record.attempts += 1;
-  loginRateLimitMap.set(ip, record);
-}
-
-function clearRateLimit(ip: string) {
-  loginRateLimitMap.delete(ip);
-}
-
 export async function POST(req: Request) {
   try {
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
-
-    if (isRateLimited(ip)) {
-      return NextResponse.json({
-        success: false,
-        error: 'Demasiados intentos fallidos. Acceso bloqueado temporalmente por 15 minutos.'
-      }, { status: 429 });
-    }
+    const ip = clientIp(req);
 
     const body = await req.json().catch(() => ({}));
     const { pin, role } = body;
@@ -60,6 +30,13 @@ export async function POST(req: Request) {
 
     if (!DB_KEY_MAP[cleanRole]) {
       return NextResponse.json({ success: false, error: 'Rol inválido especificado.' }, { status: 400 });
+    }
+
+    if (await isPinLocked(cleanRole, ip)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Demasiados intentos fallidos. Acceso bloqueado temporalmente por 15 minutos.'
+      }, { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': '900' } });
     }
 
     // 1. Obtener el PIN activo estrictamente desde Supabase settings o variable de entorno (Fail-Closed)
@@ -102,12 +79,12 @@ export async function POST(req: Request) {
     const providedHash = crypto.createHash('sha256').update(cleanPin).digest();
 
     if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
-      recordFailedAttempt(ip);
+      await registerPinFailure(cleanRole, ip);
       return NextResponse.json({ success: false, error: 'PIN incorrecto.' }, { status: 401 });
     }
 
     // Limpiar intentos fallidos tras login exitoso
-    clearRateLimit(ip);
+    await clearPinFailures(ip);
 
     // 3. Generar token de sesión firmado criptográficamente
     const sessionToken = await createSessionToken(cleanRole);
