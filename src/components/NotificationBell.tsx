@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -13,10 +12,6 @@ import {
   CheckCircle2, UserCheck, Package, Search, Calendar, ChevronRight,
   SlidersHorizontal, AlertCircle, RefreshCw
 } from 'lucide-react';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 type EventType = 'checkin' | 'checkout' | 'booking' | 'block' | 'conflict' | 'bot' | 'finanzas' | 'tarea' | 'sesion' | 'inventario' | 'limpieza';
 
@@ -452,6 +447,9 @@ export function NotificationBell() {
   const [sheetHeight, setSheetHeight] = useState<number | undefined>(undefined);
   const [logs, setLogs]           = useState<any[]>([]);
   const [events, setEvents]       = useState<HistoryEvent[]>([]);
+  const openRef = useRef(false);
+  const seenLogIdsRef = useRef<Set<string> | null>(null);
+  useEffect(() => { openRef.current = open; }, [open]);
 
   // Filtros reactivos
   const [searchQuery, setSearchQuery]     = useState('');
@@ -518,6 +516,18 @@ export function NotificationBell() {
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         const filtered = json.data.filter((log: any) => !shouldIgnoreLogForNotifications(log));
+        // Avisos de eventos nuevos (antes llegaban por tiempo real): en la primera carga solo se anotan los ya existentes
+        const seen = seenLogIdsRef.current;
+        if (seen === null) {
+          seenLogIdsRef.current = new Set(filtered.map((l: any) => String(l.id)));
+        } else {
+          const fresh = filtered.filter((l: any) => !seen.has(String(l.id)));
+          fresh.forEach((l: any) => seen.add(String(l.id)));
+          if (fresh.length > 0 && !openRef.current) {
+            setUnread(count => count + fresh.length);
+            playPremiumLogSound();
+          }
+        }
         setLogs(filtered);
         setEvents(mapLogsToEvents(filtered));
       }
@@ -528,53 +538,17 @@ export function NotificationBell() {
     fetchTasks();
     fetchLogs();
 
-    const taskChannel = supabase
-      .channel('tasks_bell_realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        () => {
-          fetchTasks();
-        }
-      )
-      .subscribe();
-
-    const logsChannel = supabase
-      .channel('notification_bell_logs_realtime')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'employee_logs' },
-        (payload: any) => {
-          const newLog = payload.new;
-          if (!newLog || shouldIgnoreLogForNotifications(newLog)) return;
-          
-          setLogs(prev => {
-            if (prev.some(item => String(item.id) === String(newLog.id))) return prev;
-            const updated = [newLog, ...prev];
-            setEvents(mapLogsToEvents(updated));
-            return updated;
-          });
-
-          setOpen(isOpen => {
-            if (!isOpen) {
-              setUnread(count => count + 1);
-              playPremiumLogSound();
-            }
-            return isOpen;
-          });
-        }
-      )
-      .subscribe();
-
+    // Sondeo a rutas autenticadas (ya no hay suscripción en tiempo real con la clave pública):
+    // registros cada 5 s y tareas cada 15 s, solo con la pestaña visible
+    let tick = 0;
     const iv = setInterval(() => {
-      fetchTasks();
+      if (document.visibilityState !== 'visible') return;
       fetchLogs();
-    }, 15_000);
+      if (++tick % 3 === 0) fetchTasks();
+    }, 5_000);
 
     return () => {
       clearInterval(iv);
-      supabase.removeChannel(taskChannel);
-      supabase.removeChannel(logsChannel);
     };
   }, [fetchTasks, fetchLogs]);
 

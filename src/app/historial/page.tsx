@@ -8,14 +8,8 @@ import {
   ChevronRight, SlidersHorizontal, Sparkles, AlertCircle, X
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-
-// Inicializar cliente de Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 const normalizeText = (text: string) => 
   (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -821,44 +815,12 @@ export default function HistorialPage() {
     }
   };
 
-  // Suscripción Realtime Supabase + Polling de Respaldo
+  // Sondeo a la ruta autenticada cada 5 s (solo con la pestaña visible): ya no hay suscripción en tiempo real con la clave pública
   useEffect(() => {
     fetchLogs();
 
-    // 1. Supabase Realtime Postgres Channel
-    const channel = supabase
-      .channel('employee_logs_realtime')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'employee_logs' },
-        (payload: any) => {
-          const newLog = payload.new;
-          
-          // Prevenir duplicados locales
-          setRawLogs(prev => {
-            if (prev.some(item => String(item.id) === String(newLog.id))) return prev;
-            const updated = [newLog, ...prev];
-            setEvents(mapLogsToEvents(updated));
-            return updated;
-          });
-
-          // Solo disparar chime y toast para eventos que pasan el filtro de auditoría
-          if (isAllowedAuditLog(newLog)) {
-            playIncidentSound();
-
-            setToastLog(newLog);
-            setShowToast(true);
-            if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-            toastTimeoutRef.current = setTimeout(() => {
-              setShowToast(false);
-            }, 8000);
-          }
-        }
-      )
-      .subscribe();
-
-    // 2. Polling silencioso cada 10 segundos para consistencia robusta offline-online
     const pollInterval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
       fetch('/api/employee-logs')
         .then(r => r.json())
         .then(json => {
@@ -867,16 +829,17 @@ export default function HistorialPage() {
               // Buscar si hay algún ID nuevo en la respuesta
               const existingIds = new Set(prev.map(x => String(x.id)));
               const newItems = json.data.filter((x: any) => !existingIds.has(String(x.id)));
-              
-              if (newItems.length > 0) {
-                // Tocar sonido ante cualquier nuevo evento
-                playIncidentSound();
 
-                // Mostrar toast del más nuevo
-                setToastLog(newItems[0]);
-                setShowToast(true);
-                if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-                toastTimeoutRef.current = setTimeout(() => setShowToast(false), 8000);
+              if (newItems.length > 0) {
+                // Solo sonido y aviso para eventos que pasan el filtro de auditoría
+                const audible = newItems.filter((x: any) => isAllowedAuditLog(x));
+                if (audible.length > 0) {
+                  playIncidentSound();
+                  setToastLog(audible[0]);
+                  setShowToast(true);
+                  if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+                  toastTimeoutRef.current = setTimeout(() => setShowToast(false), 8000);
+                }
 
                 const merged = [...newItems, ...prev];
                 setEvents(mapLogsToEvents(merged));
@@ -887,10 +850,9 @@ export default function HistorialPage() {
           }
         })
         .catch(err => console.log("Silent poll error:", err));
-    }, 10000);
+    }, 5000);
 
     return () => {
-      supabase.removeChannel(channel);
       clearInterval(pollInterval);
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
 import { 
   Copy, 
   Check, 
@@ -137,30 +136,13 @@ export default function PagoTransferenciaPage() {
   useEffect(() => {
     (async () => {
       try {
+        // La cuenta la decide el servidor (ruta pública que solo devuelve el nombre de la cuenta)
         let chosenAccount: string | null = null;
-
-        if (bookingId) {
-          const { data, error } = await supabase
-            .from('booking_portal_settings')
-            .select('transfer_account')
-            .eq('booking_id', String(bookingId))
-            .maybeSingle();
-          if (!error && data?.transfer_account) {
-            chosenAccount = data.transfer_account;
-          }
-        }
-
-        // Si no se encontró cuenta específica para la reserva, consultar la cuenta por defecto global
-        if (!chosenAccount) {
-          const { data: setAcc } = await supabase
-            .from('settings')
-            .select('value')
-            .eq('key', 'default_transfer_account')
-            .maybeSingle();
-          if (setAcc?.value) {
-            chosenAccount = String(setAcc.value).toLowerCase();
-          }
-        }
+        try {
+          const res = await fetch(`/api/public/transfer-account?bookingId=${encodeURIComponent(String(bookingId))}`, { cache: 'no-store' });
+          const json = await res.json().catch(() => null);
+          if (res.ok && typeof json?.account === 'string' && json.account) chosenAccount = json.account;
+        } catch {}
 
         const finalAcc = chosenAccount || 'santander';
         setTransferAccount(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : finalAcc));
