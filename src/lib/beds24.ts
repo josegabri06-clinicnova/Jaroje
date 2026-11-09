@@ -1,6 +1,7 @@
 import { supabaseAdmin as supabase } from './supabase-admin';
 import { normalizePhone } from '@/lib/phone';
 import { maskPhone } from '@/lib/log-mask';
+import { trackBeds24 } from '@/lib/beds24-credits';
 
 // ─── SERVICIO CENTRALIZADO DE BEDS24 JAROJE ─────────────────────────────────────
 // Fuente de verdad para reservas del Hotel Condominios Jaroje.
@@ -690,8 +691,13 @@ async function _doRefresh(force: boolean = false): Promise<string> {
 
 
 // Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
-export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string, includeCancelled: boolean = false, includeInvoiceItems: boolean = true): Promise<any[]> {
+export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string, includeCancelled: boolean = false, includeInvoiceItems: boolean = true, origin: string = 'sin-etiqueta'): Promise<any[]> {
   let beds24Token = await getBeds24Token();
+  // Medición de créditos (solo registra; ver beds24-credits.ts): una fila por listado completo, con todas sus páginas
+  const tracker = trackBeds24(origin, 'listado', {
+    desde: arrivalFrom, hasta: arrivalTo, dias: Math.round((Date.parse(arrivalTo) - Date.parse(arrivalFrom)) / 86_400_000),
+    con_facturas: includeInvoiceItems, con_canceladas: includeCancelled,
+  });
 
   const doFetchAttempt = async (token: string) => {
     const fetchPage = async (apiUrl: string) => {
@@ -705,6 +711,7 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
           headers: { 'token': token, 'Content-Type': 'application/json' },
           cache: 'no-store'
         });
+        tracker.add(res);
 
         if (res.status === 429) {
           console.warn('[Beds24 GET] Rate limit (429) detectado. Reintentando en 2.5 segundos...');
@@ -714,6 +721,7 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
             headers: { 'token': token, 'Content-Type': 'application/json' },
             cache: 'no-store'
           });
+          tracker.add(res);
         }
 
         if (res.status === 401 || res.status === 403) {
@@ -797,6 +805,8 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
       return await doFetchAttempt(beds24Token);
     }
     throw err;
+  } finally {
+    await tracker.flush();
   }
 }
 
@@ -804,15 +814,18 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
 export async function fetchBeds24RatesMap(
   token: string, 
   fromDateStr: string, 
-  toDateStr: string
+  toDateStr: string,
+  origin: string = 'sin-etiqueta'
 ): Promise<Record<string, Record<string, number>>> {
   const ratesMap: Record<string, Record<string, number>> = {};
+  const tracker = trackBeds24(origin, 'tarifas', { desde: fromDateStr, hasta: toDateStr });
   try {
     const res = await fetch(`https://api.beds24.com/v2/inventory/rooms/calendar?from=${fromDateStr}&to=${toDateStr}&includePrices=true`, {
       method: 'GET',
       headers: { 'token': token },
       cache: 'no-store'
     });
+    tracker.add(res);
     if (!res.ok) {
       console.warn(`[Beds24 Rates] API responded with status ${res.status}`);
       return ratesMap;
@@ -843,6 +856,8 @@ export async function fetchBeds24RatesMap(
     });
   } catch (err: any) {
     console.warn(`[Beds24 Rates] Fallback to static catalog due to network or API error: ${err.message}`);
+  } finally {
+    await tracker.flush();
   }
   return ratesMap;
 }
@@ -1144,7 +1159,8 @@ export function clearBeds24Cache() {
 export async function getBeds24Bookings(
   fast: boolean = true,
   includeCancelled: boolean = false,
-  bypassCache: boolean = false
+  bypassCache: boolean = false,
+  origin: string = 'sin-etiqueta'
 ): Promise<any[]> {
   const now = Date.now();
   if (includeCancelled) {
@@ -1155,7 +1171,7 @@ export async function getBeds24Bookings(
     cacheAllTimestamp = now;
     cachedAllBookingsPromise = (async () => {
       try {
-        const result = await doFetchAndMapBeds24Bookings(fast, true);
+        const result = await doFetchAndMapBeds24Bookings(fast, true, undefined, origin);
         if (Array.isArray(result) && result.length > 0) {
           lastKnownAllBookingsCache = result;
         }
@@ -1179,7 +1195,7 @@ export async function getBeds24Bookings(
     cacheTimestamp = now;
     cachedBookingsPromise = (async () => {
       try {
-        const result = await doFetchAndMapBeds24Bookings(fast, false);
+        const result = await doFetchAndMapBeds24Bookings(fast, false, undefined, origin);
         if (Array.isArray(result) && result.length > 0) {
           lastKnownBookingsCache = result;
         }
@@ -1204,7 +1220,7 @@ export async function getBeds24Bookings(
 // además, reescriben la copia de Supabase. Solo lectura. Caché de 90 s por fecha, igual que la del listado completo.
 const arrivalCache = new Map<string, { ts: number; promise: Promise<any[]> }>();
 
-export async function getBeds24BookingsForArrival(arrivalDate: string): Promise<any[]> {
+export async function getBeds24BookingsForArrival(arrivalDate: string, origin: string = 'sin-etiqueta'): Promise<any[]> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(arrivalDate)) throw new Error('Fecha de llegada no válida');
   const now = Date.now();
   const hit = arrivalCache.get(arrivalDate);
@@ -1213,7 +1229,7 @@ export async function getBeds24BookingsForArrival(arrivalDate: string): Promise<
   for (const [k, v] of arrivalCache) if (now - v.ts >= CACHE_TTL_MS) arrivalCache.delete(k);
   if (arrivalCache.size >= 50) arrivalCache.delete(arrivalCache.keys().next().value as string);
 
-  const promise = doFetchAndMapBeds24Bookings(true, false, arrivalDate).catch((err) => {
+  const promise = doFetchAndMapBeds24Bookings(true, false, arrivalDate, origin).catch((err) => {
     arrivalCache.delete(arrivalDate); // un fallo no se guarda: el siguiente intento vuelve a pedir
     throw err;
   });
@@ -1234,7 +1250,7 @@ export function isWithinFullListingWindow(arrivalDate: string): boolean {
 // `onlyArrival` (AAAA-MM-DD): versión de SOLO LECTURA para el portal del huésped. Pide a Beds24 únicamente las reservas con esa fecha
 // de llegada y NO toca nada más: ni reescribe la copia `beds24_reservations`, ni cancela reservas "desaparecidas", ni borra finanzas,
 // ni cambia la lista de la habitación 500. Esos efectos dependen de haber visto el listado completo y solo deben ocurrir con él.
-async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancelled: boolean = false, onlyArrival?: string): Promise<any[]> {
+async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancelled: boolean = false, onlyArrival?: string, origin: string = 'sin-etiqueta'): Promise<any[]> {
   const today = new Date();
   const fromDate = new Date(today);
   fromDate.setDate(today.getDate() - 180);
@@ -1251,7 +1267,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
 
   // 1. Obtener token y reservas raw
   const token = await getBeds24Token();
-  const bookingsArray = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo, includeCancelled);
+  const bookingsArray = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo, includeCancelled, true, origin);
 
   // Cargar dynamicSettings de precios
   let dynamicSettings: any = null;
@@ -1272,7 +1288,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
   const ratesToDate = new Date(today);
   ratesToDate.setDate(today.getDate() + 540);
   const ratesTo = ratesToDate.toISOString().split('T')[0];
-  const beds24RatesMap = fast ? {} : await fetchBeds24RatesMap(token, arrivalFrom, ratesTo);
+  const beds24RatesMap = fast ? {} : await fetchBeds24RatesMap(token, arrivalFrom, ratesTo, origin);
 
   const ROOM_MAP = [
     { roomId: '679077', units: [{ unitId: '1', name: '301' }, { unitId: '2', name: '302' }, { unitId: '3', name: '303' }, { unitId: '4', name: '304' }, { unitId: '5', name: '305' }, { unitId: '6', name: '306' }] },

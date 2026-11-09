@@ -34,7 +34,7 @@ export async function GET(req: Request) {
     if (bypassCache) {
       console.log("[Reservas GET] bypassCache detectado. Forzando recarga de Beds24 y sincronización con Supabase...");
       try {
-        await getBeds24Bookings(true, true, true);
+        await getBeds24Bookings(true, true, true, 'panel:reservas');
       } catch (err) {
         console.error("Error al forzar getBeds24Bookings en GET:", err);
       }

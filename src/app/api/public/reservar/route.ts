@@ -365,7 +365,7 @@ export async function POST(req: Request) {
     const [beds24RatesMap, dynamicSettings, bookingsRaw, localBookings] = await Promise.all([
       (async () => {
         try {
-          return await fetchBeds24RatesMap(BEDS24_TOKEN, cleanCheckIn, cleanCheckOut);
+          return await fetchBeds24RatesMap(BEDS24_TOKEN, cleanCheckIn, cleanCheckOut, 'compra:reservar');
         } catch (tokenErr) {
           console.warn("[Reservar API] Failed to fetch Beds24 calendar rates:", tokenErr);
           return {} as Record<string, Record<string, number>>;
@@ -386,7 +386,7 @@ export async function POST(req: Request) {
         }
         return null as any;
       })(),
-      fetchAllRawBeds24Bookings(bookingsFrom, cleanCheckOut, false, false),
+      fetchAllRawBeds24Bookings(bookingsFrom, cleanCheckOut, false, false, 'compra:reservar'),
       (async () => {
         try {
           const { data } = await supabase

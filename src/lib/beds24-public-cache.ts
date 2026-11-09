@@ -101,14 +101,14 @@ const ratesStore = newStore<Record<string, Record<string, number>>>();
 export function publicBookings(checkIn: string, checkOut: string): Promise<any[]> {
   const from = startOfMonth(shiftDays(checkIn, -180));
   const to = endOfMonth(checkOut);
-  return memo(bookingsStore, `${from}|${to}`, () => fetchAllRawBeds24Bookings(from, to, false, false), (v) => Array.isArray(v));
+  return memo(bookingsStore, `${from}|${to}`, () => fetchAllRawBeds24Bookings(from, to, false, false, 'publico:disponibilidad'), (v) => Array.isArray(v));
 }
 
 /** Tarifas del calendario de Beds24 para la estancia (un resultado sin ninguna habitación se considera fallo y no se guarda) */
 export function publicRates(token: string, checkIn: string, checkOut: string): Promise<Record<string, Record<string, number>>> {
   const from = startOfMonth(checkIn);
   const to = endOfMonth(checkOut);
-  return memo(ratesStore, `${from}|${to}`, () => fetchBeds24RatesMap(token, from, to), (v) => Object.keys(v).length > 0);
+  return memo(ratesStore, `${from}|${to}`, () => fetchBeds24RatesMap(token, from, to, 'publico:tarifas'), (v) => Object.keys(v).length > 0);
 }
 
 // ── Portal del huésped: consulta a Beds24 por número de reserva cuando no está en nuestras tablas ──

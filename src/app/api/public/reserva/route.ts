@@ -264,7 +264,7 @@ export async function GET(req: Request) {
       const { data: mirrorRow } = await supabase.from('beds24_reservations').select('check_in').eq('id', String(bookingId)).maybeSingle();
       const arrival = mirrorRow?.check_in ? String(mirrorRow.check_in).slice(0, 10) : '';
       if (arrival && isWithinFullListingWindow(arrival)) {
-        const sameDay = await getBeds24BookingsForArrival(arrival);
+        const sameDay = await getBeds24BookingsForArrival(arrival, 'portal:dia');
         const found = sameDay.find(r => String(r.id) === String(bookingId));
         if (found && String(found.check_in || '').slice(0, 10) === arrival) {
           booking = found;
@@ -275,7 +275,7 @@ export async function GET(req: Request) {
       console.warn('[Portal] Camino rápido de Beds24 no disponible, se usa el listado completo:', (fastErr as Error)?.message);
     }
     if (!booking) {
-      allBeds24 = await getBeds24Bookings(true, false, false);
+      allBeds24 = await getBeds24Bookings(true, false, false, 'portal:listado');
       booking = allBeds24.find(r => String(r.id) === String(bookingId));
     }
 
