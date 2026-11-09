@@ -189,8 +189,13 @@ export async function GET(req: NextRequest) {
 
       const dbRank = WHATSAPP_STATUS_RANK[dbStatus] ?? 1;
       const convRank = convStatus ? (WHATSAPP_STATUS_RANK[convStatus] ?? 0) : -1;
+      const hasTrackedWamidStatus = Boolean(matchedMsg?.wamid && convStatus);
       const effectiveStatus =
-        dbStatus === 'failed' || convStatus === 'failed'
+        convStatus === 'failed'
+          ? 'failed'
+          : hasTrackedWamidStatus
+          ? (convRank >= dbRank || dbStatus === 'failed' ? convStatus : dbStatus)
+          : dbStatus === 'failed'
           ? 'failed'
           : convRank > dbRank
           ? convStatus

@@ -469,48 +469,61 @@ export async function updateWhatsAppDeliveryStatus(st: {
   let matchedTemplateName: string | null = null;
 
   try {
-    const { canonicalPhone, primary, duplicates } = rawRecipient
-      ? await findConversationsByPhone(rawRecipient)
-      : { canonicalPhone: '', primary: null, duplicates: [] };
+    const applyToConversation = async (): Promise<boolean> => {
+      const { primary, duplicates } = rawRecipient
+        ? await findConversationsByPhone(rawRecipient)
+        : { primary: null, duplicates: [] };
 
-    const allConvs = [primary, ...duplicates].filter(Boolean);
-    for (const conv of allConvs) {
-      if (!Array.isArray(conv.messages)) continue;
-      let modified = false;
-      const updatedMessages = conv.messages.map((m: any) => {
-        if (!m || !wamid || m.wamid !== wamid) return m;
-        modified = true;
-        matchedConversation = true;
-        if (m.reservation_id) matchedReservationId = String(m.reservation_id);
-        if (m.template_name) matchedTemplateName = String(m.template_name);
+      const allConvs = [primary, ...duplicates].filter(Boolean);
+      for (const conv of allConvs) {
+        if (!Array.isArray(conv.messages)) continue;
+        let modified = false;
+        const updatedMessages = conv.messages.map((m: any) => {
+          if (!m || !wamid || m.wamid !== wamid) return m;
+          modified = true;
+          matchedConversation = true;
+          if (m.reservation_id) matchedReservationId = String(m.reservation_id);
+          if (m.template_name) matchedTemplateName = String(m.template_name);
 
-        const curRank = WHATSAPP_STATUS_RANK[String(m.delivery_status || 'sent').toLowerCase()] ?? 1;
-        const shouldAdvanceStatus = nextStatus === 'failed' || nextRank > curRank;
+          const curRank = WHATSAPP_STATUS_RANK[String(m.delivery_status || 'sent').toLowerCase()] ?? 1;
+          const shouldAdvanceStatus = nextStatus === 'failed' || nextRank > curRank;
 
-        const patched: Record<string, any> = {
-          ...m,
-          delivery_status: shouldAdvanceStatus ? nextStatus : (m.delivery_status || nextStatus),
-        };
-        if (nextStatus === 'sent' && !patched.sent_at) patched.sent_at = statusIso;
-        if (nextStatus === 'delivered' && !patched.delivered_at) patched.delivered_at = statusIso;
-        if (nextStatus === 'read' && !patched.read_at) patched.read_at = statusIso;
-        if (nextStatus === 'failed') {
-          patched.failed_at = statusIso;
-          if (errorCode) patched.error_code = errorCode;
-          if (errorMessage) patched.error_message = errorMessage;
+          const patched: Record<string, any> = {
+            ...m,
+            delivery_status: shouldAdvanceStatus ? nextStatus : (m.delivery_status || nextStatus),
+          };
+          if (nextStatus === 'sent' && !patched.sent_at) patched.sent_at = statusIso;
+          if (nextStatus === 'delivered' && !patched.delivered_at) patched.delivered_at = statusIso;
+          if (nextStatus === 'read' && !patched.read_at) patched.read_at = statusIso;
+          if (nextStatus === 'failed') {
+            patched.failed_at = statusIso;
+            if (errorCode) patched.error_code = errorCode;
+            if (errorMessage) patched.error_message = errorMessage;
+          }
+          return patched;
+        });
+
+        if (modified) {
+          await supabase
+            .from('conversations')
+            .update({ messages: updatedMessages })
+            .eq('id', conv.id);
         }
-        return patched;
-      });
-
-      if (modified) {
-        await supabase
-          .from('conversations')
-          .update({ messages: updatedMessages })
-          .eq('id', conv.id);
       }
+      return matchedConversation;
+    };
+
+    await applyToConversation();
+
+    // Si Meta envió el webhook en <1s mientras sendWhatsAppTemplate terminaba de guardar el wamid, reintentar una vez
+    if (!matchedConversation && wamid && rawRecipient) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await applyToConversation();
     }
 
-    if (matchedReservationId && matchedTemplateName) {
+    // Solo actualizar whatsapp_logs si el wamid coincidió exactamente con una plantilla registrada
+    // (evita que un fallo 131047 de texto libre fuera de 24h marque como fallida a una plantilla real)
+    if (matchedConversation && matchedReservationId && matchedTemplateName) {
       const { data: targetLogs } = await supabase
         .from('whatsapp_logs')
         .select('id, status')
@@ -530,28 +543,27 @@ export async function updateWhatsAppDeliveryStatus(st: {
         }
         matchedLog = true;
       }
-    } else if (canonicalPhone && (nextStatus === 'failed' || nextStatus === 'delivered' || nextStatus === 'read')) {
-      const lookbackMs = nextStatus === 'failed' ? 30 * 60 * 1000 : 10 * 60 * 1000;
-      const cutoffIso = new Date(Date.now() - lookbackMs).toISOString();
-      const last10 = canonicalPhone.replace(/\D/g, '').slice(-10);
+    } else if (matchedConversation && matchedTemplateName && rawRecipient) {
+      // Plantillas sin reservation_id específico (ej. system_manual: bienvenido_cliente_whatsaap_v4 / llamada_v4)
+      const canonicalPhone = normalizePhone(rawRecipient);
+      const last10 = canonicalPhone ? canonicalPhone.replace(/\D/g, '').slice(-10) : '';
       if (last10.length === 10) {
-        const { data: recentLogs } = await supabase
+        const { data: recentTplLogs } = await supabase
           .from('whatsapp_logs')
-          .select('id, status, phone, sent_at')
+          .select('id, status, phone')
+          .eq('template_name', matchedTemplateName)
           .ilike('phone', `%${last10}`)
-          .gte('sent_at', cutoffIso)
           .order('sent_at', { ascending: false })
           .limit(3);
 
-        const candidates = (recentLogs || []).filter(r => normalizePhone(r.phone) === canonicalPhone);
-        if (candidates.length === 1 || (nextStatus === 'failed' && candidates.length > 0)) {
-          const logRow = candidates[0];
-          const curLogRank = WHATSAPP_STATUS_RANK[String(logRow.status || 'sent').toLowerCase()] ?? 1;
+        const targetLog = (recentTplLogs || []).find(r => normalizePhone(r.phone) === canonicalPhone);
+        if (targetLog?.id) {
+          const curLogRank = WHATSAPP_STATUS_RANK[String(targetLog.status || 'sent').toLowerCase()] ?? 1;
           if (nextStatus === 'failed' || nextRank > curLogRank) {
             await supabase
               .from('whatsapp_logs')
               .update({ status: nextStatus })
-              .eq('id', logRow.id);
+              .eq('id', targetLog.id);
           }
           matchedLog = true;
         }
