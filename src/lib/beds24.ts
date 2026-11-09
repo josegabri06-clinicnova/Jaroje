@@ -2053,18 +2053,25 @@ export async function addBeds24GroupPayment(
 
     // Sincronizar todas las habitaciones del grupo en la base de datos local
     try {
-      const idsStr = group.map((b: any) => b.id).join(',');
-      const resUpdated = await fetch(`https://api.beds24.com/v2/bookings?id=${idsStr}&includeInvoice=true`, {
-        headers: { 'token': token },
-        cache: 'no-store'
-      });
+      const groupIds = group.map((b: any) => String(b.id));
+      const idsQuery = groupIds.map((id: string) => `id=${encodeURIComponent(id)}`).join('&');
+      const resUpdated = await beds24FetchTracked(
+        'grupo:sync_abono',
+        'reserva-grupo',
+        `https://api.beds24.com/v2/bookings?${idsQuery}&includeInvoice=true`,
+        {
+          headers: { 'token': token },
+          cache: 'no-store'
+        },
+        { ids: groupIds }
+      );
       if (resUpdated.ok) {
         const jsonUpdated = await resUpdated.json();
         if (jsonUpdated.success && Array.isArray(jsonUpdated.data)) {
           for (const rawB of jsonUpdated.data) {
             await syncBeds24BookingLocal(rawB);
           }
-          console.log(`[Beds24 Group Payment] Sincronizados de forma síncrona en Supabase: ${idsStr}`);
+          console.log(`[Beds24 Group Payment] Sincronizados de forma síncrona en Supabase: ${groupIds.join(',')}`);
         }
       }
     } catch (syncErr) {

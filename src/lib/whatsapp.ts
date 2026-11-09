@@ -216,7 +216,29 @@ function dedupeAndSortMessages(msgLists: any[][]): any[] {
       if (!existing) {
         byKey.set(key, m);
       } else {
-        byKey.set(key, { ...existing, ...m });
+        const curStatus = String(existing.delivery_status || '').toLowerCase();
+        const newStatus = String(m.delivery_status || '').toLowerCase();
+        const curRank = WHATSAPP_STATUS_RANK[curStatus] ?? (curStatus ? 1 : -1);
+        const newRank = WHATSAPP_STATUS_RANK[newStatus] ?? (newStatus ? 1 : -1);
+        const bestStatus = newRank > curRank ? m.delivery_status : (existing.delivery_status ?? m.delivery_status);
+
+        byKey.set(key, {
+          ...existing,
+          ...m,
+          role_guest: existing.role_guest ?? m.role_guest ?? null,
+          role_bot: existing.role_bot ?? m.role_bot ?? null,
+          role_manager: existing.role_manager ?? m.role_manager ?? null,
+          template_name: existing.template_name ?? m.template_name,
+          meta_template: existing.meta_template ?? m.meta_template,
+          reservation_id: existing.reservation_id ?? m.reservation_id,
+          sent_at: existing.sent_at ?? m.sent_at,
+          delivered_at: existing.delivered_at ?? m.delivered_at,
+          read_at: existing.read_at ?? m.read_at,
+          failed_at: existing.failed_at ?? m.failed_at,
+          error_code: existing.error_code ?? m.error_code,
+          error_message: existing.error_message ?? m.error_message,
+          delivery_status: bestStatus,
+        });
       }
     }
   }

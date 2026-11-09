@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { handleInboundMessage } from '@/lib/inbound-handler';
-import { normalizePhone, updateWhatsAppDeliveryStatus } from '@/lib/whatsapp';
+import { normalizePhone, updateWhatsAppDeliveryStatus, upsertConversationMessage } from '@/lib/whatsapp';
 import { maskPhone, describeText } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
@@ -167,6 +167,78 @@ export async function POST(req: Request) {
               await updateWhatsAppDeliveryStatus(st);
             } catch (stErr) {
               console.warn('[Meta Webhook POST] Error persistiendo estado de entrega:', stErr);
+            }
+          }
+        }
+
+        // 3. Ecos de Coexistence (mensajes enviados manualmente desde WhatsApp Business móvil/web)
+        // Opción B sin tiempo de espera: solo registra el mensaje en el historial sin pausar ni bloquear plantillas.
+        if (Array.isArray(val.message_echoes) && val.message_echoes.length > 0) {
+          const contacts = Array.isArray(val.contacts) ? val.contacts : [];
+          const displayNum = val.metadata?.display_phone_number
+            ? normalizePhone(val.metadata.display_phone_number)
+            : '';
+
+          for (const echo of val.message_echoes) {
+            const rawTo = echo?.to || echo?.recipient_id || '';
+            const cleanPhone = normalizePhone(rawTo);
+            if (!cleanPhone || cleanPhone === 'desconocido') continue;
+            if (displayNum && cleanPhone === displayNum) continue;
+
+            const rawTs = Number(echo?.timestamp);
+            const timestamp = Number.isFinite(rawTs) && rawTs > 0
+              ? new Date(rawTs > 1e12 ? rawTs : rawTs * 1000).toISOString()
+              : new Date().toISOString();
+
+            const echoType = String(echo?.type || '');
+            let echoText = '';
+            if (echoType === 'text' && echo?.text?.body) {
+              echoText = String(echo.text.body);
+            } else if (echoType === 'image') {
+              echoText = echo?.image?.caption ? `[Imagen enviada] ${echo.image.caption}` : '[Imagen enviada]';
+            } else if (echoType === 'document') {
+              echoText = echo?.document?.filename ? `[Documento enviado: ${echo.document.filename}]` : '[Documento enviado]';
+            } else if (echoType === 'audio') {
+              echoText = '[Audio enviado]';
+            } else if (echoType === 'video') {
+              echoText = echo?.video?.caption ? `[Video enviado] ${echo.video.caption}` : '[Video enviado]';
+            } else if (echoType === 'sticker') {
+              echoText = '[Sticker enviado]';
+            } else if (echoType === 'location') {
+              echoText = '[Ubicación enviada]';
+            } else if (echoType === 'contacts') {
+              echoText = '[Contacto enviado]';
+            } else if (echoType === 'template') {
+              echoText = echo?.template?.name ? `[Plantilla enviada: ${echo.template.name}]` : '[Plantilla enviada]';
+            } else if (echoType === 'reaction') {
+              echoText = echo?.reaction?.emoji ? `[Reacción: ${echo.reaction.emoji}]` : '[Reacción]';
+            } else {
+              echoText = `[Mensaje desde WhatsApp Business (${echoType || 'móvil'})]`;
+            }
+
+            const matchedContact =
+              contacts.find((c: any) => normalizePhone(c?.wa_id || '') === cleanPhone) || contacts[0];
+            const contactName = matchedContact?.profile?.name || '';
+
+            console.log(`[Meta Webhook POST] 📱 Eco Coexistence hacia ${maskPhone(cleanPhone)} (${echoType || 'text'}) ${describeText(echoText)}`);
+
+            try {
+              await upsertConversationMessage({
+                phone: cleanPhone,
+                guestName: contactName || cleanPhone,
+                defaultHumanMode: false,
+                preferProvidedName: false,
+                message: {
+                  role_guest: null,
+                  role_bot: null,
+                  role_manager: echoText,
+                  timestamp,
+                  source: 'whatsapp_business_app',
+                  ...(echo?.id ? { wamid: String(echo.id), delivery_status: 'sent', sent_at: timestamp } : {}),
+                },
+              });
+            } catch (echoErr) {
+              console.warn(`[Meta Webhook POST] Error guardando eco Coexistence para ${maskPhone(cleanPhone)}:`, echoErr);
             }
           }
         }
