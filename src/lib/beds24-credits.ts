@@ -20,6 +20,16 @@ const FLUSH_TIMEOUT_MS = 1500;
 const PAUSE_AFTER_ERROR_MS = 5 * 60_000;
 let pausedUntil = 0;
 
+// Último saldo de créditos visto en cualquier respuesta de Beds24 de ESTA instancia. El saldo es de toda la cuenta, así que sirve
+// aunque lo hayan gastado otras instancias. Vale solo hasta que termina la ventana de 5 minutos (después se reinicia).
+let lastRemaining: { value: number; expiresAt: number } | null = null;
+
+/** Créditos que quedaban en Beds24 en la última respuesta vista, o null si no hay dato reciente (desconocido) */
+export function knownRemainingCredits(): number | null {
+  if (!lastRemaining || Date.now() >= lastRemaining.expiresAt) return null;
+  return lastRemaining.value;
+}
+
 /** Cabeceras de una respuesta relacionadas con créditos o límites (los nombres exactos los decide Beds24: se guardan tal cual) */
 export function pickCreditHeaders(headers: Headers): Record<string, string> {
   const out: Record<string, string> = {};
@@ -65,6 +75,7 @@ export function trackBeds24(origin: string, kind: string, detail: Record<string,
         if (i.limit !== null) limit = i.limit;
         if (i.remaining !== null) remainingMin = remainingMin === null ? i.remaining : Math.min(remainingMin, i.remaining);
         if (i.resetsIn !== null) resetsIn = i.resetsIn;
+        if (i.remaining !== null) lastRemaining = { value: i.remaining, expiresAt: Date.now() + (i.resetsIn !== null ? i.resetsIn : 60) * 1000 };
       } catch { /* medir nunca debe romper una consulta */ }
     },
     /** Guarda la fila. Nunca lanza error y nunca espera más de FLUSH_TIMEOUT_MS */
@@ -83,4 +94,19 @@ export function trackBeds24(origin: string, kind: string, detail: Record<string,
       } catch { pausedUntil = Date.now() + PAUSE_AFTER_ERROR_MS; }
     },
   };
+}
+
+/**
+ * fetch a Beds24 que además anota el coste y los créditos restantes (una fila por llamada). Devuelve la respuesta intacta.
+ * Para consultas sueltas y poco frecuentes (webhook, consulta por número de reserva); los listados usan trackBeds24 directamente.
+ */
+export async function beds24FetchTracked(origin: string, kind: string, url: string, init?: RequestInit, detail: Record<string, unknown> = {}): Promise<Response> {
+  const tracker = trackBeds24(origin, kind, detail);
+  try {
+    const res = await fetch(url, init);
+    tracker.add(res);
+    return res;
+  } finally {
+    await tracker.flush();
+  }
 }

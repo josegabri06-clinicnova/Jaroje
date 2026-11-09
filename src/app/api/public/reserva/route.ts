@@ -8,6 +8,7 @@ import { checkGuestAccess, firstNameOf, requireGuestWriteAccess } from '@/lib/gu
 import { physicalRoomName } from '@/lib/room-names';
 import { isKnownMissingBooking, reserveBeds24Lookup, rememberBookingNotFound } from '@/lib/beds24-public-cache';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
+import { beds24FetchTracked } from '@/lib/beds24-credits';
 
 export const dynamic = 'force-dynamic';
 
@@ -294,7 +295,7 @@ export async function GET(req: Request) {
     if (!booking && mayLookup) {
       try {
         const beds24Token = await getBeds24Token();
-        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true`, {
+        const b24Res = await beds24FetchTracked('portal:reserva-id', 'reserva-id', `https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true`, {
           headers: { 'token': beds24Token },
           cache: 'no-store'
         });
@@ -303,7 +304,7 @@ export async function GET(req: Request) {
           let dataList = rawBookingData.data || [];
 
           if (rawBookingData.success && dataList.length === 0) {
-            const b24ResCancel = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true&status=cancelled`, {
+            const b24ResCancel = await beds24FetchTracked('portal:reserva-id', 'reserva-id-canceladas', `https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true&status=cancelled`, {
               headers: { 'token': beds24Token },
               cache: 'no-store'
             });

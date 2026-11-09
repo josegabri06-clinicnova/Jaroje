@@ -12,6 +12,7 @@ import { getBeds24Token, clearBeds24Cache, syncBeds24BookingLocal, isInvoicePaym
 import { deleteCancelledReservationFinances } from '@/lib/finances';
 import { isOtaChannel, sendOtaWelcomeMessage, sendOfficialOtaTemplate } from '@/lib/beds24-messages';
 import { maskPhone } from '@/lib/log-mask';
+import { beds24FetchTracked } from '@/lib/beds24-credits';
 
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking/Google/Directo o se cancela
 export async function POST(req: Request) {
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
     // Consultar detalles completos de la reserva a Beds24 (incluyendo canceladas e ítems de factura)
     try {
       const BEDS24_TOKEN = await getBeds24Token();
-      let b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true`, {
+      let b24Res = await beds24FetchTracked('webhook:reserva', 'reserva-id', `https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true`, {
         headers: { 'token': BEDS24_TOKEN }
       });
       
@@ -96,7 +97,7 @@ export async function POST(req: Request) {
         const bStatusInitial = String(b.status || '').toLowerCase().trim();
         if (!country && bStatusInitial !== '0' && bStatusInitial !== 'cancelled') {
           await new Promise(resolve => setTimeout(resolve, 2000));
-          const b24ResRetry = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true`, {
+          const b24ResRetry = await beds24FetchTracked('webhook:reserva', 'reserva-id-reintento', `https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true`, {
             headers: { 'token': BEDS24_TOKEN }
           });
           if (b24ResRetry.ok) {
