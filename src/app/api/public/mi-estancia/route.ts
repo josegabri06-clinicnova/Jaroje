@@ -3,6 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { listAuthorizedBookingIds } from '@/lib/guest-auth';
 import { physicalRoomName } from '@/lib/room-names';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
+import { isUsablePhone, phoneMatches } from '@/lib/phone-match';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,14 +26,22 @@ interface Stay {
  * GET /api/public/mi-estancia
  * Estancias confirmadas (en curso y futuras) que ESTE dispositivo tiene autorizadas.
  *
- * No recibe ningún dato del navegador: ni teléfono ni número de reserva. El servidor lee las cookies firmadas jg_<id> que el
- * huésped recibió al reservar o al verificar los 4 últimos dígitos, y solo devuelve esas reservas, con los mismos datos que ya
- * ve en su portal (habitación, fechas y estado). Sin cookies válidas no consulta la base de datos.
+ * No recibe ningún número de reserva. El servidor lee las cookies firmadas jg_<id> que el huésped recibió al reservar o al verificar
+ * los 4 últimos dígitos, y solo devuelve esas reservas, con los mismos datos que ya ve en su portal (habitación, fechas y estado).
+ * Sin cookies válidas no consulta la base de datos.
+ *
+ * Parámetro opcional `phone` (el teléfono del enlace que se abrió): SOLO FILTRA esa lista ya autorizada, dejando las reservas de
+ * ese teléfono. Nunca busca ni añade reservas, y no entra en ninguna consulta a la base de datos. Así, quien abre el enlace de un
+ * cliente desde un dispositivo que ya había usado el portal (p. ej. el móvil del hotel) no ve en "Mi Estancia" reservas de otros.
+ * Sin `phone` (o con un valor inservible) se devuelve la lista completa del dispositivo, como antes.
  */
 export async function GET(req: Request) {
   try {
     const authorizedIds = await listAuthorizedBookingIds(req);
     if (authorizedIds.length === 0) return NextResponse.json({ success: true, stays: [] }, { headers: NO_STORE });
+
+    const phoneParam = new URL(req.url).searchParams.get('phone') || '';
+    const filterPhone = isUsablePhone(phoneParam) ? phoneParam : null; // sin teléfono utilizable no se filtra
 
     // Solo las peticiones que consultan la base cuentan para el límite (60 / 15 min por IP)
     const limited = await rateLimitResponse(req, 'mi-estancia', { max: 60, windowMs: 15 * 60_000, lockMs: 5 * 60_000 });
@@ -47,8 +56,8 @@ export async function GET(req: Request) {
     ].filter(Boolean).join(',');
 
     const [local, b24] = await Promise.all([
-      supabase.from('local_reservas').select('id, check_in, check_out, status, room_id, unit_id, notes').gte('check_out', today).or(orFilter),
-      supabase.from('beds24_reservations').select('id, room_name, check_in, check_out, status').in('id', authorizedIds).gte('check_out', today),
+      supabase.from('local_reservas').select('id, check_in, check_out, status, room_id, unit_id, notes, phone').gte('check_out', today).or(orFilter),
+      supabase.from('beds24_reservations').select('id, room_name, check_in, check_out, status, guest_phone').in('id', authorizedIds).gte('check_out', today),
     ]);
     if (local.error || b24.error) {
       console.error('[Mi estancia] Error consultando reservas:', local.error?.message || b24.error?.message);
@@ -66,6 +75,7 @@ export async function GET(req: Request) {
       if (!portalId) continue;
       b24Ids.forEach((id) => coveredByLocal.add(id));
       if ((r.status ?? 'confirmed') !== 'confirmed') continue;
+      if (filterPhone && !phoneMatches(filterPhone, r.phone)) continue;
       const checkIn = dayOf(r.check_in);
       stays.push({
         id: portalId,
@@ -79,6 +89,7 @@ export async function GET(req: Request) {
     for (const r of b24.data ?? []) {
       const id = String(r.id);
       if (coveredByLocal.has(id) || r.status !== 'confirmed') continue;
+      if (filterPhone && !phoneMatches(filterPhone, r.guest_phone)) continue;
       const checkIn = dayOf(r.check_in);
       stays.push({
         id,

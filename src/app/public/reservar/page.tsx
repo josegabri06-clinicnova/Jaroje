@@ -544,16 +544,19 @@ function ReservarContent() {
     }
   };
 
-  // "Mi estancia": estancias confirmadas de ESTE dispositivo. El servidor las deduce de sus cookies firmadas; no se envía ningún teléfono.
+  // "Mi estancia": estancias confirmadas de ESTE dispositivo. El servidor las deduce de sus cookies firmadas. Si el enlace trae un
+  // teléfono, solo se enseñan las de ese teléfono (el servidor solo FILTRA: no busca reservas por él), para que quien abre el enlace
+  // de un cliente desde un dispositivo que ya había usado el portal no vea reservas de otros.
   // Una sola consulta al abrir la página, aparte de las cotizaciones (no se repite al cambiar fechas).
   useEffect(() => {
     const ctrl = new AbortController();
-    fetch('/api/public/mi-estancia', { cache: 'no-store', signal: ctrl.signal })
+    const qs = phoneParam.trim() ? `?phone=${encodeURIComponent(phoneParam.trim())}` : '';
+    fetch(`/api/public/mi-estancia${qs}`, { cache: 'no-store', signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.success && Array.isArray(d.stays) && d.stays.length > 0) setMyStays(d.stays); })
       .catch(() => {});
     return () => ctrl.abort();
-  }, []);
+  }, [phoneParam]);
 
   useEffect(() => {
     fetchQuotes();
