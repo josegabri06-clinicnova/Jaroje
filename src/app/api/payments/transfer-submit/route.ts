@@ -3,7 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { grantGuestAccess, normalizeBookingId, guestFileUrl, isGuestAuthorized } from '@/lib/guest-auth';
 import { resolveB24Alias } from '@/lib/guest-phone';
 import { filesProxyUrl } from '@/lib/storage-files';
-import { sendWhatsAppTextMessage } from '@/lib/whatsapp';
+import { sendTemplate_ComprobantePagoRecibido, sendWhatsAppTextMessage, isSpanishOrLatamPhone } from '@/lib/whatsapp';
 import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { maskPhone } from '@/lib/log-mask';
@@ -266,57 +266,104 @@ export async function POST(req: Request) {
       reservationTotal = formTotal;
     }
 
-    // Enviar mensaje de confirmación de captura recibida al huésped si tenemos su número
+    // Enviar confirmación de comprobante recibido por plantilla oficial Meta MARKETING (50% vs 100%, bilingüe es/en)
     if (guestPhone) {
-      const isCard = notesStr.includes('TARJETA') || notesStr.includes('MERCADO PAGO') || notesStr.includes('MERPAGO');
-      const isWise = notesStr.includes('WISE');
-      const isPayPal = notesStr.includes('PAYPAL');
-      const isEnglish = formLang === 'en';
-
-      const methodLabel = isCard 
-        ? 'pago con tarjeta / Mercado Pago' 
-        : (isWise ? 'pago vía Wise' : (isPayPal ? 'pago vía PayPal' : 'transferencia'));
-
-      const methodLabelEn = isCard
-        ? 'card / Mercado Pago payment'
-        : (isWise ? 'Wise payment' : (isPayPal ? 'PayPal payment' : 'bank transfer'));
-
-      const currLabel = (isWise || isPayPal || String(dbGuestName).toUpperCase().includes('(US DOLLARS)')) ? 'USD' : 'MXN';
-      const numAmount = Number(amount || 0);
-      const remainingBalance = Math.max(0, reservationTotal - reservationDeposit);
-
-      // Determinar con certeza si es pago total (100%) o anticipo (50% u otro parcial)
-      let isFullPayment = false;
-      if (isExplicitAnticipo) {
-        isFullPayment = false;
-      } else if (isExplicitTotal) {
-        isFullPayment = true;
-      } else if (reservationTotal > 0) {
-        // Solo si no fue explícito: requiere cubrir el saldo restante o al menos el 95% del total
-        isFullPayment = (remainingBalance > 0 && numAmount >= remainingBalance) || numAmount >= reservationTotal * 0.95;
+      let portalLang = '';
+      let portalMuted = false;
+      try {
+        const { data: portalSettings } = await supabase
+          .from('booking_portal_settings')
+          .select('language, mute_notifications')
+          .eq('booking_id', guestId)
+          .maybeSingle();
+        portalLang = String(portalSettings?.language || '').toLowerCase().trim();
+        portalMuted = portalSettings?.mute_notifications === true;
+      } catch (psErr) {
+        console.warn('[Submit Transfer] Error leyendo booking_portal_settings:', psErr);
       }
 
-      const refText = groupCount > 1 
-        ? `tu grupo de reservaciones (${groupCount} condominios, ref: #${guestId})` 
-        : `tu reserva #${guestId}`;
-
-      const refTextEn = groupCount > 1
-        ? `your group booking (${groupCount} condos, ref: #${guestId})`
-        : `your reservation #${guestId}`;
-
-      let guestNotificationBody = '';
-      if (isEnglish) {
-        guestNotificationBody = isFullPayment
-          ? `Hello, ${dbGuestName}! We have received your ${methodLabelEn} receipt for $${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${currLabel} for the full payment (100%) of ${refTextEn}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here once it is approved to confirm that your stay is fully paid. Thank you!`
-          : `Hello, ${dbGuestName}! We have received your ${methodLabelEn} receipt for $${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${currLabel} as a deposit for ${refTextEn}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here once it is approved to confirm your reservation. Thank you!`;
+      if (portalMuted) {
+        console.log(`[Submit Transfer] Notificación WhatsApp omitida para reserva #${guestId} (mute_notifications: true).`);
       } else {
-        guestNotificationBody = isFullPayment
-          ? `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} para el pago total (100%) de ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmarte que tu estancia ha quedado totalmente liquidada. ¡Muchas gracias!`
-          : `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} como anticipo para ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!`;
-      }
+        const isCard = notesStr.includes('TARJETA') || notesStr.includes('MERCADO PAGO') || notesStr.includes('MERPAGO');
+        const isWise = notesStr.includes('WISE');
+        const isPayPal = notesStr.includes('PAYPAL');
+        const hasFormLang = formData.has('lang') && String(formData.get('lang') || '').trim() !== '';
+        const isEnglish =
+          formLang === 'en' ||
+          portalLang === 'en' ||
+          (!hasFormLang && !isSpanishOrLatamPhone(guestPhone));
+        const targetLang: 'es' | 'en' = isEnglish ? 'en' : 'es';
 
-      console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${maskPhone(guestPhone)} (isFullPayment: ${isFullPayment}, group: ${groupCount}, paymentType: ${formPaymentType || 'inferred'})`);
-      await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
+        const methodLabel = isCard
+          ? 'pago con tarjeta / Mercado Pago'
+          : (isWise ? 'pago vía Wise' : (isPayPal ? 'pago vía PayPal' : 'transferencia bancaria'));
+
+        const methodLabelEn = isCard
+          ? 'card / Mercado Pago payment'
+          : (isWise ? 'Wise payment' : (isPayPal ? 'PayPal payment' : 'bank transfer'));
+
+        const currLabel = (isWise || isPayPal || String(dbGuestName).toUpperCase().includes('(US DOLLARS)')) ? 'USD' : 'MXN';
+        const numAmount = Number(amount || 0);
+        const remainingBalance = Math.max(0, reservationTotal - reservationDeposit);
+
+        // Determinar con certeza si es pago total (100%) o anticipo (50% u otro parcial)
+        let isFullPayment = false;
+        if (isExplicitAnticipo) {
+          isFullPayment = false;
+        } else if (isExplicitTotal) {
+          isFullPayment = true;
+        } else if (reservationTotal > 0) {
+          // Cubre el saldo restante (liquidación 100%) o al menos el 95% del total
+          isFullPayment = (remainingBalance > 0 && numAmount >= remainingBalance - 0.01) || numAmount >= reservationTotal * 0.95;
+        }
+
+        const amountLabel = isEnglish
+          ? `$${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${currLabel}`
+          : `$${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel}`;
+
+        const refText = groupCount > 1
+          ? `tu grupo de reservaciones (${groupCount} condominios, ref: #${guestId})`
+          : `tu reserva #${guestId}`;
+
+        const refTextEn = groupCount > 1
+          ? `your group booking (${groupCount} condos, ref: #${guestId})`
+          : `your reservation #${guestId}`;
+
+        console.log(`[Submit Transfer] Sending Meta MARKETING receipt template to guest: ${maskPhone(guestPhone)} (isFullPayment: ${isFullPayment}, lang: ${targetLang}, group: ${groupCount}, paymentType: ${formPaymentType || 'inferred'})`);
+
+        const tplRes = await sendTemplate_ComprobantePagoRecibido({
+          phone: guestPhone,
+          bookingId: guestId,
+          guestName: dbGuestName,
+          methodLabel: isEnglish ? methodLabelEn : methodLabel,
+          amountLabel,
+          referenceText: isEnglish ? refTextEn : refText,
+          isFullPayment,
+          lang: targetLang,
+          bypassPause: false,
+        });
+
+        // Fallback seguro a texto libre SOLO si la plantilla aún no está aprobada/disponible en Meta (ej. en revisión PENDING)
+        // y nunca cuando el envío fue bloqueado intencionadamente por regla de negocio.
+        const blockedByRule =
+          tplRes.error === 'excluded_person' ||
+          tplRes.error === 'paused' ||
+          tplRes.error === 'muted';
+
+        if (!tplRes.success && !blockedByRule) {
+          console.warn(`[Submit Transfer] Plantilla Meta no disponible aún (${tplRes.error}); intentando fallback a texto dentro de ventana 24h.`);
+          const guestNotificationBody = isEnglish
+            ? (isFullPayment
+              ? `Hello, ${dbGuestName}! We have received your ${methodLabelEn} receipt for ${amountLabel} for the full payment (100%) of ${refTextEn}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here once it is approved to confirm that your stay is fully paid. Thank you!`
+              : `Hello, ${dbGuestName}! We have received your ${methodLabelEn} receipt for ${amountLabel} as a deposit for ${refTextEn}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here once it is approved to confirm your reservation. Thank you!`)
+            : (isFullPayment
+              ? `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por ${amountLabel} para el pago total (100%) de ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmarte que tu estancia ha quedado totalmente liquidada. ¡Muchas gracias!`
+              : `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por ${amountLabel} como anticipo para ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!`);
+
+          await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
+        }
+      }
     }
 
     // Al huésped solo se le devuelve el enlace propio de su reserva; el registro se devuelve sin el enlace de almacenamiento

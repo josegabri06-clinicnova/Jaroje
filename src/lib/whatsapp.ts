@@ -678,7 +678,7 @@ export async function sendWhatsAppTemplate(
     // Resolve language preference
     let detectedLang = languageOverride || detectLanguageFromPhone(phone);
 
-    if (bookingId && !languageOverride) {
+    if (bookingId && (!languageOverride || !bypassPause)) {
       try {
         const { data: settings } = await supabase
           .from('booking_portal_settings')
@@ -691,7 +691,7 @@ export async function sendWhatsAppTemplate(
           return { success: false, error: 'muted', data: { status: 'muted', message: 'Notificaciones silenciadas para esta reserva.' } };
         }
         
-        if (settings?.language) {
+        if (!languageOverride && settings?.language) {
           detectedLang = settings.language;
         }
       } catch (dbErr) {
@@ -860,6 +860,8 @@ export async function sendWhatsAppTemplate(
       'seguimiento_satisfaccion',
       'seguimiento_satisfaccion_v2',
       'pago_anticipo_recibido',
+      'comprobante_anticipo_recibido',
+      'comprobante_pago_total_recibido',
       'portal_huesped_link',
       'portal_huesped_link_en',
       'rechazo_solicitud',
@@ -1224,6 +1226,10 @@ export async function sendWhatsAppTemplate(
               const abonadoEn = params[1] || '$0.00';
               const saldoEn = params[2] || '$0.00';
               return `Hello ${name}!\n\nWe have successfully registered your payment in the amount of *${abonadoEn}*.\n\nYour current outstanding balance is *${saldoEn}*.\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
+            case 'comprobante_anticipo_recibido':
+              return `🧾 *Deposit Receipt Received (50%)*\n\nHello, ${name}!\n\nWe have received your ${params[1] || 'payment'} receipt for *${params[2] || '$0.00'}* as a deposit for ${params[3] || 'your reservation'}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm your reservation. Thank you!\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
+            case 'comprobante_pago_total_recibido':
+              return `🧾 *Full Payment Receipt Received (100%)*\n\nHello, ${name}!\n\nWe have received your ${params[1] || 'payment'} receipt for *${params[2] || '$0.00'}* for the full payment (100%) of ${params[3] || 'your reservation'}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm that your stay is fully paid. Thank you!\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
             case 'portal_huesped_link':
             case 'portal_huesped_link_en':
               return `Hello ${name}, here is your access to your real-time booking details. From your portal you can view your room status, guidelines, WiFi info, and record additional payments.✅\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
@@ -1269,6 +1275,10 @@ export async function sendWhatsAppTemplate(
             const abonado = params[1] || '$0.00';
             const saldo = params[2] || '$0.00';
             return `¡Hola ${name}!\n\nHemos registrado con éxito tu pago por la cantidad de *${abonado}*.\n\nTu saldo pendiente actual es de *${saldo}*.\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
+          case 'comprobante_anticipo_recibido':
+            return `🧾 *Comprobante de anticipo recibido (50%)*\n\n¡Hola, ${name}!\n\nHemos recibido tu comprobante de ${params[1] || 'pago'} por *${params[2] || '$0.00'}* como anticipo para ${params[3] || 'tu reserva'}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
+          case 'comprobante_pago_total_recibido':
+            return `🧾 *Comprobante de pago total recibido (100%)*\n\n¡Hola, ${name}!\n\nHemos recibido tu comprobante de ${params[1] || 'pago'} por *${params[2] || '$0.00'}* para el pago total (100%) de ${params[3] || 'tu reserva'}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmarte que tu estancia ha quedado totalmente liquidada. ¡Muchas gracias!\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
           case 'portal_huesped_link':
             return `Hola ${name}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales.✅\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
           case 'portal_huesped_link_en':
@@ -1753,6 +1763,59 @@ export async function sendTemplate11_PagoAnticipoRecibido(booking: any, bypassPa
   const lang = booking.lang || booking.language || undefined;
 
   return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, undefined, booking.id, 'url', bypassPause, lang);
+}
+
+// 11.2 Comprobante recibido en validación (50% anticipo o 100% pago total, categoría MARKETING en Meta, bilingüe es/en)
+function sanitizeTemplateParam(value: string, fallback: string): string {
+  const clean = String(value || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return clean || fallback;
+}
+
+export async function sendTemplate_ComprobantePagoRecibido(input: {
+  phone: string;
+  bookingId: string | number;
+  guestName?: string;
+  methodLabel: string;
+  amountLabel: string;
+  referenceText: string;
+  isFullPayment: boolean;
+  lang?: 'es' | 'en';
+  bypassPause?: boolean;
+}): Promise<{ success: boolean; error?: string; data?: unknown }> {
+  if (!input.phone) return { success: false, error: 'Sin teléfono' };
+
+  const targetLang: 'es' | 'en' =
+    input.lang || (isSpanishOrLatamPhone(input.phone) ? 'es' : 'en');
+  const rawName = String(input.guestName || '').replace(/\(US DOLLARS\)/gi, '').trim();
+  let firstName = getFirstName(rawName);
+  if (isGenericGuestName(firstName) || firstName === 'Huésped') {
+    firstName = targetLang === 'en' ? 'Guest' : 'Huésped';
+  }
+
+  const templateName = input.isFullPayment
+    ? 'comprobante_pago_total_recibido'
+    : 'comprobante_anticipo_recibido';
+
+  const params = [
+    sanitizeTemplateParam(firstName, targetLang === 'en' ? 'Guest' : 'Huésped'),
+    sanitizeTemplateParam(input.methodLabel, targetLang === 'en' ? 'bank transfer' : 'transferencia bancaria'),
+    sanitizeTemplateParam(input.amountLabel, '$0.00'),
+    sanitizeTemplateParam(input.referenceText, targetLang === 'en' ? 'your reservation' : 'tu reserva'),
+  ];
+
+  return sendWhatsAppTemplate(
+    input.phone,
+    templateName,
+    params,
+    undefined,
+    input.bookingId,
+    'url',
+    Boolean(input.bypassPause),
+    targetLang
+  );
 }
 
 // 12. Portal del Huésped - Enlace como botón CTA URL (portal_huesped_link)
