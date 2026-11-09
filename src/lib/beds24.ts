@@ -691,7 +691,7 @@ async function _doRefresh(force: boolean = false): Promise<string> {
 
 
 // Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
-export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string, includeCancelled: boolean = false, includeInvoiceItems: boolean = true, origin: string = 'sin-etiqueta'): Promise<any[]> {
+export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string, includeCancelled: boolean = false, includeInvoiceItems: boolean = true, origin: string = 'sin-etiqueta', onlyActive: boolean = false): Promise<any[]> {
   let beds24Token = await getBeds24Token();
   // Medición de créditos (solo registra; ver beds24-credits.ts): una fila por listado completo, con todas sus páginas
   const tracker = trackBeds24(origin, 'listado', {
@@ -772,6 +772,13 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
         }
       });
       return combined;
+    } else if (onlyActive) {
+      // Solo reservas activas: sin la segunda cadena de peticiones para las canceladas del último mes (ahorra créditos).
+      // Para quien solo necesita saber qué habitaciones están ocupadas (búsquedas públicas), las canceladas no cuentan.
+      return await fetchPage(baseUrl).catch(err => {
+        console.error("[Beds24 API] Fallo al obtener activas:", err);
+        throw err;
+      });
     } else {
       const oneMonthAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('.')[0] + 'Z';
       const [activeBookings, recentCancelledBookings] = await Promise.all([

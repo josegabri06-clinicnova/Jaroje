@@ -1,6 +1,7 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Token, updateBeds24BookingPhone, extractPhoneFromBookingData, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { maskPhone } from '@/lib/log-mask';
+import { trackBeds24 } from '@/lib/beds24-credits';
 import {
   normalizePhone,
   sendTemplate3_ReservacionConfirmada,
@@ -608,7 +609,7 @@ export async function sendOtaWelcomeMessage({
 /**
  * Consulta el historial de mensajes de una reserva en Beds24 API v2
  */
-export async function fetchBeds24OtaMessages(bookingId: string | number): Promise<any[]> {
+export async function fetchBeds24OtaMessages(bookingId: string | number, tracker?: { add(res: Response): void }): Promise<any[]> {
   const cleanId = String(bookingId).replace(/\D/g, '');
   if (!cleanId) return [];
 
@@ -626,9 +627,11 @@ export async function fetchBeds24OtaMessages(bookingId: string | number): Promis
 
   try {
     let res = await doFetch(token);
+    tracker?.add(res); // medición de créditos (solo registra)
     if (res.status === 401) {
       token = await getBeds24Token(true);
       res = await doFetch(token);
+      tracker?.add(res);
     }
 
     if (!res.ok) {
@@ -751,9 +754,11 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
       return hasInvalidPhone || wasRequested;
     });
 
+    // Medición de créditos: una fila por ejecución del cron con todas sus consultas de mensajes (una por reserva pendiente)
+    const msgTracker = trackBeds24('cron:ota-messages', 'mensajes', { reservas_pendientes: pendingBookings.length });
     for (const b of pendingBookings) {
       const bId = String(b.id);
-      const messages = await fetchBeds24OtaMessages(bId);
+      const messages = await fetchBeds24OtaMessages(bId, msgTracker);
 
       if (!messages || messages.length === 0) continue;
 
@@ -820,6 +825,8 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
         });
       }
     }
+
+    await msgTracker.flush();
 
     return {
       processedCount: pendingBookings.length,
