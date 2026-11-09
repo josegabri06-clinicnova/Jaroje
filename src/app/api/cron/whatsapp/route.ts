@@ -98,7 +98,7 @@ export async function GET(req: Request) {
     // 1. (La tabla whatsapp_logs ya existe y se gestiona solo desde Supabase: el cron no ejecuta SQL.)
 
     // 2. Obtener reservaciones de Beds24
-    const beds24Reservas = await getBeds24Bookings(true);
+    const beds24Reservas = await getBeds24Bookings(true, false, false, 'cron:whatsapp');
 
     // 3. Obtener reservaciones locales de Supabase
     const { data: localRes } = await supabase

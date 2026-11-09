@@ -35,7 +35,7 @@ export async function POST(req: Request) {
 
     try {
       // --- 1. BEDS24 RESERVATIONS (Llamada interna local, cero loopback HTTP) ---
-      let allReservas = await getBeds24Bookings(true);
+      let allReservas = await getBeds24Bookings(true, false, false, 'copilot');
 
       // --- 1.1 LOCAL RESERVATIONS (Supabase) ---
       try {

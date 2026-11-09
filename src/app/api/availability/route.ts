@@ -116,14 +116,14 @@ export async function GET(req: Request) {
     toDate.setDate(today.getDate() + 1000);
     const arrivalTo = toDate.toISOString().split('T')[0];
 
-    const bookingsRaw = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
+    const bookingsRaw = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo, false, true, 'personal:availability');
     const bookingsData = { data: bookingsRaw };
 
     // Obtener las tarifas del calendario de Beds24 para el rango solicitado
     let beds24RatesMap: Record<string, Record<string, number>> = {};
     try {
       const BEDS24_TOKEN = await getBeds24Token();
-      beds24RatesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, checkIn, checkOut);
+      beds24RatesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, checkIn, checkOut, 'personal:availability');
     } catch (tokenErr) {
       console.warn("[Availability API] Failed to fetch Beds24 token or calendar rates:", tokenErr);
     }
