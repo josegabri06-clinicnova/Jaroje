@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24BookingsForArrival, isWithinFullListingWindow, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
@@ -253,9 +253,31 @@ export async function GET(req: Request) {
       }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
-    // 2. Buscar en Beds24 activo (usando caché para velocidad)
-    const allBeds24 = await getBeds24Bookings(true, false, false);
-    let booking = allBeds24.find(r => String(r.id) === String(bookingId));
+    // 2. Buscar en Beds24 activo.
+    // Camino rápido: la copia de Supabase conoce la fecha de llegada, y una reserva y sus hermanas de grupo comparten siempre esa
+    // fecha, así que se pide a Beds24 solo ese día (una petición) en vez del listado completo (~1.700 reservas, 18+ peticiones en serie
+    // y reescritura de la copia). Es de solo lectura y solo se acepta si la reserva aparece con esa misma fecha; en cualquier otro
+    // caso (reserva nueva sin copia, fecha cambiada, fuera de ventana, error de Beds24) se usa el listado completo de siempre.
+    let allBeds24: any[] = [];
+    let booking: any = undefined;
+    try {
+      const { data: mirrorRow } = await supabase.from('beds24_reservations').select('check_in').eq('id', String(bookingId)).maybeSingle();
+      const arrival = mirrorRow?.check_in ? String(mirrorRow.check_in).slice(0, 10) : '';
+      if (arrival && isWithinFullListingWindow(arrival)) {
+        const sameDay = await getBeds24BookingsForArrival(arrival);
+        const found = sameDay.find(r => String(r.id) === String(bookingId));
+        if (found && String(found.check_in || '').slice(0, 10) === arrival) {
+          booking = found;
+          allBeds24 = sameDay;
+        }
+      }
+    } catch (fastErr) {
+      console.warn('[Portal] Camino rápido de Beds24 no disponible, se usa el listado completo:', (fastErr as Error)?.message);
+    }
+    if (!booking) {
+      allBeds24 = await getBeds24Bookings(true, false, false);
+      booking = allBeds24.find(r => String(r.id) === String(bookingId));
+    }
 
     // 2.1. Fallback: Buscar directamente en Beds24 por ID si no está activo (ej: si está cancelada).
     // Es una ruta pública y cada consulta gasta créditos de Beds24: un número inventado NO puede provocarlas sin límite.
@@ -388,26 +410,27 @@ export async function GET(req: Request) {
     if (!booking && confirmedMissing) rememberBookingNotFound(String(bookingId));
 
     if (booking) {
-      const { data: checkinData } = await supabase
-        .from('checkins')
-        .select('status, document_url, receipt_url')
-        .eq('reservation_id', String(bookingId).toLowerCase().trim())
-        .maybeSingle();
-
-      // Obtener si tiene algún comprobante de transferencia
-      const { data: transferData } = await supabase
-        .from('transfer_receipts')
-        .select('receipt_url')
-        .eq('booking_id', Number(bookingId))
-        .limit(1);
+      // Las tres consultas son independientes: se lanzan a la vez (antes iban una tras otra)
+      const [{ data: checkinData }, { data: transferData }, { data: portalSettings, error: portalSettingsError }] = await Promise.all([
+        supabase
+          .from('checkins')
+          .select('status, document_url, receipt_url')
+          .eq('reservation_id', String(bookingId).toLowerCase().trim())
+          .maybeSingle(),
+        // Obtener si tiene algún comprobante de transferencia
+        supabase
+          .from('transfer_receipts')
+          .select('receipt_url')
+          .eq('booking_id', Number(bookingId))
+          .limit(1),
+        supabase
+          .from('booking_portal_settings')
+          .select('show_card_payment, transfer_account, language')
+          .eq('booking_id', String(bookingId))
+          .maybeSingle(),
+      ]);
 
       const finalReceiptUrl = checkinData?.receipt_url || (transferData && transferData.length > 0 ? transferData[0].receipt_url : null);
-
-      const { data: portalSettings, error: portalSettingsError } = await supabase
-        .from('booking_portal_settings')
-        .select('show_card_payment, transfer_account, language')
-        .eq('booking_id', String(bookingId))
-        .maybeSingle();
 
       let siblingBeds24: any[] = [];
       try {
