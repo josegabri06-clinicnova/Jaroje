@@ -30,6 +30,7 @@ import {
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DEFAULT_FALLBACK_PHOTO } from '@/lib/room-photos';
+import { MyStayCard, type MyStay } from '@/components/MyStayCard';
 
 interface QuoteItem {
   key: string;
@@ -55,15 +56,6 @@ interface QuoteItem {
   totalPrice: number;
   depositRequired: number;
   currency: string;
-}
-
-// Estancia confirmada de este dispositivo (la entrega /api/public/mi-estancia)
-interface MyStay {
-  id: string;
-  room_name: string;
-  check_in: string;
-  check_out: string;
-  phase: 'in_house' | 'upcoming';
 }
 
 function formatMexicanDate(dateStr: string): string {
@@ -1110,31 +1102,13 @@ function ReservarContent() {
             </div>
 
             {myStays.map((stay) => (
-              <div key={stay.id} className="bg-white rounded-2xl p-5 border border-zinc-200/80 shadow-xs space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
-                      stay.phase === 'in_house' ? 'text-emerald-700 bg-emerald-50' : 'text-indigo-600 bg-indigo-50'
-                    }`}>
-                      {stay.phase === 'in_house' ? t.stayInHouse : t.stayUpcoming}
-                    </span>
-                    <h3 className="text-sm font-black text-zinc-900 mt-1.5">{stay.room_name}</h3>
-                  </div>
-                  <span className="text-xs font-mono font-bold text-zinc-400">#{stay.id}</span>
-                </div>
-
-                <div className="text-xs text-zinc-600 border-t border-zinc-100 pt-2">
-                  📅 {formatMexicanDate(stay.check_in)} → {formatMexicanDate(stay.check_out)}
-                </div>
-
-                <a
-                  href={`/public/reserva/${stay.id}${lang === 'en' ? '?lang=en' : ''}`}
-                  className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <span>{t.viewPortalLink}</span>
-                  <ExternalLink size={14} />
-                </a>
-              </div>
+              <MyStayCard
+                key={stay.id}
+                stay={stay}
+                dates={`${formatMexicanDate(stay.check_in)} → ${formatMexicanDate(stay.check_out)}`}
+                href={`/public/reserva/${stay.id}${lang === 'en' ? '?lang=en' : ''}`}
+                labels={{ inHouse: t.stayInHouse, upcoming: t.stayUpcoming, viewPortal: t.viewPortalLink }}
+              />
             ))}
           </div>
         ) : (
