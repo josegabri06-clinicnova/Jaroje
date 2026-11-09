@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check, LogOut, CreditCard, Sparkles, MessageCircle, Copy, Phone } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check, CheckCheck, LogOut, CreditCard, Sparkles, MessageCircle, Copy, Phone } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { uploadGuestFile } from '@/lib/files-client';
 import { format, parseISO } from 'date-fns';
@@ -369,10 +369,60 @@ function ReservasListInner() {
   const [portalTransferAccount, setPortalTransferAccount] = useState('santander');
   const [portalLanguage, setPortalLanguage] = useState('es');
   const [portalMuteNotifications, setPortalMuteNotifications] = useState(false);
+  const [waLogs, setWaLogs] = useState<any[]>([]);
+  const [waLogsLoading, setWaLogsLoading] = useState(false);
+  const [waLogsError, setWaLogsError] = useState<string | null>(null);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [savingNotesOnly, setSavingNotesOnly] = useState(false);
   const [savingPhoneOnly, setSavingPhoneOnly] = useState(false);
   const [phoneSavedSuccess, setPhoneSavedSuccess] = useState(false);
+
+  const formatWaDateTime = (iso?: string | null) => {
+    if (!iso) return '—';
+    try {
+      return new Intl.DateTimeFormat('es-MX', {
+        timeZone: 'America/Mexico_City',
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      }).format(new Date(iso));
+    } catch {
+      return String(iso);
+    }
+  };
+
+  const fetchWaLogs = useCallback(async (resObj: any) => {
+    if (!resObj || !resObj.id || resObj.id === 'walkin' || resObj.status === 'black') {
+      setWaLogs([]);
+      setWaLogsError(null);
+      return;
+    }
+    setWaLogsLoading(true);
+    setWaLogsError(null);
+    try {
+      const memberIds = Array.isArray(resObj.group_members) && resObj.group_members.length > 0
+        ? resObj.group_members.map((m: any) => String(m.id)).join(',')
+        : '';
+      const rawPhone = resObj.guest_phone || resObj.phone || resObj.mobile || resObj.guestPhone || '';
+      const qs = new URLSearchParams({ reservationId: String(resObj.id) });
+      if (memberIds) qs.set('memberIds', memberIds);
+      if (rawPhone) qs.set('phone', String(rawPhone));
+
+      const resp = await fetch(`/api/whatsapp/logs?${qs.toString()}`, { cache: 'no-store' });
+      const json = await resp.json();
+      if (!resp.ok || !json.success) {
+        throw new Error(json.error || 'No se pudo cargar el historial de WhatsApp');
+      }
+      setWaLogs(Array.isArray(json.logs) ? json.logs : []);
+    } catch (err: any) {
+      setWaLogsError(err?.message || 'Error cargando envíos de WhatsApp');
+      setWaLogs([]);
+    } finally {
+      setWaLogsLoading(false);
+    }
+  }, []);
 
   const handleSavePhoneOnly = async () => {
     if (!selectedRes) return;
@@ -545,6 +595,7 @@ function ReservasListInner() {
           console.error("Error loading portal settings:", e);
         }
       })();
+      fetchWaLogs(selectedRes);
     } else {
       setReassigningRes(null);
       setShowReassignModal(false);
@@ -575,8 +626,10 @@ function ReservasListInner() {
       setCheckInSelectedIds([]);
 
       setPortalMuteNotifications(false);
+      setWaLogs([]);
+      setWaLogsError(null);
     }
-  }, [selectedRes]);
+  }, [selectedRes, fetchWaLogs]);
 
   const handleCloseModal = () => {
     setSelectedRes(null);
@@ -5971,6 +6024,89 @@ function ReservasListInner() {
                     </div>
                   )}
 
+                  {/* Historial real de WhatsApp (Meta API) */}
+                  {selectedRes && selectedRes.id !== 'walkin' && selectedRes.status !== 'black' && (
+                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3 mt-2">
+                      <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <MessageCircle size={13} className="text-emerald-600" />
+                          WhatsApp Enviados (Meta)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => fetchWaLogs(selectedRes)}
+                          disabled={waLogsLoading}
+                          title="Actualizar estados de WhatsApp"
+                          className="text-[10px] font-bold text-zinc-500 hover:text-zinc-900 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-100 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          <RefreshCw size={11} className={waLogsLoading ? 'animate-spin' : ''} />
+                          Actualizar
+                        </button>
+                      </div>
+
+                      {waLogsLoading && waLogs.length === 0 ? (
+                        <div className="py-3 flex items-center justify-center gap-2 text-xs text-zinc-400 font-medium">
+                          <Loader2 size={14} className="animate-spin" />
+                          Consultando historial en Meta / sistema...
+                        </div>
+                      ) : waLogsError ? (
+                        <div className="text-[11px] font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-left">
+                          {waLogsError}
+                        </div>
+                      ) : waLogs.length === 0 ? (
+                        <div className="text-[11px] text-zinc-500 bg-zinc-50 border border-zinc-200/70 rounded-xl p-3 text-left">
+                          {isDummyOrInvalidPhone(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '', selectedRes.notes, selectedRes.channel)
+                            ? 'Sin teléfono válido registrado todavía; no se han enviado plantillas por WhatsApp.'
+                            : 'No hay plantillas registradas aún para esta reserva.'}
+                        </div>
+                      ) : (
+                        <div className="space-y-2 text-left">
+                          {waLogs.map((log: any) => {
+                            const st = String(log.status || 'sent').toLowerCase();
+                            const badgeCfg =
+                              st === 'read'
+                                ? { label: 'Leído', cls: 'bg-sky-50 text-sky-700 border-sky-200', icon: <CheckCheck size={11} className="text-sky-600" /> }
+                                : st === 'delivered'
+                                ? { label: 'Entregado', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCheck size={11} className="text-emerald-600" /> }
+                                : st === 'failed'
+                                ? { label: 'Fallido', cls: 'bg-rose-50 text-rose-700 border-rose-200', icon: <AlertCircle size={11} className="text-rose-600" /> }
+                                : st === 'sending'
+                                ? { label: 'Enviando', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: <Clock size={11} className="text-amber-600" /> }
+                                : { label: 'Enviado', cls: 'bg-zinc-100 text-zinc-700 border-zinc-200', icon: <Check size={11} className="text-emerald-600" /> };
+
+                            return (
+                              <div key={log.id} className="bg-zinc-50/70 border border-zinc-200/70 rounded-xl px-3 py-2 space-y-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="text-[12px] font-bold text-zinc-800 leading-snug truncate">{log.label}</p>
+                                    <p className="text-[10px] text-zinc-500 font-medium">
+                                      {formatWaDateTime(log.sent_at)}
+                                      {st === 'read' && log.read_at ? ` · Leído ${formatWaDateTime(log.read_at)}` : ''}
+                                      {st === 'delivered' && log.delivered_at ? ` · Entregado ${formatWaDateTime(log.delivered_at)}` : ''}
+                                    </p>
+                                  </div>
+                                  <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${badgeCfg.cls}`}>
+                                    {badgeCfg.icon}
+                                    {badgeCfg.label}
+                                  </span>
+                                </div>
+                                {st === 'failed' && log.error_message && (
+                                  <p className="text-[10px] text-rose-700 bg-rose-50/90 border border-rose-200/70 rounded-lg px-2 py-1">
+                                    {log.error_message}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <p className="text-[10px] text-zinc-400 leading-relaxed text-left pt-0.5">
+                        Las plantillas enviadas por API Cloud pueden no mostrarse en WhatsApp Business del celular aunque Meta sí las haya entregado al huésped.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Registrar Anticipo Button & Panel */}
                   {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
                     <div className="mt-3">
@@ -7210,6 +7346,7 @@ function ReservasListInner() {
                                 }]);
                               } catch (_) {}
 
+                              fetchWaLogs(selectedRes);
                               alert(`✅ Plantilla oficial "${apiTemplateKey}" enviada exitosamente por WhatsApp Meta (${portalLanguage.toUpperCase()}).`);
                             } else {
                               alert(`⚠️ No se pudo enviar por API: ${data.error || 'Error desconocido'}.\n\nPuedes usar el botón "Copiar y Enviar Manual" abajo.`);

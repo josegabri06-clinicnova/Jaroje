@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { handleInboundMessage } from '@/lib/inbound-handler';
-import { normalizePhone } from '@/lib/whatsapp';
+import { normalizePhone, updateWhatsAppDeliveryStatus } from '@/lib/whatsapp';
 import { maskPhone, describeText } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
@@ -162,6 +162,11 @@ export async function POST(req: Request) {
           for (const st of val.statuses) {
             if (st.status === 'failed') {
               console.error(`[Meta Webhook POST] ⚠️ Fallo de entrega a ${maskPhone(st.recipient_id)}:`, JSON.stringify(st.errors || []));
+            }
+            try {
+              await updateWhatsAppDeliveryStatus(st);
+            } catch (stErr) {
+              console.warn('[Meta Webhook POST] Error persistiendo estado de entrega:', stErr);
             }
           }
         }

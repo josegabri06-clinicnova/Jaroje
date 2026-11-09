@@ -1,7 +1,7 @@
 import { supabaseAdmin as supabase } from './supabase-admin';
 import { normalizePhone } from '@/lib/phone';
 import { maskPhone } from '@/lib/log-mask';
-import { trackBeds24 } from '@/lib/beds24-credits';
+import { trackBeds24, beds24FetchTracked } from '@/lib/beds24-credits';
 
 // ─── SERVICIO CENTRALIZADO DE BEDS24 JAROJE ─────────────────────────────────────
 // Fuente de verdad para reservas del Hotel Condominios Jaroje.
@@ -1643,37 +1643,163 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       }
       console.log(`[Beds24 Sync Lote] Sincronizadas con éxito ${upsertRows.length} reservas en Supabase.`);
 
-      // --- AUTOLIMPIEZA DE CANCELADAS/ELIMINADAS ---
+      // --- AUTOLIMPIEZA DE CANCELADAS/ELIMINADAS (CON VENTANA DE GRACIA + VERIFICACIÓN INDIVIDUAL EN BEDS24) ---
       const activeIds = new Set(mappedBookings.filter(b => b.status !== 'cancelled').map(b => String(b.id)));
-      
+      const mappedCancelledIds = new Set(mappedBookings.filter(b => b.status === 'cancelled').map(b => String(b.id)));
+
       const { data: dbActiveInRange, error: dbErr } = await supabase
         .from('beds24_reservations')
-        .select('id, guest_name, check_in')
+        .select('id, guest_name, check_in, created_at, updated_at')
         .neq('status', 'cancelled')
         .gte('check_in', arrivalFrom)
         .lte('check_in', arrivalTo);
 
       if (!dbErr && dbActiveInRange) {
-        const goneBookings = dbActiveInRange.filter(dbB => !activeIds.has(String(dbB.id)));
-        if (goneBookings.length > 0) {
-          console.log(`[Beds24 Sync Lote] 🔍 Detectadas ${goneBookings.length} reservas que ya no están activas en Beds24. Marcándolas como canceladas:`, goneBookings.map(b => `${b.guest_name} (ID: ${b.id})`));
-          
-          const goneIds = goneBookings.map(b => String(b.id));
-          const { error: updateErr } = await supabase
-            .from('beds24_reservations')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .in('id', goneIds);
+        const rawGoneBookings = dbActiveInRange.filter(dbB => !activeIds.has(String(dbB.id)));
 
-          if (updateErr) {
-            console.error(`[Beds24 Sync Lote] Error al actualizar estado de reservas canceladas/eliminadas:`, updateErr);
-          } else {
-            // Limpiar y revertir transacciones en Finanzas para cada reserva detectada como cancelada
-            for (const goneId of goneIds) {
-              try {
-                const { deleteCancelledReservationFinances } = await import('@/lib/finances');
-                await deleteCancelledReservationFinances(goneId, 'Reserva no encontrada en Beds24 (marcada como cancelada)');
-              } catch (finErr) {
-                console.error(`[Beds24 Sync Lote] Error limpiando finanzas para reserva ${goneId}:`, finErr);
+        if (rawGoneBookings.length > 0) {
+          const GRACE_WINDOW_MS = 10 * 60 * 1000;
+          const nowMs = Date.now();
+
+          const candidatesToVerify = rawGoneBookings.filter((dbB: any) => {
+            const idStr = String(dbB.id);
+            // Si ya vino explícitamente cancelada en el lote actual, pasa directo a verificación/limpieza
+            if (mappedCancelledIds.has(idStr)) return true;
+
+            if (!/^\d+$/.test(idStr)) {
+              return false;
+            }
+
+            const createdMs = dbB.created_at ? Date.parse(dbB.created_at) : NaN;
+            const updatedMs = dbB.updated_at ? Date.parse(dbB.updated_at) : NaN;
+            const latestTouchMs = Math.max(
+              isNaN(createdMs) ? 0 : createdMs,
+              isNaN(updatedMs) ? 0 : updatedMs
+            );
+
+            if (latestTouchMs > 0 && (nowMs - latestTouchMs) < GRACE_WINDOW_MS) {
+              console.log(`[Beds24 Sync Lote] 🛡️ Reserva reciente protegida por ventana de gracia (<10 min): ${dbB.guest_name} (ID: ${idStr})`);
+              return false;
+            }
+            return true;
+          });
+
+          const confirmedGoneBookings: any[] = [];
+
+          if (candidatesToVerify.length > 0) {
+            // Dividir entre ya marcadas como canceladas en este fetch vs candidatas a comprobar 1 a 1 en Beds24
+            const needRemoteCheck: any[] = [];
+            for (const cand of candidatesToVerify) {
+              if (mappedCancelledIds.has(String(cand.id))) {
+                confirmedGoneBookings.push(cand);
+              } else {
+                needRemoteCheck.push(cand);
+              }
+            }
+
+            if (needRemoteCheck.length > 0) {
+              let verifyToken = await getBeds24Token();
+              const verifyChunk = async (chunkIds: string[], token: string): Promise<any[] | null> => {
+                const query = chunkIds.map(id => `id=${encodeURIComponent(id)}`).join('&');
+                const verifyUrl = `https://api.beds24.com/v2/bookings?${query}&includeCancelled=true`;
+                let res = await beds24FetchTracked(
+                  `${origin}:verify_gone`,
+                  'verificacion',
+                  verifyUrl,
+                  {
+                    method: 'GET',
+                    headers: { 'token': token, 'Content-Type': 'application/json' },
+                    cache: 'no-store'
+                  },
+                  { ids: chunkIds }
+                );
+                if (res.status === 429) {
+                  await new Promise(r => setTimeout(r, 2500));
+                  res = await beds24FetchTracked(
+                    `${origin}:verify_gone_reintento`,
+                    'verificacion',
+                    verifyUrl,
+                    {
+                      method: 'GET',
+                      headers: { 'token': token, 'Content-Type': 'application/json' },
+                      cache: 'no-store'
+                    },
+                    { ids: chunkIds }
+                  );
+                }
+                if (res.status === 401 || res.status === 403) {
+                  throw new Error('TOKEN_EXPIRED');
+                }
+                if (!res.ok) {
+                  console.warn(`[Beds24 Sync Lote] ⚠️ Verificación directa Beds24 falló con HTTP ${res.status}. Se aborta cancelación preventiva para proteger finanzas.`);
+                  return null;
+                }
+                const json = await res.json();
+                if (!json || json.success !== true || !Array.isArray(json.data)) {
+                  console.warn(`[Beds24 Sync Lote] ⚠️ Respuesta inesperada verificando IDs en Beds24. Se protege DB y finanzas.`);
+                  return null;
+                }
+                return json.data;
+              };
+
+              for (let i = 0; i < needRemoteCheck.length; i += 20) {
+                const chunk = needRemoteCheck.slice(i, i + 20);
+                const chunkIds = chunk.map((c: any) => String(c.id));
+                let remoteRows: any[] | null = null;
+                try {
+                  remoteRows = await verifyChunk(chunkIds, verifyToken);
+                } catch (verErr: any) {
+                  if (verErr?.message === 'TOKEN_EXPIRED') {
+                    try {
+                      verifyToken = await getBeds24Token(true);
+                      remoteRows = await verifyChunk(chunkIds, verifyToken);
+                    } catch (retryErr) {
+                      console.warn('[Beds24 Sync Lote] ⚠️ Error reintentando verificación tras refrescar token:', retryErr);
+                      remoteRows = null;
+                    }
+                  } else {
+                    console.warn('[Beds24 Sync Lote] ⚠️ Error de red verificando IDs en Beds24:', verErr);
+                    remoteRows = null;
+                  }
+                }
+
+                // Fail-safe: si no pudimos verificar con certeza ante Beds24, NO cancelar ni revertir finanzas
+                if (!remoteRows) continue;
+
+                const remoteMap = new Map(remoteRows.map((rb: any) => [String(rb.id), rb]));
+                for (const cand of chunk) {
+                  const idStr = String(cand.id);
+                  const remote = remoteMap.get(idStr);
+                  if (!remote || String(remote.status) === '0' || remote.status === 'cancelled') {
+                    confirmedGoneBookings.push(cand);
+                  } else {
+                    console.log(`[Beds24 Sync Lote] 🛡️ Reserva ${cand.guest_name} (ID: ${idStr}) sigue ACTIVA en Beds24 (status=${remote.status}, arrival=${remote.arrival}). Protegida contra falsa cancelación.`);
+                  }
+                }
+              }
+            }
+          }
+
+          if (confirmedGoneBookings.length > 0) {
+            console.log(`[Beds24 Sync Lote] 🔍 Confirmadas ${confirmedGoneBookings.length} reservas canceladas/eliminadas en Beds24:`, confirmedGoneBookings.map(b => `${b.guest_name} (ID: ${b.id})`));
+
+            const goneIds = confirmedGoneBookings.map(b => String(b.id));
+            const { error: updateErr } = await supabase
+              .from('beds24_reservations')
+              .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+              .in('id', goneIds);
+
+            if (updateErr) {
+              console.error(`[Beds24 Sync Lote] Error al actualizar estado de reservas canceladas/eliminadas:`, updateErr);
+            } else {
+              // Limpiar y revertir transacciones en Finanzas únicamente para reservas confirmadas como canceladas
+              for (const goneId of goneIds) {
+                try {
+                  const { deleteCancelledReservationFinances } = await import('@/lib/finances');
+                  await deleteCancelledReservationFinances(goneId, 'Reserva confirmada cancelada/eliminada en Beds24');
+                } catch (finErr) {
+                  console.error(`[Beds24 Sync Lote] Error limpiando finanzas para reserva ${goneId}:`, finErr);
+                }
               }
             }
           }

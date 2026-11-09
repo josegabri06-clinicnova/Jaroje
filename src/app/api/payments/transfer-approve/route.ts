@@ -485,12 +485,7 @@ export async function POST(req: Request) {
           }
 
           if (waRes?.success) {
-            // Registrar en whatsapp_logs para evitar que el cron reenvíe mensajes
-            await supabase.from('whatsapp_logs').insert([{
-              reservation_id: String(bookingId),
-              template_name: templateLogged,
-              phone: phone
-            }]);
+            // sendWhatsAppTemplate ya registró el envío en whatsapp_logs; aquí solo logueamos confirmación
             console.log(`[Approve Transfer] WhatsApp ${templateLogged} enviado y registrado en logs (reserva ${bookingId})`);
           } else if (waRes) {
             console.warn('[Approve Transfer] WhatsApp send template failed:', waRes.error);

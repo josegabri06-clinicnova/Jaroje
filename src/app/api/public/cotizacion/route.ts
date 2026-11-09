@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { normalizePhone, sendTemplate_Cotizacion, sendWhatsAppCTAButtonMessage, isSpanishOrLatamPhone } from '@/lib/whatsapp';
+import { normalizePhone, sendTemplate_Cotizacion, sendWhatsAppCTAButtonMessage, isSpanishOrLatamPhone, upsertConversationMessage } from '@/lib/whatsapp';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { checkBookingWindow } from '@/lib/booking-window';
 import { getBeds24Token, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
@@ -265,16 +265,8 @@ export async function POST(req: Request) {
       createdAt: nowIso
     };
 
-    // 1. Guardar la cotización en la conversación de este teléfono
+    // 1. Guardar la cotización en la conversación de este teléfono (consolidado)
     try {
-      const { data: existingConv } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('guest_phone', cleanPhone)
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
       const quoteMessage = {
         role_guest: null,
         role_bot: `🎉 ¡Cotización generada! Total: $${finalTotal.toLocaleString()} MXN (50% anticipo: $${finalDeposit.toLocaleString()} MXN). Pendiente de formalizar.`,
@@ -283,29 +275,16 @@ export async function POST(req: Request) {
         timestamp: nowIso
       };
 
-      if (existingConv) {
-        const updatedMessages = [...(existingConv.messages || []), quoteMessage];
-        await supabase
-          .from('conversations')
-          .update({
-            messages: updatedMessages,
-            timestamp: nowIso
-          })
-          .eq('id', existingConv.id);
-      } else {
-        await supabase
-          .from('conversations')
-          .insert({
-            id: `wa_${Date.now()}`,
-            guest_name: 'Cliente Cotización',
-            guest_phone: cleanPhone,
-            timestamp: nowIso,
-            booking_created: false,
-            resolved: false,
-            human_mode: false,
-            messages: [quoteMessage]
-          });
-      }
+      await upsertConversationMessage({
+        phone: cleanPhone,
+        guestName: 'Cliente Cotización',
+        message: quoteMessage,
+        defaultHumanMode: false,
+        updateFields: {
+          timestamp: nowIso,
+          archived: false
+        }
+      });
     } catch (dbErr) {
       console.error("[Cotizacion API] Error guardando cotización en BD:", dbErr);
     }

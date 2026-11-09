@@ -118,14 +118,8 @@ export async function POST(req: Request) {
               ? await sendTemplate3_ReservacionConfirmada(bookingForWA)
               : await sendTemplate11_PagoAnticipoRecibido(bookingForWA);
 
-            if (waRes?.success) {
-              await supabase.from('whatsapp_logs').insert([{
-                reservation_id: String(localRes.id),
-                template_name: tmplToSend,
-                phone: localRes.phone,
-                sent_at: new Date().toISOString(),
-                status: 'sent'
-              }]);
+            if (!waRes?.success) {
+              console.warn(`[Payment Local] Falló envío de plantilla ${tmplToSend}:`, waRes?.error);
             }
           } catch (waErr) {
             console.error("Error enviando WhatsApp en payment local:", waErr);
@@ -251,14 +245,8 @@ export async function POST(req: Request) {
               ? await sendTemplate3_ReservacionConfirmada(booking)
               : await sendTemplate11_PagoAnticipoRecibido(booking);
 
-            if (waRes?.success) {
-              await supabase.from('whatsapp_logs').insert([{
-                reservation_id: String(bookId),
-                template_name: tmplToSend,
-                phone: guestPhone,
-                sent_at: new Date().toISOString(),
-                status: 'sent'
-              }]);
+            if (!waRes?.success) {
+              console.warn(`[Payment Beds24] Falló envío de plantilla ${tmplToSend}:`, waRes?.error);
             }
           }
         } catch (waErr) {

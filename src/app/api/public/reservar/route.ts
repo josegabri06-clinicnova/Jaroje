@@ -11,7 +11,7 @@ import {
   fetchBeds24RatesMap,
   getAverageRatesForDates
 } from '@/lib/beds24';
-import { normalizePhone, cleanPhoneForMeta, sendTemplate1_SolicitudRecibida } from '@/lib/whatsapp';
+import { normalizePhone, cleanPhoneForMeta, sendTemplate1_SolicitudRecibida, findConversationsByPhone, upsertConversationMessage } from '@/lib/whatsapp';
 import { checkBookingWindow } from '@/lib/booking-window';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
@@ -748,19 +748,15 @@ export async function POST(req: Request) {
       console.error("[Reservar API] Error al disparar Plantilla 1 de WhatsApp:", waErr);
     }
 
-    // 8.1. Actualizar la cotización pendiente en 'conversations' a confirmed
+    // 8.1. Actualizar la cotización pendiente en 'conversations' a confirmed y consolidar
     try {
-      const { data: conv } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('guest_phone', cleanPhone)
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { primary: conv, duplicates } = await findConversationsByPhone(cleanPhone);
+      const allConvs = [conv, ...duplicates].filter(Boolean);
 
-      if (conv && Array.isArray(conv.messages)) {
+      for (const c of allConvs) {
+        if (!Array.isArray(c.messages)) continue;
         let changed = false;
-        const updatedMessages = conv.messages.map((m: any) => {
+        const updatedMessages = c.messages.map((m: any) => {
           if (m.quote_data && m.quote_data.status === 'pending_name') {
             changed = true;
             return {
@@ -777,13 +773,25 @@ export async function POST(req: Request) {
         if (changed) {
           await supabase
             .from('conversations')
-            .update({ 
+            .update({
               messages: updatedMessages,
               guest_name: guestName.trim(),
-              booking_created: true 
+              booking_created: true
             })
-            .eq('id', conv.id);
+            .eq('id', c.id);
         }
+      }
+
+      if (allConvs.length > 0) {
+        await upsertConversationMessage({
+          phone: cleanPhone,
+          guestName: guestName.trim(),
+          defaultHumanMode: true,
+          preferProvidedName: true,
+          updateFields: {
+            booking_created: true
+          }
+        });
       }
     } catch (qUpdErr) {
       console.warn("[Reservar API] Error actualizando pendingQuote a confirmed:", qUpdErr);

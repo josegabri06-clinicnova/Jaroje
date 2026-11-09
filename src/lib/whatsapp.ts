@@ -166,6 +166,382 @@ export async function isWhatsAppAutomationsPaused(): Promise<boolean> {
   }
 }
 
+export const WHATSAPP_STATUS_RANK: Record<string, number> = {
+  sending: 0,
+  sent: 1,
+  delivered: 2,
+  read: 3,
+  failed: 99,
+};
+
+function isGenericGuestName(name?: string | null): boolean {
+  if (!name) return true;
+  const trimmed = String(name).trim();
+  if (!trimmed || trimmed.length <= 2) return true;
+  if (/^\d+$/.test(trimmed)) return true;
+  const lower = trimmed.toLowerCase();
+  return [
+    'huésped',
+    'huesped',
+    'guest',
+    'cliente',
+    'cliente cotización',
+    'cliente cotizacion',
+    'contacto personal',
+    'desconocido',
+  ].includes(lower);
+}
+
+export function pickBestGuestName(candidates: (string | null | undefined)[], fallback: string): string {
+  const realNames = candidates
+    .map(c => (c ? String(c).trim() : ''))
+    .filter(c => c && !isGenericGuestName(c));
+  if (realNames.length > 0) {
+    return realNames.sort((a, b) => b.length - a.length)[0];
+  }
+  const nonEmpty = candidates.map(c => (c ? String(c).trim() : '')).find(Boolean);
+  return nonEmpty || fallback;
+}
+
+function dedupeAndSortMessages(msgLists: any[][]): any[] {
+  const byKey = new Map<string, any>();
+  for (const list of msgLists) {
+    if (!Array.isArray(list)) continue;
+    for (const m of list) {
+      if (!m || typeof m !== 'object') continue;
+      const key = m.wamid
+        ? `wamid:${m.wamid}`
+        : `${m.timestamp || ''}|${m.role_guest || ''}|${m.role_bot || ''}|${m.role_manager || ''}|${m.template_name || ''}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, m);
+      } else {
+        byKey.set(key, { ...existing, ...m });
+      }
+    }
+  }
+  return Array.from(byKey.values()).sort((a, b) => {
+    const tA = Date.parse(a.timestamp || '') || 0;
+    const tB = Date.parse(b.timestamp || '') || 0;
+    return tA - tB;
+  });
+}
+
+export async function findConversationsByPhone(rawPhone: string): Promise<{
+  canonicalPhone: string;
+  primary: any | null;
+  duplicates: any[];
+}> {
+  const canonical = normalizePhone(rawPhone) || String(rawPhone || '').replace(/\D/g, '');
+  if (!canonical || canonical === 'desconocido') {
+    return { canonicalPhone: canonical, primary: null, duplicates: [] };
+  }
+
+  const digits = canonical.replace(/\D/g, '');
+  const last10 = digits.length >= 10 ? digits.slice(-10) : '';
+
+  let rows: any[] = [];
+  if (last10.length >= 10) {
+    const { data } = await supabase
+      .from('conversations')
+      .select('*')
+      .ilike('guest_phone', `%${last10}`)
+      .order('timestamp', { ascending: false })
+      .limit(20);
+    rows = data || [];
+  } else {
+    const { data } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('guest_phone', canonical)
+      .order('timestamp', { ascending: false })
+      .limit(20);
+    rows = data || [];
+  }
+
+  const matched = rows.filter(r => {
+    const rCanon = normalizePhone(r.guest_phone || '');
+    if (rCanon && rCanon === canonical) return true;
+    const rDigits = String(r.guest_phone || '').replace(/\D/g, '');
+    return last10.length === 10 && rDigits.slice(-10) === last10 && rDigits.length <= 13;
+  });
+
+  if (matched.length === 0) {
+    return { canonicalPhone: canonical, primary: null, duplicates: [] };
+  }
+
+  matched.sort((a, b) => {
+    const lenA = Array.isArray(a.messages) ? a.messages.length : 0;
+    const lenB = Array.isArray(b.messages) ? b.messages.length : 0;
+    if (lenB !== lenA) return lenB - lenA;
+    if (Boolean(b.booking_created) !== Boolean(a.booking_created)) {
+      return Boolean(b.booking_created) ? 1 : -1;
+    }
+    return (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0);
+  });
+
+  return {
+    canonicalPhone: canonical,
+    primary: matched[0],
+    duplicates: matched.slice(1),
+  };
+}
+
+export async function upsertConversationMessage(opts: {
+  phone: string;
+  guestName?: string | null;
+  message?: Record<string, any> | null;
+  messagesToAppend?: Record<string, any>[];
+  updateFields?: Record<string, any>;
+  defaultHumanMode?: boolean;
+  preferProvidedName?: boolean;
+}): Promise<{ conversationId: string | null }> {
+  const nowIso = new Date().toISOString();
+  const toAppend = [
+    ...(opts.message ? [opts.message] : []),
+    ...(opts.messagesToAppend || [])
+  ];
+
+  const applyMergeAndSave = async () => {
+    const { canonicalPhone, primary, duplicates } = await findConversationsByPhone(opts.phone);
+    if (!canonicalPhone) return { conversationId: null };
+
+    if (primary) {
+      const mergedMessages = dedupeAndSortMessages([
+        primary.messages || [],
+        ...duplicates.map(d => d.messages || []),
+        toAppend
+      ]);
+      const allNames = opts.preferProvidedName && opts.guestName && !isGenericGuestName(opts.guestName)
+        ? [opts.guestName, primary.guest_name, ...duplicates.map(d => d.guest_name)]
+        : [primary.guest_name, ...duplicates.map(d => d.guest_name), opts.guestName];
+      const bestName = pickBestGuestName(allNames, canonicalPhone);
+      const latestMsgTs = mergedMessages.length > 0
+        ? mergedMessages[mergedMessages.length - 1]?.timestamp || nowIso
+        : nowIso;
+      const bestTimestamp = [primary.timestamp, ...duplicates.map(d => d.timestamp), latestMsgTs]
+        .filter(Boolean)
+        .sort((a, b) => (Date.parse(b) || 0) - (Date.parse(a) || 0))[0] || nowIso;
+
+      const updatePayload: Record<string, any> = {
+        guest_phone: canonicalPhone,
+        guest_name: bestName,
+        messages: mergedMessages,
+        timestamp: opts.updateFields?.timestamp || bestTimestamp,
+        booking_created: Boolean(primary.booking_created || duplicates.some(d => d.booking_created) || opts.updateFields?.booking_created),
+        ...opts.updateFields,
+      };
+
+      const { error: updErr } = await supabase
+        .from('conversations')
+        .update(updatePayload)
+        .eq('id', primary.id);
+
+      if (!updErr && duplicates.length > 0) {
+        const dupIds = duplicates.map(d => d.id).filter(Boolean);
+        if (dupIds.length > 0) {
+          await supabase.from('conversations').delete().in('id', dupIds);
+        }
+      }
+      return { conversationId: primary.id };
+    }
+
+    const deterministicId = `wa_${canonicalPhone}`;
+    const msgTimestamp = opts.updateFields?.timestamp || toAppend[toAppend.length - 1]?.timestamp || nowIso;
+    const insertPayload: Record<string, any> = {
+      id: deterministicId,
+      guest_name: pickBestGuestName([opts.guestName], canonicalPhone),
+      guest_phone: canonicalPhone,
+      timestamp: msgTimestamp,
+      booking_created: false,
+      resolved: false,
+      archived: false,
+      human_mode: opts.defaultHumanMode ?? true,
+      messages: toAppend,
+      ...opts.updateFields,
+    };
+
+    const { error: insErr } = await supabase.from('conversations').insert(insertPayload);
+    if (!insErr) {
+      return { conversationId: deterministicId };
+    }
+
+    if (insErr.code === '23505' || String(insErr.message || '').toLowerCase().includes('duplicate')) {
+      const retry = await findConversationsByPhone(opts.phone);
+      if (retry.primary) {
+        const mergedMessages = dedupeAndSortMessages([
+          retry.primary.messages || [],
+          ...retry.duplicates.map(d => d.messages || []),
+          toAppend,
+        ]);
+        const retryNames = opts.preferProvidedName && opts.guestName && !isGenericGuestName(opts.guestName)
+          ? [opts.guestName, retry.primary.guest_name, ...retry.duplicates.map(d => d.guest_name)]
+          : [retry.primary.guest_name, ...retry.duplicates.map(d => d.guest_name), opts.guestName];
+        const retryLatestTs = mergedMessages.length > 0
+          ? mergedMessages[mergedMessages.length - 1]?.timestamp || nowIso
+          : nowIso;
+        const retryBestTs = [retry.primary.timestamp, ...retry.duplicates.map(d => d.timestamp), retryLatestTs]
+          .filter(Boolean)
+          .sort((a, b) => (Date.parse(b) || 0) - (Date.parse(a) || 0))[0] || nowIso;
+        const { error: retryUpdErr } = await supabase
+          .from('conversations')
+          .update({
+            guest_phone: retry.canonicalPhone,
+            messages: mergedMessages,
+            guest_name: pickBestGuestName(retryNames, canonicalPhone),
+            timestamp: opts.updateFields?.timestamp || retryBestTs,
+            booking_created: Boolean(retry.primary.booking_created || retry.duplicates.some(d => d.booking_created) || opts.updateFields?.booking_created),
+            ...opts.updateFields,
+          })
+          .eq('id', retry.primary.id);
+        if (!retryUpdErr && retry.duplicates.length > 0) {
+          const dupIds = retry.duplicates.map(d => d.id).filter(Boolean);
+          if (dupIds.length > 0) {
+            await supabase.from('conversations').delete().in('id', dupIds);
+          }
+        }
+        return { conversationId: retry.primary.id };
+      }
+    }
+    throw insErr;
+  };
+
+  try {
+    return await applyMergeAndSave();
+  } catch (err) {
+    console.error('[WhatsApp Conversations] Error consolidando/guardando conversación:', err);
+    return { conversationId: null };
+  }
+}
+
+export async function updateWhatsAppDeliveryStatus(st: {
+  id?: string;
+  status?: string;
+  timestamp?: string;
+  recipient_id?: string;
+  errors?: any[];
+}): Promise<{ matchedConversation: boolean; matchedLog: boolean }> {
+  const wamid = String(st?.id || '').trim();
+  const nextStatus = String(st?.status || '').toLowerCase().trim();
+  const rawRecipient = String(st?.recipient_id || '').trim();
+
+  if (!nextStatus || !['sent', 'delivered', 'read', 'failed'].includes(nextStatus)) {
+    return { matchedConversation: false, matchedLog: false };
+  }
+
+  const statusIso = st.timestamp && !isNaN(Number(st.timestamp))
+    ? new Date(Number(st.timestamp) * 1000).toISOString()
+    : new Date().toISOString();
+
+  const firstError = Array.isArray(st.errors) && st.errors.length > 0 ? st.errors[0] : null;
+  const errorCode = firstError?.code || null;
+  const errorMessage = firstError
+    ? (firstError.error_data?.details || firstError.message || firstError.title || 'Fallo de entrega en Meta')
+    : null;
+
+  const nextRank = WHATSAPP_STATUS_RANK[nextStatus] ?? 0;
+
+  let matchedConversation = false;
+  let matchedLog = false;
+  let matchedReservationId: string | null = null;
+  let matchedTemplateName: string | null = null;
+
+  try {
+    const { canonicalPhone, primary, duplicates } = rawRecipient
+      ? await findConversationsByPhone(rawRecipient)
+      : { canonicalPhone: '', primary: null, duplicates: [] };
+
+    const allConvs = [primary, ...duplicates].filter(Boolean);
+    for (const conv of allConvs) {
+      if (!Array.isArray(conv.messages)) continue;
+      let modified = false;
+      const updatedMessages = conv.messages.map((m: any) => {
+        if (!m || !wamid || m.wamid !== wamid) return m;
+        modified = true;
+        matchedConversation = true;
+        if (m.reservation_id) matchedReservationId = String(m.reservation_id);
+        if (m.template_name) matchedTemplateName = String(m.template_name);
+
+        const curRank = WHATSAPP_STATUS_RANK[String(m.delivery_status || 'sent').toLowerCase()] ?? 1;
+        const shouldAdvanceStatus = nextStatus === 'failed' || nextRank > curRank;
+
+        const patched: Record<string, any> = {
+          ...m,
+          delivery_status: shouldAdvanceStatus ? nextStatus : (m.delivery_status || nextStatus),
+        };
+        if (nextStatus === 'sent' && !patched.sent_at) patched.sent_at = statusIso;
+        if (nextStatus === 'delivered' && !patched.delivered_at) patched.delivered_at = statusIso;
+        if (nextStatus === 'read' && !patched.read_at) patched.read_at = statusIso;
+        if (nextStatus === 'failed') {
+          patched.failed_at = statusIso;
+          if (errorCode) patched.error_code = errorCode;
+          if (errorMessage) patched.error_message = errorMessage;
+        }
+        return patched;
+      });
+
+      if (modified) {
+        await supabase
+          .from('conversations')
+          .update({ messages: updatedMessages })
+          .eq('id', conv.id);
+      }
+    }
+
+    if (matchedReservationId && matchedTemplateName) {
+      const { data: targetLogs } = await supabase
+        .from('whatsapp_logs')
+        .select('id, status')
+        .eq('reservation_id', matchedReservationId)
+        .eq('template_name', matchedTemplateName)
+        .order('sent_at', { ascending: false })
+        .limit(1);
+
+      const targetLog = targetLogs?.[0];
+      if (targetLog?.id) {
+        const curLogRank = WHATSAPP_STATUS_RANK[String(targetLog.status || 'sent').toLowerCase()] ?? 1;
+        if (nextStatus === 'failed' || nextRank > curLogRank) {
+          await supabase
+            .from('whatsapp_logs')
+            .update({ status: nextStatus })
+            .eq('id', targetLog.id);
+        }
+        matchedLog = true;
+      }
+    } else if (canonicalPhone && (nextStatus === 'failed' || nextStatus === 'delivered' || nextStatus === 'read')) {
+      const lookbackMs = nextStatus === 'failed' ? 30 * 60 * 1000 : 10 * 60 * 1000;
+      const cutoffIso = new Date(Date.now() - lookbackMs).toISOString();
+      const last10 = canonicalPhone.replace(/\D/g, '').slice(-10);
+      if (last10.length === 10) {
+        const { data: recentLogs } = await supabase
+          .from('whatsapp_logs')
+          .select('id, status, phone, sent_at')
+          .ilike('phone', `%${last10}`)
+          .gte('sent_at', cutoffIso)
+          .order('sent_at', { ascending: false })
+          .limit(3);
+
+        const candidates = (recentLogs || []).filter(r => normalizePhone(r.phone) === canonicalPhone);
+        if (candidates.length === 1 || (nextStatus === 'failed' && candidates.length > 0)) {
+          const logRow = candidates[0];
+          const curLogRank = WHATSAPP_STATUS_RANK[String(logRow.status || 'sent').toLowerCase()] ?? 1;
+          if (nextStatus === 'failed' || nextRank > curLogRank) {
+            await supabase
+              .from('whatsapp_logs')
+              .update({ status: nextStatus })
+              .eq('id', logRow.id);
+          }
+          matchedLog = true;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[WhatsApp Status Webhook] Error actualizando estado de entrega:', err);
+  }
+
+  return { matchedConversation, matchedLog };
+}
+
 // Envía una plantilla genérica de WhatsApp llamando a Meta Cloud API
 export async function sendWhatsAppTemplate(
   phone: string,
@@ -485,6 +861,7 @@ export async function sendWhatsAppTemplate(
     let response: Response;
     let status: number;
     let resBody: any;
+    let resolvedMetaTemplate = templateName;
 
     {
       // ── DRIVER META CLOUD API (RESPALDO AUTOMÁTICO O PROVEEDOR PRINCIPAL) ──
@@ -521,6 +898,7 @@ export async function sendWhatsAppTemplate(
         'portal_huesped_link_en': 'portal_huesped_link',
       };
       const actualMetaTemplate = META_TEMPLATE_ALIASES[templateName] || templateName;
+      resolvedMetaTemplate = actualMetaTemplate;
 
       // Header de imagen para plantillas con portada multimedia (Conmutador y WhatsApp Directo)
       if (
@@ -878,56 +1256,41 @@ export async function sendWhatsAppTemplate(
             return `🎉 ¡Excelente! 🎉\n\nHemos recibido tu cotización. Para confirmar tu reserva, necesitamos que introduzcas tu nombre y apellidos.\n\nPulsa el botón para completar tu reserva 👇\n\n[Botón: Confirmar Reserva]`;
           case 'cotizacion_reserva':
             return `🏨 Cotización Condominios Jaroje\n\n(Sujeta a disponibilidad a la hora de Reservar)\n\n✅ *Tarifa de Miembro Jaroje aplicada*\n\n📅 *Check in:* ${params[0] || ''}\n   *Check out:* ${params[1] || ''} (${params[2] || ''})\n\n👥 *Huéspedes:* ${params[3] || ''}\n\n🛏️ *Alojamientos seleccionados:*\n${params[4] || ''}\n\n👤 *Personas adicionales:* ${params[5] || ''}\n\n💰 *DESGLOSE TOTAL:*\n${params[6] || ''}\n• *Total de la estancia (impuestos incluidos):* ${params[7] || ''}\n• *Anticipo requerido para apartar (50%):* ${params[8] || ''}\n• *Saldo restante al check-in (50%):* ${params[9] || ''}\n\n[Botón: ¡¡¡ RESERVA YA !!!]`;
+          case 'presentacion_cliente_jaroje_2':
+            return `¡Hola, ${name}! 🌴\n\nTe damos la más cálida bienvenida a Jaroje Condominios. Es un placer tenerte con nosotros y ser parte de tu estancia.\n\nAquí tienes información útil para iniciar tu estancia:\n• Wi-Fi: Red "Jaroje_Guest" (Sin contraseña).\n• Servicios: Piscina, terraza y estacionamiento incluidos.\n\nCualquier duda o solicitud especial, escríbenos directamente aquí. ¡Disfruta tu estancia!`;
           default:
             return `[Plantilla: ${tName}]` + (params.length > 0 ? ` (Parámetros: ${params.join(', ')})` : '');
         }
       };
 
       const summaryText = getTemplateText(templateName, parameters).replace('[BOOKID]', String(bookingId || ''));
+      const wamid: string | null = resBody?.messages?.[0]?.id || null;
+      const nowConvIso = new Date().toISOString();
 
-      const newMsg = {
+      const newMsg: Record<string, any> = {
         role_manager: summaryText,
         role_guest:   null,
         role_bot:     null,
-        timestamp:    new Date().toISOString(),
+        timestamp:    nowConvIso,
+        template_name: templateName,
+        meta_template: resolvedMetaTemplate,
+        delivery_status: 'sent',
+        ...(wamid ? { wamid } : {}),
+        ...(bIdStr ? { reservation_id: bIdStr } : {})
       };
 
-      // Buscar si ya existe una conversación
-      const { data: existing } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('guest_phone', cleanedPhone)
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (existing) {
-        const newMessages = [...(existing.messages || []), newMsg];
-        await supabase
-          .from('conversations')
-          .update({ 
-            messages: newMessages, 
-            timestamp: new Date().toISOString(),
-            resolved: false,
-            archived: false
-          })
-          .eq('id', existing.id);
-      } else {
-        const guestName = (parameters && parameters.length > 0) ? parameters[0] : 'Huésped';
-        await supabase
-          .from('conversations')
-          .insert({
-            id: `wa_${Date.now()}`,
-            guest_name: guestName,
-            guest_phone: cleanedPhone,
-            timestamp: new Date().toISOString(),
-            booking_created: false,
-            resolved: false,
-            archived: false,
-            human_mode: true,
-            messages: [newMsg],
-          });
-      }
+      const guestNameCandidate = (parameters && parameters.length > 0) ? parameters[0] : 'Huésped';
+      await upsertConversationMessage({
+        phone: cleanedPhone,
+        guestName: guestNameCandidate,
+        message: newMsg,
+        defaultHumanMode: true,
+        updateFields: {
+          timestamp: nowConvIso,
+          resolved: false,
+          archived: false
+        }
+      });
     } catch (convErr) {
       console.error("[WhatsApp] Error al registrar plantilla en conversations:", convErr);
     }

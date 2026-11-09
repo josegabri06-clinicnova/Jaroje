@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { sendTemplate_BienvenidoConmutador, normalizePhone, isSpanishOrLatamPhone } from '@/lib/whatsapp';
+import { sendTemplate_BienvenidoConmutador, normalizePhone, isSpanishOrLatamPhone, findConversationsByPhone, upsertConversationMessage } from '@/lib/whatsapp';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { maskPhone } from '@/lib/log-mask';
 
@@ -157,11 +157,7 @@ async function processConmutadorCall(req: Request) {
         if (localGuest?.guest_name) {
           resolvedCallerName = localGuest.guest_name;
         } else {
-          const { data: convGuest } = await supabase
-            .from('conversations')
-            .select('guest_name')
-            .eq('guest_phone', cleanPhone)
-            .maybeSingle();
+          const { primary: convGuest } = await findConversationsByPhone(cleanPhone);
           if (convGuest?.guest_name && convGuest.guest_name !== cleanPhone) {
             resolvedCallerName = convGuest.guest_name;
           }
@@ -278,41 +274,23 @@ async function processConmutadorCall(req: Request) {
       }
     }
 
-    // 4. Asegurar registro inicial en conversations
+    // 4. Asegurar registro inicial consolidado en conversations
     try {
-      const { data: existingConv } = await supabase
-        .from('conversations')
-        .select('id, messages')
-        .eq('guest_phone', cleanPhone)
-        .maybeSingle();
-
+      const nowCallIso = new Date().toISOString();
       const welcomeMsg = {
         role_guest: null,
         role_bot: `[Llamada recibida en conmutador telefónico]`,
         role_manager: null,
-        timestamp: new Date().toISOString()
+        timestamp: nowCallIso
       };
 
-      if (existingConv) {
-        await supabase
-          .from('conversations')
-          .update({
-            timestamp: new Date().toISOString(),
-            messages: [...(existingConv.messages || []), welcomeMsg]
-          })
-          .eq('id', existingConv.id);
-      } else {
-        await supabase
-          .from('conversations')
-          .insert({
-            id: `call_${Date.now()}`,
-            guest_name: resolvedCallerName || cleanPhone,
-            guest_phone: cleanPhone,
-            timestamp: new Date().toISOString(),
-            human_mode: false,
-            messages: [welcomeMsg]
-          });
-      }
+      await upsertConversationMessage({
+        phone: cleanPhone,
+        guestName: resolvedCallerName || cleanPhone,
+        message: welcomeMsg,
+        defaultHumanMode: false,
+        updateFields: { timestamp: nowCallIso }
+      });
     } catch (convErr) {
       console.error("[Webhook Conmutador] Error actualizando conversations:", convErr);
     }

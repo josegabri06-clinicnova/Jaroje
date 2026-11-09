@@ -1,5 +1,5 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { sendWhatsAppTextMessage, sendWhatsAppTemplate, normalizePhone, cleanPhoneForMeta } from '@/lib/whatsapp';
+import { sendWhatsAppTextMessage, sendWhatsAppTemplate, normalizePhone, cleanPhoneForMeta, findConversationsByPhone, upsertConversationMessage } from '@/lib/whatsapp';
 import { maskPhone, describeText } from '@/lib/log-mask';
 import { isTesterPhone } from '@/lib/test-phones';
 
@@ -129,14 +129,8 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   }
 
-  // 1. Buscar la última conversación de este teléfono
-  const { data: existing } = await supabase
-    .from('conversations')
-    .select('*')
-    .eq('guest_phone', phone)
-    .order('timestamp', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // 1. Buscar la conversación consolidada de este teléfono
+  const { primary: existing } = await findConversationsByPhone(phone);
 
   // Deduplicación basada en historial reciente
   if (existing && Array.isArray(existing.messages) && existing.messages.length > 0) {
@@ -227,38 +221,27 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     // Guardar el mensaje en el historial para visibilidad en el Inbox en modo humano
     if (guestMsgText || params.button_payload) {
       try {
+        const msgTs = timestamp || new Date().toISOString();
         const newMsgItem = {
           role_guest: guestMsgText || `[${params.button_payload}]`,
           role_manager: null,
           role_bot: null,
-          timestamp: timestamp || new Date().toISOString()
+          timestamp: msgTs
         };
 
-        if (existing) {
-          const currentMsgs = Array.isArray(existing.messages) ? existing.messages : [];
-          await supabase
-            .from('conversations')
-            .update({
-              guest_name: contactName || existing.guest_name || params.guest_name || 'Contacto Personal',
-              messages: [...currentMsgs, newMsgItem],
-              timestamp: timestamp || new Date().toISOString(),
-              human_mode: true
-            })
-            .eq('id', existing.id);
-        } else {
-          await supabase
-            .from('conversations')
-            .insert([{
-              id: `wa_${Date.now()}`,
-              guest_phone: phone,
-              guest_name: contactName || params.guest_name || 'Contacto Personal',
-              messages: [newMsgItem],
-              timestamp: timestamp || new Date().toISOString(),
-              human_mode: true,
-              booking_created: false,
-              resolved: false
-            }]);
-        }
+        await upsertConversationMessage({
+          phone,
+          guestName: contactName || params.guest_name || 'Contacto Personal',
+          message: newMsgItem,
+          defaultHumanMode: true,
+          preferProvidedName: Boolean(personalCheck.contact?.name),
+          updateFields: {
+            timestamp: msgTs,
+            human_mode: true,
+            archived: false,
+            resolved: false
+          }
+        });
       } catch (saveErr) {
         console.warn("[Inbound Handler] Error guardando mensaje de contacto excluido:", saveErr);
       }
@@ -369,13 +352,18 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       role_manager: null,
       timestamp,
     };
-    if (existing) {
-      await supabase.from('conversations').update({
-        messages: [...(existing.messages || []), newMessage],
+    await upsertConversationMessage({
+      phone,
+      guestName: guestBooking.guest_name || params.guest_name || phone,
+      message: newMessage,
+      defaultHumanMode: true,
+      updateFields: {
         timestamp,
-        human_mode: true
-      }).eq('id', existing.id);
-    }
+        human_mode: true,
+        archived: false,
+        resolved: false
+      }
+    });
     return { success: true, isAutoReplyTriggered, finalBotResponse };
   }
 
@@ -576,7 +564,8 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     for (let i = existing.messages.length - 1; i >= 0; i--) {
       const msg = existing.messages[i];
       const botText = String(msg.role_bot || msg.role_manager || '');
-      if (botText.includes('bienvenido_cliente')) {
+      const tplName = String(msg.template_name || '');
+      if (botText.includes('bienvenido_cliente') || tplName.includes('bienvenido_cliente')) {
         const msgTime = new Date(msg.timestamp || 0).getTime();
         if (!isNaN(msgTime) && msgTime > lastWelcomeSentAt) {
           lastWelcomeSentAt = msgTime;
@@ -662,11 +651,14 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   }
 
   // 2. Enviar respuesta automática por WhatsApp si aplica
+  let replyWamid: string | null = null;
   if (isAutoReplyTriggered && finalBotResponse) {
     try {
       console.log(`[Inbound Handler] Enviando respuesta automática a ${maskPhone(phone)} ${describeText(finalBotResponse)}`);
       const waSendRes = await sendWhatsAppTextMessage(phone, finalBotResponse);
-      if (!waSendRes.success) {
+      if (waSendRes.success) {
+        replyWamid = waSendRes.data?.messages?.[0]?.id || null;
+      } else {
         console.error(`[Inbound Handler] Error enviando mensaje a ${maskPhone(phone)}:`, waSendRes.error);
       }
     } catch (sendErr) {
@@ -674,43 +666,28 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   }
 
-  // 3. Guardar mensaje en Supabase conversations
-  const newMessage = {
+  // 3. Guardar mensaje en Supabase conversations (consolidado por teléfono)
+  const newMessage: Record<string, any> = {
     role_guest:   guestMsgText || null,
     role_bot:     finalBotResponse,
     role_manager: null,
     timestamp,
+    ...(replyWamid ? { wamid: replyWamid, delivery_status: 'sent' } : {})
   };
 
-  const newConvId = `wa_${Date.now()}`;
-
-  if (existing) {
-    const updatedMessages = [...(existing.messages || []), newMessage];
-    await supabase
-      .from('conversations')
-      .update({
-        messages:        updatedMessages,
-        timestamp,
-        booking_created: params.booking_created ?? existing.booking_created,
-        resolved:        params.resolved ?? false,
-        archived:        false,
-        human_mode:      forceHuman,
-      })
-      .eq('id', existing.id);
-  } else {
-    await supabase
-      .from('conversations')
-      .insert({
-        id:              newConvId,
-        guest_name:      params.guest_name || phone,
-        guest_phone:     phone,
-        timestamp,
-        booking_created: params.booking_created || false,
-        resolved:        params.resolved ?? false,
-        human_mode:      forceHuman,
-        messages:        [newMessage],
-      });
-  }
+  await upsertConversationMessage({
+    phone,
+    guestName: params.guest_name || guestBooking?.guest_name || phone,
+    message: (guestMsgText || finalBotResponse) ? newMessage : null,
+    defaultHumanMode: forceHuman,
+    updateFields: {
+      timestamp,
+      booking_created: params.booking_created ?? existing?.booking_created ?? false,
+      resolved:        params.resolved ?? false,
+      archived:        false,
+      human_mode:      forceHuman,
+    }
+  });
 
   return { success: true, isAutoReplyTriggered, finalBotResponse };
 }

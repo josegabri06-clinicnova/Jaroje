@@ -190,11 +190,7 @@ export async function POST(req: Request) {
                 phone: phone
               }, false);
               if (waRes.success) {
-                await supabase.from('whatsapp_logs').insert([{
-                  reservation_id: String(matchedRes.id),
-                  template_name: 'alojamiento_listo',
-                  phone: phone
-                }]);
+                // sendWhatsAppTemplate ya registra la plantilla en whatsapp_logs (sin insertar duplicado aquí)
                 console.log(`[Room Status -> Limpia] WhatsApp notification sent and logged successfully to ${maskPhone(phone)}`);
               } else {
                 console.warn(`[Room Status -> Limpia] WhatsApp notification failed:`, waRes.error);

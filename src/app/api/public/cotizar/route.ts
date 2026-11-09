@@ -7,7 +7,7 @@ import {
   getChildRoomId
 } from '@/lib/beds24';
 import { publicBookings, publicRates, PublicBeds24BusyError } from '@/lib/beds24-public-cache';
-import { normalizePhone } from '@/lib/whatsapp';
+import { normalizePhone, findConversationsByPhone } from '@/lib/whatsapp';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { checkBookingWindow } from '@/lib/booking-window';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
@@ -248,22 +248,22 @@ export async function GET(req: Request) {
       // Buscar si hay una cotización pendiente reciente (últimas 24 horas) para este teléfono
       await (async () => {
         try {
-          const { data: conv } = await supabase
-            .from('conversations')
-            .select('messages')
-            .eq('guest_phone', cleanPhone)
-            .maybeSingle();
+          const { primary, duplicates } = await findConversationsByPhone(cleanPhone);
+          const allMsgs = [primary, ...duplicates]
+            .filter(Boolean)
+            .flatMap(c => (Array.isArray(c.messages) ? c.messages : []));
 
-          if (conv && Array.isArray(conv.messages)) {
+          if (allMsgs.length > 0) {
             const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-            for (let i = conv.messages.length - 1; i >= 0; i--) {
-              const m = conv.messages[i];
-              if (m.quote_data && m.quote_data.status === 'pending_name') {
-                const quoteTime = new Date(m.quote_data.createdAt || m.timestamp || 0).getTime();
-                if (quoteTime > oneDayAgo) {
-                  pendingQuote = m.quote_data;
-                  break;
-                }
+            const pendingList = allMsgs
+              .filter(m => m?.quote_data && m.quote_data.status === 'pending_name')
+              .sort((a, b) => new Date(b.quote_data.createdAt || b.timestamp || 0).getTime() - new Date(a.quote_data.createdAt || a.timestamp || 0).getTime());
+
+            if (pendingList.length > 0) {
+              const latest = pendingList[0];
+              const quoteTime = new Date(latest.quote_data.createdAt || latest.timestamp || 0).getTime();
+              if (quoteTime > oneDayAgo) {
+                pendingQuote = latest.quote_data;
               }
             }
           }

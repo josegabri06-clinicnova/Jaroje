@@ -405,13 +405,17 @@ export async function GET(req: Request) {
           if (guestPhone) {
             const res = await waSender();
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{
-                reservation_id: bookingIdStr,
-                template_name: logKey,
-                phone: guestPhone,
-                sent_at: new Date().toISOString(),
-                status: 'sent'
-              }]);
+              // sendWhatsAppTemplate ya registra/actualiza whatsapp_logs con templateName.
+              // Solo agregamos registro extra cuando logKey difiere de templateName (ej. recibimiento_nuevamente_5m / _10m).
+              if (logKey !== templateName && !res.data?.deduplicated) {
+                await supabase.from('whatsapp_logs').insert([{
+                  reservation_id: bookingIdStr,
+                  template_name: logKey,
+                  phone: guestPhone,
+                  sent_at: new Date().toISOString(),
+                  status: 'sent'
+                }]);
+              }
               markTemplateAsSent(bookingIdStr, guestPhone, logKey);
               reports.push(`Enviado ${friendlyLabel} (WhatsApp) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             } else {
@@ -547,9 +551,11 @@ export async function GET(req: Request) {
 
               // 5. Registrar éxito de la cancelación grupal en los logs de auditoría
               // 6. Enviar WhatsApp / OTA de disponibilidad liberada una sola vez para todo el grupo (respetando freno de emergencia)
+              let disponWaSent = false;
               if (guestPhone) {
                 const waRes = await sendTemplate4_DisponibilidadLiberada(booking, false);
                 if (waRes.success) {
+                  disponWaSent = true;
                   reports.push(`[Expirado 3h tras Último Aviso] Grupo [${groupMemberIds.join(', ')}] cancelado y notificado con Mensaje 4 por WhatsApp.`);
                 } else {
                   reports.push(`[Expirado 3h tras Último Aviso] Grupo [${groupMemberIds.join(', ')}] cancelado en sistema, pero falló WhatsApp: ${waRes.error}`);
@@ -567,8 +573,9 @@ export async function GET(req: Request) {
                 }
               }
               
-              // 7. Registrar logs de whatsapp_logs para TODOS los miembros del grupo
+              // 7. Registrar logs de whatsapp_logs para los miembros adicionales del grupo (o si fue solo OTA)
               for (const memberId of groupMemberIds) {
+                if (disponWaSent && memberId === bookingIdStr) continue;
                 await supabase.from('whatsapp_logs').insert([{
                   reservation_id: memberId,
                   template_name: 'disponibilidad_liberada',
@@ -650,13 +657,6 @@ export async function GET(req: Request) {
               if (isConfirmed) {
                 const waRes = await sendTemplate3_ReservacionConfirmada(booking, false);
                 if (waRes.success) {
-                  await supabase.from('whatsapp_logs').insert([{
-                    reservation_id: bookingIdStr,
-                    template_name: 'reservacion_confirmada',
-                    phone: guestPhone,
-                    sent_at: new Date().toISOString(),
-                    status: 'sent'
-                  }]);
                   reports.push(`Enviado Mensaje 3 (Confirmada - Reciente/T-7) a ${booking.guest_name} (ID: ${bookingIdStr})`);
                 } else {
                   console.error(`[Cron WhatsApp] Error enviando Mensaje 3 a ${booking.guest_name}:`, waRes.error);
@@ -664,13 +664,6 @@ export async function GET(req: Request) {
               } else {
                 const waRes = await sendTemplate1_SolicitudRecibida(booking, false);
                 if (waRes.success) {
-                  await supabase.from('whatsapp_logs').insert([{
-                    reservation_id: bookingIdStr,
-                    template_name: 'solicitud_recibida',
-                    phone: guestPhone,
-                    sent_at: new Date().toISOString(),
-                    status: 'sent'
-                  }]);
                   reports.push(`Enviado Mensaje 1 (Solicitud Recibida) a ${booking.guest_name} (ID: ${bookingIdStr})`);
                 } else {
                   console.error(`[Cron WhatsApp] Error enviando Mensaje 1 a ${booking.guest_name}:`, waRes.error);
@@ -688,7 +681,8 @@ export async function GET(req: Request) {
         }
 
         // --- MENSAJE EXTRA: Alojamiento Listo para habitaciones vacías el día anterior (12:00 PM de hoy) ---
-        if (cleanCheckIn === todayStr && (currentHour === 12 || (currentHour >= 12 && currentHour < 15))) {
+        // NUNCA enviar si la reserva ya está cancelada o ya realizó Check-In (ej. Walk-In / En Casa)
+        if (!isCancelled && !isAlreadyCheckedIn && cleanCheckIn === todayStr && (currentHour === 12 || (currentHour >= 12 && currentHour < 15))) {
           if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'alojamiento_listo')) {
             const rRoom = getCleanRoom(booking.room_name, booking.room);
             if (rRoom) {
