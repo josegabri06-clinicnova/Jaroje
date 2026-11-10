@@ -197,7 +197,9 @@ export async function POST(req: Request) {
       // 2.2. Calcular ajuste de precio basado en la capacidad base del grupo
       const originalExtraGuests = Math.max(0, groupOriginalPax - groupBase);
       const newExtraGuests = Math.max(0, totalNewGroupGuests - groupBase);
-      const diffExtra = newExtraGuests - originalExtraGuests;
+      // Reserva antigua con más personas guardadas que el máximo del grupo (dato imposible): ese exceso nunca se cobró como
+      // extra, así que no se calcula ninguna devolución ni cargo. Antes el precio podía quedar en $0 al editar.
+      const diffExtra = groupOriginalPax > groupMax ? 0 : newExtraGuests - originalExtraGuests;
 
       const isUSD = (localRes.guest_name || '').toUpperCase().includes('(US DOLLARS)');
       const extraGuestPrice = isUSD ? 25 : (capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500);
@@ -430,7 +432,9 @@ export async function POST(req: Request) {
     // 3.2. Calcular ajuste de precio
     const originalExtraGuests = Math.max(0, groupOriginalPax - groupBase);
     const newExtraGuests = Math.max(0, totalNewGroupGuests - groupBase);
-    const diffExtra = newExtraGuests - originalExtraGuests;
+    // Reserva antigua con más personas guardadas que el máximo del grupo (dato imposible): ese exceso nunca se cobró como
+    // extra, así que no se calcula ninguna devolución ni cargo. Antes el precio podía quedar en $0 al editar.
+    const diffExtra = groupOriginalPax > groupMax ? 0 : newExtraGuests - originalExtraGuests;
 
     const isUSD = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.toUpperCase().includes('(US DOLLARS)');
     const extraGuestPrice = isUSD ? 25 : (capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500);
