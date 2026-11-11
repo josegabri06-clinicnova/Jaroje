@@ -653,6 +653,7 @@ export async function sendWhatsAppTemplate(
     // ── GUARDIA DE CICLO DE VIDA: No enviar plantillas previas al Check-in si el huésped ya está en el hotel ──
     const preCheckInTemplates = [
       'solicitud_recibida',
+      'recordatorio_7_dias',
       'preparacion_llegada',
       'preparacion_llegada_v2'
     ];
@@ -710,6 +711,7 @@ export async function sendWhatsAppTemplate(
       'reservacion_confirmada',
       'bienvenida_checkin',
       'bienvenida_checkin_v2',
+      'recordatorio_7_dias',
       'preparacion_llegada',
       'preparacion_llegada_v2'
     ];
@@ -853,6 +855,7 @@ export async function sendWhatsAppTemplate(
       'ultimo_aviso_v2',
       'reservacion_confirmada',
       'confirmacion_reserva_util',
+      'recordatorio_7_dias',
       'preparacion_llegada',
       'preparacion_llegada_v2',
       'bienvenida_checkin',
@@ -1198,6 +1201,8 @@ export async function sendWhatsAppTemplate(
             case 'disponibilidad_liberada':
             case 'disponibilidad_liberada_v2':
               return `😔 Availability released\n\nHello, ${name}.\n\nWe regret to inform you that since we did not receive the deposit within the indicated period, the availability of your accommodation was released.\n\nIf you still wish to stay with us, press "Availability and Quote" to check if we still have accommodation available for your travel dates and make a new reservation.\n\n👇 Availability and Quote\n\n[Button: Availability and Quote] [Button: Photos and Rates]`;
+            case 'recordatorio_7_dias':
+              return `📅 7 days until your arrival\n\nHello, ${name}.\n\nOnly one week left to welcome you to Condominios Jaroje! 🌴\n\nIf for any reason you will not be able to arrive, please let us know as soon as possible by replying to this message so we can help you.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\nIn "My reservation" you can check your reservation details, the location and how to get here.\n\n👇 My reservation\n\n[Button: My reservation]`;
             case 'preparacion_llegada':
             case 'preparacion_llegada_v2':
               return `🚗 Everything ready for your arrival\n\nHello, ${name}.\n\nVery soon we will welcome you to Condominios Jaroje! We want your arrival to be as comfortable as possible.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\nIn "My reservation" you will find the gate code, location, directions, photos, description and services of your accommodation, as well as everything you need to prepare for your arrival.\n\nArriving after 8:00 p.m.? Let us know in advance to welcome you.\n\nWe wish you an excellent trip!\n\n[Button: My reservation] [Button: How to get there] [Button: Ver WiFi y claves]`;
@@ -1254,6 +1259,8 @@ export async function sendWhatsAppTemplate(
             return `🎉 ¡Tu reservación está confirmada!\n\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\nEn "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n[Botón: Portal del Huésped] [Botón: Cómo llegar]`;
           case 'disponibilidad_liberada':
             return `😔 Disponibilidad liberada\n\nHola, ${name}.\n\nLamentamos informarte que, al no recibir el anticipo dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\nSi aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n👇 Verificar disponibilidad\n\n[Botón: Verificar disponibilidad]`;
+          case 'recordatorio_7_dias':
+            return `📅 Faltan 7 días para tu llegada\n\nHola, ${name}.\n\n¡Ya falta una semana para recibirte en Condominios Jaroje! 🌴\n\nSi por algún motivo no podrás llegar, por favor avísanos lo antes posible respondiendo a este mensaje, así podemos ayudarte.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\nEn "Mi reservación" puedes consultar los datos de tu reservación, la ubicación y cómo llegar.\n\n👇 Mi reservación\n\n[Botón: Mi reservación]`;
           case 'preparacion_llegada':
           case 'preparacion_llegada_v2':
             return `🚗 Todo listo para tu llegada\n\nHola, ${name}.\n\n¡Ya falta muy poco para recibirte en Condominios Jaroje! Queremos que tu llegada sea lo más cómoda posible.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\nEn "Mi reservación" encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n¿Llegarás después de las 8:00 p.m.? Avísanos con anticipación para recibirte.\n\n¡Te deseamos un excelente viaje!\n\n[Botón: Mi reservación] [Botón: Cómo llegar] [Botón: Ver WiFi y claves]`;
@@ -1645,6 +1652,19 @@ export async function sendTemplate5_PreparacionLlegada(booking: any, bypassPause
   const lang = booking.lang || booking.language || undefined;
 
   return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, undefined, booking.id, 'url', bypassPause, lang);
+}
+
+// Recordatorio a 7 días del check-in (recordatorio_7_dias): avisa que falta una semana y pide comunicar si no van a llegar
+export async function sendTemplate_Recordatorio7Dias(booking: any, bypassPause: boolean = false) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const params = [
+    getFirstName(booking.guest_name) // {{1}} Nombre
+  ];
+  const lang = booking.lang || booking.language || undefined;
+
+  return sendWhatsAppTemplate(phone, 'recordatorio_7_dias', params, undefined, booking.id, 'url', bypassPause, lang);
 }
 
 // 6. Mensaje 6 - Bienvenida después del check-in (bienvenida_checkin)

@@ -150,7 +150,7 @@ export async function POST(req: Request) {
 
         const rawSource = String(`${b.channel || ''} ${source || ''} ${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
         const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
-        const isPrepaidOTA = ['airbnb', 'booking', 'vrbo'].some(ota => rawSource.includes(ota))
+        const isPrepaidOTA = ['airbnb', 'booking', 'vrbo', 'expedia'].some(ota => rawSource.includes(ota))
           || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -390,6 +390,21 @@ export async function POST(req: Request) {
               console.log(`[Webhook Beds24] ✅ WhatsApp solicitud_recibida enviado AL INSTANTE a reserva ${bookingIdStr} (${bookingForWA.guest_name})`);
             } else {
               console.error(`[Webhook Beds24] Error al enviar WhatsApp de solicitud_recibida:`, waRes.error);
+            }
+          }
+
+          // Copia en la bandeja de la OTA, en paralelo al WhatsApp: cubre al huésped cuyo número no tiene WhatsApp.
+          // Se envía una sola vez (el registro de la bandeja evita repetirla).
+          const otaCopyChannel = String(b.channel || source || b.referer || '').trim();
+          if (isOtaChannel(otaCopyChannel)) {
+            try {
+              await sendOfficialOtaTemplate(bookingIdStr, isConfirmedBooking ? 'reservacion_confirmada' : 'solicitud_recibida', {
+                guestName: `${b.firstName || ''} ${b.lastName || ''}`.trim() || b.guestName || guestName || 'Huésped',
+                channel: otaCopyChannel,
+                lang: detectLanguageFromPhone(phone)
+              });
+            } catch (otaCopyErr) {
+              console.error(`[Webhook Beds24] Error enviando la copia a la bandeja OTA para ${bookingIdStr}:`, otaCopyErr);
             }
           }
         } else {
