@@ -378,6 +378,16 @@ export function getLengthOfStayMultiplier(nights: number, customDiscounts?: { ni
   return 1.00;                   // Sin descuento (1-6 noches)
 }
 
+/**
+ * Precio por noche que paga el cliente en el portal de venta (canal Directo): tarifa base de Beds24 con el descuento por
+ * estancia larga (15% desde 7 noches, 25% desde 15, 40% desde 30) más IVA 16% + ISH 3%. Es la misma cuenta que hace
+ * "Nueva reserva" en la webapp (nueva/page.tsx). Los tramos son fijos a propósito: así el portal y la webapp nunca divergen.
+ * La cotización, el aviso y el cobro final usan esta única función.
+ */
+export function getPublicNightlyPrice(basePricePerNight: number, nights: number): number {
+  return Math.round(basePricePerNight * getLengthOfStayMultiplier(nights) * 1.19);
+}
+
 // Modificador por canal
 export function getChannelMultiplier(
   referer: string, 

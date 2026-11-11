@@ -9,7 +9,8 @@ import {
   getChildRoomId,
   syncBeds24BookingLocal,
   fetchBeds24RatesMap,
-  getAverageRatesForDates
+  getAverageRatesForDates,
+  getPublicNightlyPrice
 } from '@/lib/beds24';
 import { normalizePhone, cleanPhoneForMeta, sendTemplate1_SolicitudRecibida, findConversationsByPhone, upsertConversationMessage } from '@/lib/whatsapp';
 import { checkBookingWindow } from '@/lib/booking-window';
@@ -481,8 +482,7 @@ export async function POST(req: Request) {
         dynamicSettings
       );
 
-      const TAX_MULTIPLIER = 1.19; // IVA 16% + ISH 3%
-      const officialPricePerNight = Math.round(basePricePerNight * TAX_MULTIPLIER);
+      const officialPricePerNight = getPublicNightlyPrice(basePricePerNight, nights);
       // Se cobra siempre el precio vigente (Beds24/Supabase, con descuentos); solo se rechaza un precio inválido
       if (!(officialPricePerNight > 0)) throw new RatesUnavailableError();
       const verifiedPricePerNight = officialPricePerNight;

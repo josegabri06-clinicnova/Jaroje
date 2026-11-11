@@ -4,6 +4,7 @@ import {
   getParentMapping,
   getBeds24Token,
   getAverageRatesForDates,
+  getPublicNightlyPrice,
   getChildRoomId
 } from '@/lib/beds24';
 import { publicBookings, publicRates, PublicBeds24BusyError } from '@/lib/beds24-public-cache';
@@ -452,7 +453,7 @@ export async function GET(req: Request) {
       );
 
       const TAX_MULTIPLIER = 1.19;
-      const pricePerNight = Math.round(basePricePerNight * TAX_MULTIPLIER);
+      const pricePerNight = getPublicNightlyPrice(basePricePerNight, nights);
       const totalPrice = Math.round(pricePerNight * nights);
       const depositRequired = Math.round(totalPrice * 0.5);
 
