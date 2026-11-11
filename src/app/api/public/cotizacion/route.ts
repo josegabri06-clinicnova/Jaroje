@@ -3,7 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { normalizePhone, sendTemplate_Cotizacion, sendWhatsAppCTAButtonMessage, isSpanishOrLatamPhone, upsertConversationMessage } from '@/lib/whatsapp';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { checkBookingWindow } from '@/lib/booking-window';
-import { getBeds24Token, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
+import { getBeds24Token, getAverageRatesForDates, getPublicNightlyPrice, getChildRoomId } from '@/lib/beds24';
 import { publicRates } from '@/lib/beds24-public-cache';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
 import { maskPhone } from '@/lib/log-mask';
@@ -219,8 +219,7 @@ export async function POST(req: Request) {
         '1',
         dynamicSettings
       );
-      const TAX_MULTIPLIER = 1.19; // IVA 16% + ISH 3%
-      const officialPricePerNight = Math.round(basePricePerNight * TAX_MULTIPLIER);
+      const officialPricePerNight = getPublicNightlyPrice(basePricePerNight, nights);
       // Se cotiza siempre el precio vigente (Beds24/Supabase, con descuentos); solo se rechaza un precio inválido
       if (!(officialPricePerNight > 0)) throw new RatesUnavailableError();
       const verifiedPricePerNight = officialPricePerNight;
