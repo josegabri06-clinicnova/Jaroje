@@ -15,7 +15,9 @@ import {
   sendTemplate8_SalidaCheckout,
   sendTemplate9_ComparteExperiencia,
   sendTemplate10_RecibimientoNuevamente,
-  sendTemplate_AlojamientoListo
+  sendTemplate_AlojamientoListo,
+  sendTemplate_Recordatorio7Dias,
+  detectLanguageFromPhone
 } from '@/lib/whatsapp';
 import { isOtaChannel, sendOfficialOtaTemplate, isDummyOrInvalidPhone } from '@/lib/beds24-messages';
 
@@ -301,6 +303,33 @@ export async function GET(req: Request) {
 
     const sentSet = sentBookingSet;
 
+    // Plantillas ya enviadas por la bandeja de las OTAs (una sola consulta por ejecución). El envío por la bandeja es
+    // independiente del de WhatsApp: cada uno lleva su propio registro y un fallo en uno no bloquea ni repite el otro.
+    const otaSentSet = new Set<string>();
+    // Envíos a la bandeja que fallaron hace menos de 30 minutos: se espera antes de reintentar (igual que con WhatsApp),
+    // para no gastar una llamada a Beds24 en cada ejecución del cron con un chat que no acepta mensajes.
+    const otaRecentFailedSet = new Set<string>();
+    try {
+      const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+      const thirtyMinAgoIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: otaLogs } = await supabase
+        .from('ota_messages_log')
+        .select('booking_id, template_type, status, created_at')
+        .in('status', ['sent', 'failed'])
+        .gte('created_at', sixtyDaysAgo)
+        .order('created_at', { ascending: false })
+        .range(0, 1999);
+      (otaLogs || []).forEach((l: any) => {
+        const key = `${String(l.booking_id).trim()}_${String(l.template_type).trim()}`;
+        if (l.status === 'sent') otaSentSet.add(key);
+        else if (l.created_at && String(l.created_at) >= thirtyMinAgoIso) otaRecentFailedSet.add(key);
+      });
+    } catch (otaLogErr) {
+      console.warn('[Cron WhatsApp] No se pudo precargar ota_messages_log:', otaLogErr);
+    }
+    // La fidelización (5 y 10 meses) va solo por WhatsApp: pasado tanto tiempo las OTAs ya no permiten escribir en el chat
+    const WHATSAPP_ONLY_TEMPLATES = new Set(['recibimiento_nuevamente_5m', 'recibimiento_nuevamente_10m']);
+
     // --- PRECARGA PARA CANCELACIÓN DE 3 HORAS ---
     // Obtener logs de 'ultimo_aviso' enviados en los últimos 7 días ordenados por fecha descendente
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -394,7 +423,26 @@ export async function GET(req: Request) {
           booking.mobile = guestPhone;
         }
 
-        // Despachador unificado: WhatsApp si tiene teléfono válido, o chat oficial OTA si no tiene WhatsApp
+        // ¿Falta enviar esta plantilla? Por WhatsApp (si hay teléfono válido) o por la bandeja de la OTA (si es OTA).
+        // Cada canal lleva su propio registro: que uno ya haya salido no impide enviar el otro.
+        // Fechas de la estancia para no mandar por la bandeja mensajes atrasados (p. ej. a una estancia que terminó hace días)
+        const stayInStr = String(booking.check_in || '').split('T')[0].split(' ')[0];
+        const stayOutStr = String(booking.check_out || '').split('T')[0].split(' ')[0];
+        const otaCanSend = (logKey: string): boolean => {
+          if (!isOta || WHATSAPP_ONLY_TEMPLATES.has(logKey)) return false;
+          const key = `${bookingIdStr}_${logKey}`;
+          if (otaSentSet.has(key) || otaRecentFailedSet.has(key)) return false;
+          if (stayOutStr && stayOutStr < yesterdayStr) return false; // la estancia terminó hace más de un día
+          if (logKey === 'bienvenida_checkin' && stayInStr && stayInStr < yesterdayStr) return false; // la bienvenida solo al llegar
+          return true;
+        };
+        const shouldDispatch = (logKey: string): boolean => {
+          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, logKey)) return true;
+          return otaCanSend(logKey);
+        };
+
+        // Despachador unificado. En reservas de OTA se envía POR LOS DOS canales a la vez: WhatsApp (si hay teléfono válido)
+        // y la bandeja oficial de la OTA (cubre al huésped cuyo número no tiene WhatsApp). Sin teléfono, solo la bandeja.
         const dispatchTemplate = async (
           templateName: string,
           waSender: () => Promise<any>,
@@ -402,7 +450,7 @@ export async function GET(req: Request) {
           logTemplateKey?: string
         ) => {
           const logKey = logTemplateKey || templateName;
-          if (guestPhone) {
+          if (guestPhone && !isTemplateAlreadySent(bookingIdStr, guestPhone, logKey)) {
             const res = await waSender();
             if (res.success) {
               // sendWhatsAppTemplate ya registra/actualiza whatsapp_logs con templateName.
@@ -421,26 +469,29 @@ export async function GET(req: Request) {
             } else {
               console.warn(`[Cron WhatsApp] Error enviando ${templateName} a ${booking.guest_name}:`, res.error);
             }
-          } else if (isOta) {
+          }
+          if (otaCanSend(logKey)) {
             const res = await sendOfficialOtaTemplate(bookingIdStr, templateName, {
               guestName: booking.guest_name,
-              channel: rawChannel
+              channel: rawChannel,
+              lang: guestPhone ? detectLanguageFromPhone(guestPhone) : 'es'
             });
             if (res.success) {
-              markTemplateAsSent(bookingIdStr, undefined, logKey);
-              reports.push(`Enviado ${friendlyLabel} (OTA ${rawChannel}) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-            } else {
-              console.warn(`[Cron WhatsApp] Error enviando ${templateName} a OTA ${rawChannel} para ${booking.guest_name}:`, res.error);
+              if (!res.alreadySent) reports.push(`Enviado ${friendlyLabel} (OTA ${rawChannel}) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+              otaSentSet.add(`${bookingIdStr}_${logKey}`);
+            } else if (res.error !== 'paused') {
+              otaRecentFailedSet.add(`${bookingIdStr}_${logKey}`);
+              console.warn(`[Cron WhatsApp] Error enviando ${templateName} a OTA ${rawChannel} (reserva ${bookingIdStr}):`, res.error);
             }
           }
         };
 
-        // --- REGLA: Cancelación Automática 3h tras Último Aviso enviado desde la app (Solo Reservas Directas/Locales/Expedia con anticipo pendiente, NUNCA OTAs prepagadas Airbnb/Booking) ---
+        // --- REGLA: Cancelación Automática 3h tras Último Aviso enviado desde la app (Solo Reservas Directas/Locales con anticipo pendiente, NUNCA OTAs prepagadas Airbnb/Booking/Vrbo/Expedia) ---
         const isCancelled = booking.status === 'cancelled' || String(booking.status) === '0';
         const hasDeposit = Number(booking.deposit || 0) > 0 || Number(booking.actualPaid || 0) > 0;
         const sentAtStr = getGroupNoticeSentAt(booking);
         const channelLower = String(booking.channel || '').toLowerCase();
-        const isPrepaidOtaBooking = ['airbnb', 'booking', 'vrbo'].some(ota => channelLower.includes(ota));
+        const isPrepaidOtaBooking = ['airbnb', 'booking', 'vrbo', 'expedia'].some(ota => channelLower.includes(ota));
 
         if (!isCancelled && !hasDeposit && sentAtStr && !isPrepaidOtaBooking) {
           const sentAt = new Date(sentAtStr);
@@ -672,10 +723,39 @@ export async function GET(req: Request) {
             }
         }
 
+        // Copia del mensaje inicial en la bandeja de la OTA, en paralelo al WhatsApp (cubre al huésped cuyo número no tiene WhatsApp).
+        // Sin teléfono no se envía aquí: eso lo gestiona el flujo de "pedir WhatsApp" y su fallback de 20 minutos.
+        if (shouldEvaluateInitial && isOta && guestPhone) {
+          const initialOtaTemplate = isConfirmed ? 'reservacion_confirmada' : 'solicitud_recibida';
+          if (otaCanSend(initialOtaTemplate)) {
+            const otaRes = await sendOfficialOtaTemplate(bookingIdStr, initialOtaTemplate, {
+              guestName: booking.guest_name,
+              channel: rawChannel,
+              lang: detectLanguageFromPhone(guestPhone)
+            });
+            if (otaRes.success) {
+              otaSentSet.add(`${bookingIdStr}_${initialOtaTemplate}`);
+              if (!otaRes.alreadySent) reports.push(`Enviado mensaje inicial (OTA ${rawChannel}) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            } else if (otaRes.error !== 'paused') {
+              otaRecentFailedSet.add(`${bookingIdStr}_${initialOtaTemplate}`);
+              console.warn(`[Cron WhatsApp] Error enviando ${initialOtaTemplate} a OTA ${rawChannel} (reserva ${bookingIdStr}):`, otaRes.error);
+            }
+          }
+        }
+
+        // --- RECORDATORIO A 7 DÍAS DEL CHECK-IN (solo Expedia) ---
+        // Avisa que falta una semana y pide que comuniquen si no van a llegar. Sale por WhatsApp y por la bandeja de Expedia.
+        if (channelLower.includes('expedia') && !isCancelled && !isAlreadyCheckedIn && !isRequestStatus
+          && daysUntilCheckIn === 7 && currentHour >= 10 && currentHour < 20) {
+          if (shouldDispatch('recordatorio_7_dias')) {
+            await dispatchTemplate('recordatorio_7_dias', () => sendTemplate_Recordatorio7Dias(booking), 'Recordatorio 7 días (Expedia)');
+          }
+        }
+
         // --- MENSAJE 5: Todo listo para su llegada (6:00 PM del día anterior) ---
         // NUNCA enviar si la reserva ya está en el hotel (checked_in) o cancelada
         if (!isCancelled && !isAlreadyCheckedIn && cleanCheckIn === tomorrowStr && (currentHour >= 18 && currentHour < 21)) {
-          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'preparacion_llegada')) {
+          if (shouldDispatch('preparacion_llegada')) {
             await dispatchTemplate('preparacion_llegada', () => sendTemplate5_PreparacionLlegada(booking), 'Mensaje 5 (Prep llegada 6PM)');
           }
         }
@@ -683,7 +763,7 @@ export async function GET(req: Request) {
         // --- MENSAJE EXTRA: Alojamiento Listo para habitaciones vacías el día anterior (12:00 PM de hoy) ---
         // NUNCA enviar si la reserva ya está cancelada o ya realizó Check-In (ej. Walk-In / En Casa)
         if (!isCancelled && !isAlreadyCheckedIn && cleanCheckIn === todayStr && (currentHour === 12 || (currentHour >= 12 && currentHour < 15))) {
-          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'alojamiento_listo')) {
+          if (shouldDispatch('alojamiento_listo')) {
             const rRoom = getCleanRoom(booking.room_name, booking.room);
             if (rRoom) {
               // Verificar si alguna reserva ocupaba la habitación ayer por la noche
@@ -708,7 +788,7 @@ export async function GET(req: Request) {
 
         // --- MENSAJE 6: Bienvenidos a Condominios Jaroje (Automático en Check-In) ---
         if (booking.checked_in || booking.status === 'checked_in') {
-          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'bienvenida_checkin')) {
+          if (shouldDispatch('bienvenida_checkin')) {
             await dispatchTemplate('bienvenida_checkin', () => sendTemplate6_BienvenidaCheckin(booking), 'Mensaje 6 (Bienvenida Check-In)');
           }
         }
@@ -719,7 +799,7 @@ export async function GET(req: Request) {
         const isStayActiveForTemplate7 = (isDayTwo || (cleanCheckIn < todayStr && cleanCheckOut > todayStr)) && bookingNights >= 2;
 
         if (isStayActiveForTemplate7 && currentHour >= 9 && currentHour < 14) {
-          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'seguimiento_satisfaccion')) {
+          if (shouldDispatch('seguimiento_satisfaccion')) {
             await dispatchTemplate('seguimiento_satisfaccion', () => sendTemplate7_SeguimientoSatisfaccion(booking), 'Mensaje 7 (Satisfacción 9AM)');
           }
         }
@@ -727,7 +807,7 @@ export async function GET(req: Request) {
         // --- MENSAJE 8: Check-out 12:00 p.m. (7:00 AM del día del Check-Out) ---
         // Soporta extensiones de estancia: Se enviará a las 7 AM de la nueva fecha de salida si la estancia fue extendida
         if (cleanCheckOut === todayStr && currentHour >= 7 && currentHour < 12) {
-          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'salida_checkout')) {
+          if (shouldDispatch('salida_checkout')) {
             await dispatchTemplate('salida_checkout', () => sendTemplate8_SalidaCheckout(booking), 'Mensaje 8 (Salida Checkout 7AM)');
           }
         }
@@ -736,7 +816,7 @@ export async function GET(req: Request) {
         // Condición de exclusión: OMITIR si existió un reporte en mantenimiento con urgencia alta durante la estancia
         // Soporta extensiones de estancia: Se envía el día después de la fecha real de salida
         if (cleanCheckOut === yesterdayStr && currentHour >= 10 && currentHour < 14) {
-          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'comparte_experiencia')) {
+          if (shouldDispatch('comparte_experiencia')) {
             const roomStr = booking.room_name || booking.room || '';
             const hasIncident = await hasHighUrgencyIncident(roomStr, cleanCheckIn, cleanCheckOut);
             if (hasIncident) {

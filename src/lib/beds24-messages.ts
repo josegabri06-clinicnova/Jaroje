@@ -5,7 +5,8 @@ import { trackBeds24 } from '@/lib/beds24-credits';
 import {
   normalizePhone,
   sendTemplate3_ReservacionConfirmada,
-  isWhatsAppAutomationsPaused
+  isWhatsAppAutomationsPaused,
+  detectLanguageFromPhone
 } from '@/lib/whatsapp';
 
 export interface SendOtaMessageOptions {
@@ -160,6 +161,31 @@ export function getOfficialOtaTemplateText(
           `Si aún deseas hospedarte con nosotros, consulta si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.`;
         if (allowLinks) {
           msg += `\n\n👇 Verificar disponibilidad\n${catalogUrl}`;
+        }
+        return msg;
+      }
+
+    case 'recordatorio_7_dias':
+      if (isEn) {
+        let msg = `📅 7 days until your arrival\n\n` +
+          `Hello, ${name}.\n\n` +
+          `Only one week left to welcome you to Condominios Jaroje! 🌴\n\n` +
+          `If for any reason you will not be able to arrive, please let us know as soon as possible by replying to this message so we can help you.\n\n` +
+          `👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n` +
+          `In "My reservation" you can check your reservation details, the location and how to get here.`;
+        if (allowLinks) {
+          msg += `\n\n👇 My reservation\n${portalUrl}`;
+        }
+        return msg;
+      } else {
+        let msg = `📅 Faltan 7 días para tu llegada\n\n` +
+          `Hola, ${name}.\n\n` +
+          `¡Ya falta una semana para recibirte en Condominios Jaroje! 🌴\n\n` +
+          `Si por algún motivo no podrás llegar, por favor avísanos lo antes posible respondiendo a este mensaje, así podemos ayudarte.\n\n` +
+          `👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
+          `En "Mi reservación" puedes consultar los datos de tu reservación, la ubicación y cómo llegar.`;
+        if (allowLinks) {
+          msg += `\n\n👇 Mi reservación\n${portalUrl}`;
         }
         return msg;
       }
@@ -815,6 +841,18 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
           console.warn(`[OTA Replies Worker] ⚠️ Resultado envío WhatsApp para ${bId}:`, waResult?.error);
         }
 
+        // Copia en la bandeja de la OTA, en paralelo al WhatsApp (el número que dio el huésped puede no tener WhatsApp).
+        // Si el fallback de 20 minutos ya la envió, el registro de la bandeja evita repetirla.
+        try {
+          await sendOfficialOtaTemplate(bId, 'reservacion_confirmada', {
+            guestName: b.guest_name,
+            channel: b.channel,
+            lang: detectLanguageFromPhone(detectedPhone)
+          });
+        } catch (otaCopyErr) {
+          console.warn(`[OTA Replies Worker] No se pudo enviar la copia a la bandeja de la OTA para ${bId}:`, otaCopyErr);
+        }
+
         upgradedCount++;
         details.push({
           bookingId: bId,
@@ -915,11 +953,13 @@ export async function processOta20MinuteFallback(): Promise<{
       const isCancelled = bStatus === 'cancelled' || bStatus === '0';
       if (isCancelled) continue; // Cancelaciones se manejan por su propio evento
 
-      const isAirbnb = channel.toLowerCase().includes('airbnb');
+      // Airbnb y Expedia llegan con el pago anticipado ya hecho: nunca se les pide el anticipo de 24 h
+      // (una reserva en estado "request" todavía no está confirmada, aunque venga de una OTA prepagada)
+      const isPrepaidOta = bStatus !== 'request' && ['airbnb', 'expedia'].some(ota => channel.toLowerCase().includes(ota));
       const bookingPrice = Number(b.price || 0);
       const effectivePaid = Number(b.actual_paid || b.deposit || 0);
       const hasMin50Deposit = bookingPrice > 0 ? (effectivePaid >= (bookingPrice * 0.5 - 0.01)) : (effectivePaid > 0);
-      const isConfirmed = isAirbnb || (hasMin50Deposit && bStatus === 'confirmed');
+      const isConfirmed = isPrepaidOta || (hasMin50Deposit && bStatus === 'confirmed');
 
       const templateToSend = isConfirmed ? 'reservacion_confirmada' : 'solicitud_recibida';
 
