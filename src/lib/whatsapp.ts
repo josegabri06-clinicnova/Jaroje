@@ -1235,6 +1235,8 @@ export async function sendWhatsAppTemplate(
               return `🧾 *Deposit Receipt Received (50%)*\n\nHello, ${name}!\n\nWe have received your ${params[1] || 'payment'} receipt for *${params[2] || '$0.00'}* as a deposit for ${params[3] || 'your reservation'}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm your reservation. Thank you!\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
             case 'comprobante_pago_total_recibido':
               return `🧾 *Full Payment Receipt Received (100%)*\n\nHello, ${name}!\n\nWe have received your ${params[1] || 'payment'} receipt for *${params[2] || '$0.00'}* for the full payment (100%) of ${params[3] || 'your reservation'}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm that your stay is fully paid. Thank you!\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
+            case 'cotizacion_reserva':
+              return `(Subject to availability)\n\n✅ *Jaroje Member Rate Applied*\n\n📅 *Stay Dates*\nCheck-in: ${params[0] || ''}\nCheck-out: ${params[1] || ''}\nTotal: ${params[2] || ''}\n\n👥 *Guests:* ${params[3] || ''}\n\n🛏️ *Selected Accommodations:*\n${params[4] || ''}\n\n👤 *Additional Guests:*\n${params[5] || ''}\n\n💰 *PRICE SUMMARY:*\n${params[6] || ''}\n• *Total (taxes included):* ${params[7] || ''}\n\n💳 *Payment Details:*\n• *Deposit to confirm (50%):* ${params[8] || ''}\n• *Balance due at check-in:* ${params[9] || ''}\n\n📌 *Rates and availability are subject to change until your reservation is confirmed.*\n\n👇 *Book Now*\n\n[Button: Book Now]`;
             case 'portal_huesped_link':
             case 'portal_huesped_link_en':
               return `Hello ${name}, here is your access to your real-time booking details. From your portal you can view your room status, guidelines, WiFi info, and record additional payments.✅\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
@@ -1925,9 +1927,21 @@ export async function sendTemplate_BienvenidoWhatsApp(
  * 14.2. Plantilla Oficial de Cotización / Paso 1 (cotizacion_reserva)
  * Aprobada en Meta para saltarse la ventana de 24 horas y despacharse con botón interactivo de reserva.
  */
-// Bandera de activación: false mientras Meta termina de revisar y aprobar 'cotizacion_reserva'.
-// Instrucción de Floren: Mantener el envío interactivo / texto hasta que la plantilla esté oficialmente aprobada.
-const USE_META_TEMPLATE_COTIZACION = false;
+// Bandera de activación: 'cotizacion_reserva' ya está aprobada en Meta (español e inglés). Si Meta la rechazara,
+// el envío cae automáticamente al botón interactivo / texto de más abajo.
+const USE_META_TEMPLATE_COTIZACION = true;
+
+// Meta rechaza las variables de plantilla con saltos de línea, tabuladores o más de 4 espacios seguidos, y limita su
+// longitud. Las partes de la cotización que van en varias líneas (alojamientos, adicionales, desglose) se aplanan.
+function flattenQuoteTemplateParam(value: string): string {
+  return String(value ?? '')
+    .replace(/\s*(\r?\n){2,}\s*/g, ' | ')
+    .replace(/\s*[\r\n]+\s*/g, ' · ')
+    .replace(/\t/g, ' ')
+    .replace(/ {2,}/g, ' ')
+    .trim()
+    .slice(0, 1000);
+}
 
 export async function sendTemplate_Cotizacion(
   phone: string,
@@ -1967,7 +1981,7 @@ export async function sendTemplate_Cotizacion(
       data.totalAmountText,
       data.depositText,
       data.balanceText
-    ];
+    ].map(flattenQuoteTemplateParam);
 
     const buttonParams = [data.reserveQuerySuffix];
 
