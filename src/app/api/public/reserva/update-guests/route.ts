@@ -202,8 +202,9 @@ export async function POST(req: Request) {
       const diffExtra = groupOriginalPax > groupMax ? 0 : newExtraGuests - originalExtraGuests;
 
       const isUSD = (localRes.guest_name || '').toUpperCase().includes('(US DOLLARS)');
-      const extraGuestPrice = isUSD ? 25 : (capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500);
-      
+      // Cargo por persona extra con el 19% de impuestos incluido (igual que la webapp y el portal de venta)
+      const extraGuestPrice = isUSD ? 25 : Math.round((capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500) * 1.19);
+
       const arrivalDate = localRes.check_in ? new Date(localRes.check_in) : null;
       const departureDate = localRes.check_out ? new Date(localRes.check_out) : null;
       const nights = (arrivalDate && departureDate)
@@ -437,8 +438,9 @@ export async function POST(req: Request) {
     const diffExtra = groupOriginalPax > groupMax ? 0 : newExtraGuests - originalExtraGuests;
 
     const isUSD = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.toUpperCase().includes('(US DOLLARS)');
-    const extraGuestPrice = isUSD ? 25 : (capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500);
-    
+    // Cargo por persona extra con el 19% de impuestos incluido (igual que la webapp y el portal de venta)
+    const extraGuestPrice = isUSD ? 25 : Math.round((capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500) * 1.19);
+
     const arrivalDate = currentBooking.arrival ? new Date(currentBooking.arrival) : null;
     const departureDate = currentBooking.departure ? new Date(currentBooking.departure) : null;
     const nights = (arrivalDate && departureDate)

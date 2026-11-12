@@ -415,7 +415,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     adultsLabel: 'Adultos',
     childrenLabel: 'Niños (2-12 años)',
     capacityInfo: (base: number, max: number) => `Capacidad sin costo adicional: ${base} huéspedes. Capacidad máxima: ${max} huéspedes.`,
-    extraChargeInfo: 'Cada persona extra tiene un costo adicional de $500 MXN por noche.',
+    extraChargeInfo: 'Cada persona extra tiene un costo adicional de $500 MXN + 19% de impuestos ($595 MXN) por noche.',
     estimatedTotal: 'Total de la estancia estimado:',
     priceAdjustmentLabel: 'Ajuste por personas adicionales:',
     maxCapacityExceeded: (max: number) => `La cantidad de huéspedes supera la capacidad máxima de la habitación (${max} personas).`,
@@ -546,7 +546,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     adultsLabel: 'Adults',
     childrenLabel: 'Children (2-12 years)',
     capacityInfo: (base: number, max: number) => `Included capacity: ${base} guests. Max capacity: ${max} guests.`,
-    extraChargeInfo: 'Each extra person has an additional cost of $500 MXN per night.',
+    extraChargeInfo: 'Each extra person has an additional cost of $500 MXN + 19% tax ($595 MXN) per night.',
     estimatedTotal: 'Estimated total stay amount:',
     priceAdjustmentLabel: 'Extra guests surcharge:',
     maxCapacityExceeded: (max: number) => `The number of guests exceeds the maximum capacity of the room (${max} people).`,
@@ -1463,7 +1463,8 @@ export default function PublicReservaPage() {
   // - OTAs (Airbnb, Booking, Expedia): precio fijo, sin cargo extra adicional
   // - Directo (local 500-507 o Beds24 Directo): booking.price = tarifa base × noches
   //   El sistema tiene las reglas de capacidad por habitación y calcula el extra automáticamente
-  const EXTRA_GUEST_CHARGE = isUSD ? 25 : 500;
+  // 500 MXN por persona extra + 19% de impuestos (el impuesto va sobre el cargo extra, no sobre la tarifa de la habitación)
+  const EXTRA_GUEST_CHARGE = isUSD ? 25 : 595;
   const extraChargesTotal = (() => {
     if (isOta) return 0; // OTAs: tarifa fija negociada con la plataforma
 
@@ -1823,7 +1824,7 @@ export default function PublicReservaPage() {
                       // Calcular cargo por persona extra si aplica
                       const totalGuests = (room.num_adult || 0) + (room.num_child || 0);
                       const baseCapacity = getCapacityRulesForSingle(room.room_name || '').base;
-                      const EXTRA_CHARGE = 500;
+                      const EXTRA_CHARGE = EXTRA_GUEST_CHARGE;
                       const extraGuests = Math.max(0, totalGuests - baseCapacity);
                       const roomExtraCharge = extraGuests * EXTRA_CHARGE * roomNights;
 
