@@ -13,6 +13,7 @@ import { deleteCancelledReservationFinances } from '@/lib/finances';
 import { isOtaChannel, sendOtaWelcomeMessage, sendOfficialOtaTemplate } from '@/lib/beds24-messages';
 import { maskPhone } from '@/lib/log-mask';
 import { beds24FetchTracked } from '@/lib/beds24-credits';
+import { hasDepositPaid } from '@/lib/deposit-rule';
 
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking/Google/Directo o se cancela
 export async function POST(req: Request) {
@@ -342,13 +343,10 @@ export async function POST(req: Request) {
           }
 
           const isRequest = bStatus === 'request';
-          const bookingPrice = Number(b.price || 0);
           const effectivePaid = Math.max(actualPaid, Number(b.deposit || 0));
-          const hasMin50Deposit = bookingPrice > 0 
-            ? (effectivePaid >= (bookingPrice * 0.5 - 0.01)) 
-            : (effectivePaid > 0);
 
-          const isConfirmedBooking = !isRequest && (isPrepaidOTA || (hasMin50Deposit && bStatus === 'confirmed'));
+          // Con cualquier anticipo la reserva se considera confirmada (el gerente puede autorizar anticipos menores al 50%)
+          const isConfirmedBooking = !isRequest && (isPrepaidOTA || (hasDepositPaid(effectivePaid) && bStatus === 'confirmed'));
 
           if (isConfirmedBooking) {
             // RESERVACIÓN CONFIRMADA (Booking.com, Airbnb, con anticipo pagado, etc.):

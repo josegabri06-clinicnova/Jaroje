@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { COMMON_PHOTOS, getRoomPhotos } from '@/lib/room-photos';
 import { getRoomTypeKey } from '@/lib/room-type';
+import { hasDepositPaid } from '@/lib/deposit-rule';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -1344,9 +1345,8 @@ export default function PublicReservaPage() {
   const isRequestStatus = rawStatus === 'request';
   const isBedsConfirmed = rawStatus === 'confirmed' || rawStatus === '1';
 
-  const bPrice = Number(booking.price || 0);
-  const bDeposit = Number(booking.deposit || 0);
-  const hasMinDeposit = bPrice > 0 ? (bDeposit >= (bPrice * 0.5 - 0.01)) : (bDeposit > 0);
+  // Con cualquier anticipo la reserva se considera confirmada (el gerente puede autorizar anticipos menores al 50%)
+  const hasMinDeposit = hasDepositPaid(booking.deposit);
 
   const rawChannel = (booking.channel || '').toLowerCase();
   const rawName = (booking.guest_name || '').toLowerCase();
