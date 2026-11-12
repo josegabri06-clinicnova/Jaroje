@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
-import { hasDepositPaid } from '@/lib/deposit-rule';
 import { 
   sendTemplate1_SolicitudRecibida, 
   sendTemplate3_ReservacionConfirmada,
@@ -456,7 +455,7 @@ export async function POST(req: Request) {
           num_child: numChild ? Number(numChild) : 0,
           notes: notes || '',
           channel: isBlock ? 'Bloqueo' : 'Recepción',
-          status: isBlock ? 'black' : (hasDepositPaid(deposit) ? 'confirmed' : 'request')
+          status: isBlock ? 'black' : ((Number(price || 0) > 0 ? Number(deposit || 0) >= (Number(price) * 0.5 - 0.01) : Number(deposit || 0) > 0) ? 'confirmed' : 'request')
         }])
         .select()
         .single();
@@ -598,7 +597,7 @@ export async function POST(req: Request) {
           ? { firstName: parts[0], lastName: parts.slice(1).join(' ') }
           : { firstName: fullName.trim(), lastName: '' };
       })(),
-      status: isBlock ? "black" : (hasDepositPaid(deposit) ? "confirmed" : "request"),
+      status: isBlock ? "black" : ((Number(price || 0) > 0 ? Number(deposit || 0) >= (Number(price) * 0.5 - 0.01) : Number(deposit || 0) > 0) ? "confirmed" : "request"),
       ...(!isBlock && price !== undefined && price !== null ? { 
         price: Number(price),
         invoiceItems: [
@@ -816,7 +815,7 @@ export async function POST(req: Request) {
             mobile: phone || '',
             price: isBlock ? 0 : (price ? Number(price) : 0),
             deposit: isBlock ? 0 : (deposit ? Number(deposit) : 0),
-            status: isBlock ? 'black' : (hasDepositPaid(deposit) ? 'confirmed' : 'request'),
+            status: isBlock ? 'black' : ((Number(price || 0) > 0 ? Number(deposit || 0) >= (Number(price) * 0.5 - 0.01) : Number(deposit || 0) > 0) ? 'confirmed' : 'request'),
             channel: 'direct',
             numAdult: isBlock ? 1 : (numAdult ? Number(numAdult) : 1),
             numChild: isBlock ? 0 : (numChild ? Number(numChild) : 0),
@@ -1415,7 +1414,6 @@ export async function PUT(req: Request) {
           if (m.numChild !== undefined) localUpdate.num_child = Number(m.numChild);
           if (m.price !== undefined) localUpdate.price = Number(m.price);
           if (m.deposit !== undefined) localUpdate.deposit = Number(m.deposit);
-          if (hasDepositPaid(m.deposit) && String(localMem.status || '').toLowerCase() === 'request') localUpdate.status = 'confirmed';
           if (notes !== undefined) localUpdate.notes = notes;
           if (checkIn) localUpdate.check_in = checkIn;
           if (checkOut) localUpdate.check_out = checkOut;
@@ -1470,11 +1468,6 @@ export async function PUT(req: Request) {
             }
           } catch (e) {
             console.error(`[Reservas PUT Group] Error fetching member ${mIdStr}:`, e);
-          }
-
-          // Con anticipo la reserva pasa a confirmada (solo desde 'request'/'new': nunca reactiva una cancelada ni toca un bloqueo)
-          if (hasDepositPaid(m.deposit) && ['request', 'new'].includes(String(currentMemBooking?.status || '').toLowerCase())) {
-            b24Item.status = 'confirmed';
           }
 
           if (m.price !== undefined) {
@@ -1599,7 +1592,6 @@ export async function PUT(req: Request) {
             // Actualización inmediata y directa en beds24_reservations
             const b24DirectUpdate: any = { updated_at: new Date().toISOString() };
             if (memberObj?.deposit !== undefined) b24DirectUpdate.deposit = Number(memberObj.deposit);
-            if (beds24BatchPayload.find((it: any) => String(it.id) === String(bId))?.status === 'confirmed') b24DirectUpdate.status = 'confirmed';
             if (memberObj?.price !== undefined) b24DirectUpdate.price = Number(memberObj.price);
             if (memberObj?.deposit !== undefined || memberObj?.price !== undefined) {
               const memP = memberObj?.price !== undefined ? Number(memberObj.price) : undefined;
@@ -1738,8 +1730,6 @@ export async function PUT(req: Request) {
       if (numChild !== undefined) localUpdate.num_child = Number(numChild);
       if (price !== undefined) localUpdate.price = Number(price);
       if (deposit !== undefined) localUpdate.deposit = Number(deposit);
-      // Con anticipo la reserva pasa a confirmada (solo desde 'request': nunca reactiva una cancelada ni toca un bloqueo)
-      if (hasDepositPaid(deposit) && String(localRes.status || '').toLowerCase() === 'request') localUpdate.status = 'confirmed';
       if (notes !== undefined) localUpdate.notes = notes;
       if (checkIn) localUpdate.check_in = checkIn;
       if (checkOut) localUpdate.check_out = checkOut;
@@ -2214,26 +2204,6 @@ export async function PUT(req: Request) {
     }
     if (deposit !== undefined) {
       updatePayload.deposit = Number(deposit);
-      // Con anticipo la reserva pasa a confirmada (solo desde 'request'/'new': nunca reactiva una cancelada ni toca un bloqueo)
-      if (hasDepositPaid(deposit)) {
-        let statusBeforeDeposit = String(currentBooking?.status || '').toLowerCase();
-        if (!statusBeforeDeposit) {
-          // Si solo se edita el anticipo no se había leído la reserva: se consulta su estado real en Beds24 (no la copia local, que puede estar desfasada)
-          try {
-            const stRes = await fetch(`https://api.beds24.com/v2/bookings?id=${id}`, {
-              headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-              cache: 'no-store'
-            });
-            const stJson = await stRes.json().catch(() => null);
-            statusBeforeDeposit = String(stJson?.data?.[0]?.status || '').toLowerCase();
-          } catch (stErr) {
-            console.warn('[Reservas PUT] No se pudo leer el estado actual para confirmar por anticipo:', stErr);
-          }
-        }
-        if (['request', 'new'].includes(statusBeforeDeposit)) {
-          updatePayload.status = 'confirmed';
-        }
-      }
     }
     if (notes !== undefined) {
       updatePayload.notes = notes;
@@ -2292,7 +2262,6 @@ export async function PUT(req: Request) {
     try {
       const b24DirectUpdate: any = { updated_at: new Date().toISOString() };
       if (deposit !== undefined) b24DirectUpdate.deposit = Number(deposit);
-      if (updatePayload.status === 'confirmed') b24DirectUpdate.status = 'confirmed';
       if (updatePayload.price !== undefined) b24DirectUpdate.price = Number(updatePayload.price);
       if (deposit !== undefined || updatePayload.price !== undefined) {
         const p = updatePayload.price !== undefined ? Number(updatePayload.price) : Number(currentBooking?.price || 0);

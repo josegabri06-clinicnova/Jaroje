@@ -20,7 +20,6 @@ import {
   detectLanguageFromPhone
 } from '@/lib/whatsapp';
 import { isOtaChannel, sendOfficialOtaTemplate, isDummyOrInvalidPhone } from '@/lib/beds24-messages';
-import { hasDepositPaid } from '@/lib/deposit-rule';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // Hasta 5 minutos de ejecución continua en Vercel Pro
@@ -680,10 +679,11 @@ export async function GET(req: Request) {
 
         const actualPaid = Number(booking.actualPaid || 0);
         const depositVal = Number(booking.deposit || 0);
+        const bPrice = Number(booking.price || 0);
         const effectiveDeposit = Math.max(actualPaid, depositVal);
+        const hasMin50 = bPrice > 0 ? (effectiveDeposit >= (bPrice * 0.5 - 0.01)) : (effectiveDeposit > 0);
         const isRequestStatus = String(booking.status || '').toLowerCase() === 'request';
-        // Con cualquier anticipo la reserva se considera confirmada (el gerente puede autorizar anticipos menores al 50%)
-        const isConfirmed = !isRequestStatus && (isPrepaidOtaBooking || (hasDepositPaid(effectiveDeposit) && String(booking.status || '').toLowerCase() === 'confirmed'));
+        const isConfirmed = !isRequestStatus && (isPrepaidOtaBooking || (hasMin50 && String(booking.status || '').toLowerCase() === 'confirmed'));
         const isExpediaUnpaid = !isConfirmed && channelLower.includes('expedia');
 
         // Reservas confirmadas (OTAs prepagadas Airbnb/Booking o directas con anticipo): Solo se evalúan si fueron creadas en las últimas 48h.

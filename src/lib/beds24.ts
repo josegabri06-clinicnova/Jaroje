@@ -2,8 +2,6 @@ import { supabaseAdmin as supabase } from './supabase-admin';
 import { normalizePhone } from '@/lib/phone';
 import { maskPhone } from '@/lib/log-mask';
 import { trackBeds24, beds24FetchTracked } from '@/lib/beds24-credits';
-import { hasDepositPaid } from '@/lib/deposit-rule';
-import { isCancelledStatus } from '@/lib/booking-status';
 
 // ─── SERVICIO CENTRALIZADO DE BEDS24 JAROJE ─────────────────────────────────────
 // Fuente de verdad para reservas del Hotel Condominios Jaroje.
@@ -1856,21 +1854,13 @@ export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
   return json;
 }
 
-/** Se intentó registrar un pago en una reserva cancelada: primero hay que reactivarla. */
-export class BookingCancelledError extends Error {
-  constructor(bookId: number | string) {
-    super(`La reserva ${bookId} está cancelada`);
-    this.name = 'BookingCancelledError';
-  }
-}
-
 // Registrar un pago por transferencia en Beds24 como un ítem de factura (negativo)
 export async function addBeds24Payment(bookId: number | string, amount: number, description: string = 'Pago por transferencia'): Promise<boolean> {
   const token = await getBeds24Token();
-  // 1. Obtener la reserva actual para conocer el valor del campo 'deposit' y 'status' previos
+  // 1. Obtener la reserva actual para conocer el valor del campo 'deposit', 'price' y 'status' previos
   let currentDeposit = 0;
+  let bookingPrice = 0;
   let currentStatus = 'request';
-  let readFromBeds24 = false;
   try {
     const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookId}`, {
       headers: { 'token': token },
@@ -1880,32 +1870,34 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
       const getData = await getRes.json();
       if (getData && getData.success && Array.isArray(getData.data) && getData.data.length > 0) {
         currentDeposit = Number(getData.data[0].deposit || 0);
+        bookingPrice = Number(getData.data[0].price || 0);
         currentStatus = getData.data[0].status || 'request';
-        readFromBeds24 = true;
       }
     }
   } catch (e) {
     console.error(`[Beds24 API] Error fetching booking for deposit calculation:`, e);
   }
 
-  // Fallback a Supabase si no se pudo leer la reserva desde Beds24
-  if (!readFromBeds24) {
+  // Fallback a Supabase si no se obtuvo el precio desde Beds24
+  if (!bookingPrice) {
     try {
       const { data: dbB } = await supabase
         .from('beds24_reservations')
-        .select('status')
+        .select('price, status')
         .eq('id', String(bookId))
         .maybeSingle();
-      if (dbB?.status) currentStatus = dbB.status;
+      if (dbB) {
+        bookingPrice = Number(dbB.price || 0);
+        if (dbB.status) currentStatus = dbB.status;
+      }
     } catch (_) {}
   }
 
-  // Una reserva cancelada no recibe pagos: primero se reactiva (nunca se reactiva sola por un pago)
-  if (isCancelledStatus(currentStatus)) throw new BookingCancelledError(bookId);
-
   const newDeposit = currentDeposit + Number(amount);
-  // Con cualquier anticipo la reserva pasa a confirmada (el gerente puede autorizar anticipos menores al 50%)
-  const targetStatus = hasDepositPaid(newDeposit)
+  const is50PercentMet = (bookingPrice > 0)
+    ? (newDeposit >= (bookingPrice * 0.5 - 0.01))
+    : (newDeposit > 0);
+  const targetStatus = is50PercentMet
     ? 'confirmed'
     : (currentStatus === 'confirmed' ? 'confirmed' : 'request');
 
@@ -1984,8 +1976,6 @@ export async function addBeds24GroupPayment(
     }
 
     const targetB = jsonTarget.data[0];
-    // Una reserva cancelada no recibe pagos: primero se reactiva
-    if (isCancelledStatus(targetB.status)) throw new BookingCancelledError(bookId);
     const targetName = `${targetB.firstName || ''} ${targetB.lastName || ''}`.trim().toLowerCase();
     const targetPhone = (targetB.phone || targetB.mobile || targetB.guestPhone || '').trim();
 
@@ -2039,7 +2029,10 @@ export async function addBeds24GroupPayment(
       if (shareAmount <= 0) continue;
 
       const newDep = item.dep + shareAmount;
-      const targetStatus = hasDepositPaid(newDep)
+      const is50PercentMet = (item.price > 0)
+        ? (newDep >= (item.price * 0.5 - 0.01))
+        : (newDep > 0);
+      const targetStatus = is50PercentMet
         ? 'confirmed'
         : (item.b.status === 'confirmed' ? 'confirmed' : 'request');
 
@@ -2098,7 +2091,6 @@ export async function addBeds24GroupPayment(
     clearBeds24Cache();
     return allSuccess;
   } catch (err) {
-    if (err instanceof BookingCancelledError) throw err;
     console.error("[Beds24 Group Payment Error]:", err);
     return addBeds24Payment(bookId, totalAmount, description);
   }

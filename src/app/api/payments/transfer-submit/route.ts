@@ -7,7 +7,6 @@ import { sendTemplate_ComprobantePagoRecibido, sendWhatsAppTextMessage, isSpanis
 import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { maskPhone } from '@/lib/log-mask';
-import { isCancelledStatus } from '@/lib/booking-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,27 +50,6 @@ export async function POST(req: Request) {
     }
     if (access.reason === 'no_phone' && !access.bookingFound) {
       return NextResponse.json({ error: 'Reserva no encontrada.' }, { status: 404 });
-    }
-
-    // Una reserva cancelada no recibe comprobantes: primero tiene que reactivarla el equipo. Se comprueba antes de guardar nada.
-    // (El portal ya oculta el pago de una reserva cancelada; esto lo exige también el servidor.)
-    try {
-      const { data: b24State } = await supabase.from('beds24_reservations').select('status').eq('id', guestId).maybeSingle();
-      const localId = Number(guestId);
-      const { data: localState } = Number.isFinite(localId) && !b24State
-        ? await supabase.from('local_reservas').select('status').eq('id', localId).maybeSingle()
-        : { data: null as { status?: string } | null };
-      if (isCancelledStatus(b24State?.status ?? localState?.status)) {
-        const wantsEnglish = String(formData.get('lang') || '').toLowerCase().trim() === 'en';
-        return NextResponse.json({
-          error: wantsEnglish
-            ? 'This reservation is cancelled and cannot receive payments. Please contact us to reactivate it.'
-            : 'Esta reserva está cancelada y no puede recibir pagos. Contáctanos para reactivarla.',
-          code: 'booking_cancelled'
-        }, { status: 409 });
-      }
-    } catch (stateErr) {
-      console.warn('[Submit Transfer] No se pudo comprobar si la reserva está cancelada:', stateErr);
     }
 
     // Validación de tamaño de archivo (máx 10 MB)

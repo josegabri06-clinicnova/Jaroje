@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Token, getBeds24Bookings, clearBeds24Cache } from '@/lib/beds24';
-import { isCancelledStatus } from '@/lib/booking-status';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendTemplate3_ReservacionConfirmada, sendTemplate11_PagoAnticipoRecibido, sendTemplate6_BienvenidaCheckin } from '@/lib/whatsapp';
-import { hasDepositPaid } from '@/lib/deposit-rule';
-
-const CANCELLED_BOOKING_MESSAGE = 'Esta reserva está cancelada y no puede recibir pagos. Reactívala primero (Reservas → Reactivar reserva) y después registra el cobro.';
 
 // POST: Registrar un cobro/pago en Beds24 asociado a una reserva o localmente en Supabase
 export async function POST(req: Request) {
@@ -28,16 +24,12 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (localRes) {
-      // Una reserva cancelada no recibe pagos: primero hay que reactivarla
-      if (isCancelledStatus(localRes.status)) {
-        return NextResponse.json({ success: false, error: CANCELLED_BOOKING_MESSAGE }, { status: 409 });
-      }
-
       // Es local! Registrar el pago actualizando el depósito y status en la tabla local_reservas
       const newDeposit = Number(localRes.deposit || 0) + Number(amount);
-      // Con cualquier anticipo la reserva queda confirmada (el gerente puede autorizar anticipos menores al 50%)
-      const isConfirmedNow = hasDepositPaid(newDeposit);
-      const nextStatus = isConfirmedNow ? 'confirmed' : (localRes.status === 'confirmed' ? 'confirmed' : 'request');
+      const isMet50 = (Number(localRes.price || 0) > 0)
+        ? (newDeposit >= (Number(localRes.price) * 0.5 - 0.01))
+        : (newDeposit > 0);
+      const nextStatus = isMet50 ? 'confirmed' : (localRes.status === 'confirmed' ? 'confirmed' : 'request');
 
       const { error: updateErr } = await supabase
         .from('local_reservas')
@@ -111,14 +103,18 @@ export async function POST(req: Request) {
               num_child: Number(localRes.num_child || 0)
             };
 
-            // Si ya tenía un anticipo antes de este pago, ya se le confirmó: omitir reenvío de confirmación
-            if (hasDepositPaid(localRes.deposit)) {
-              console.log(`[Payment Local] Reserva local #${localRes.id} ya contaba con anticipo previamente. Omitiendo reservacion_confirmada.`);
+            // Si ya estaba cubierto al 50% antes de este pago, omitir reenvío de confirmación
+            const wasAlready50 = (Number(localRes.price || 0) > 0)
+              ? (Number(localRes.deposit || 0) >= (Number(localRes.price) * 0.5 - 0.01))
+              : false;
+
+            if (wasAlready50) {
+              console.log(`[Payment Local] Reserva local #${localRes.id} ya contaba con 50% previamente. Omitiendo reservacion_confirmada.`);
               return;
             }
 
-            const tmplToSend = isConfirmedNow ? 'reservacion_confirmada' : 'pago_anticipo_recibido';
-            const waRes = isConfirmedNow 
+            const tmplToSend = isMet50 ? 'reservacion_confirmada' : 'pago_anticipo_recibido';
+            const waRes = isMet50 
               ? await sendTemplate3_ReservacionConfirmada(bookingForWA)
               : await sendTemplate11_PagoAnticipoRecibido(bookingForWA);
 
@@ -144,24 +140,24 @@ export async function POST(req: Request) {
     const currentDeposit = bodyDeposit !== undefined ? Number(bodyDeposit) : 0;
     const newDeposit = currentDeposit + Number(amount);
 
+    let bookingPrice = Number(body.totalPrice || body.price || 0);
     let currentStatus = 'request';
     try {
       const { data: dbB } = await supabase
         .from('beds24_reservations')
-        .select('status')
+        .select('price, status')
         .eq('id', String(bookId))
         .maybeSingle();
-      if (dbB?.status) currentStatus = dbB.status;
+      if (dbB) {
+        if (!bookingPrice) bookingPrice = Number(dbB.price || 0);
+        if (dbB.status) currentStatus = dbB.status;
+      }
     } catch (_) {}
 
-    // Una reserva cancelada no recibe pagos: primero hay que reactivarla
-    if (isCancelledStatus(currentStatus)) {
-      return NextResponse.json({ success: false, error: CANCELLED_BOOKING_MESSAGE }, { status: 409 });
-    }
-
-    // Con cualquier anticipo la reserva queda confirmada (el gerente puede autorizar anticipos menores al 50%)
-    const isConfirmedNowB24 = hasDepositPaid(newDeposit);
-    const targetStatusB24 = isConfirmedNowB24
+    const isMet50B24 = (bookingPrice > 0)
+      ? (newDeposit >= (bookingPrice * 0.5 - 0.01))
+      : (newDeposit > 0);
+    const targetStatusB24 = isMet50B24
       ? 'confirmed'
       : (currentStatus === 'confirmed' ? 'confirmed' : 'request');
 
@@ -235,15 +231,17 @@ export async function POST(req: Request) {
           const booking = allBookings.find(r => r.id === Number(bookId));
           if (booking && (booking.phone || booking.mobile || booking.guest_phone)) {
             const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
-            // Si ya tenía un anticipo antes de este pago, ya se le confirmó: omitir reenvío de confirmación
-            if (hasDepositPaid(currentDeposit)) {
-              console.log(`[Payment Beds24] Reserva Beds24 #${bookId} ya contaba con anticipo previamente. Omitiendo reservacion_confirmada.`);
+            const bPrice = Number(booking.price || bookingPrice || 0);
+            const is50Covered = bPrice > 0 ? (newDeposit >= (bPrice * 0.5 - 0.01)) : true;
+            const wasAlready50 = bPrice > 0 ? (currentDeposit >= (bPrice * 0.5 - 0.01)) : false;
+            if (wasAlready50) {
+              console.log(`[Payment Beds24] Reserva Beds24 #${bookId} ya contaba con 50% previamente. Omitiendo reservacion_confirmada.`);
               return;
             }
 
-            const tmplToSend = isConfirmedNowB24 ? 'reservacion_confirmada' : 'pago_anticipo_recibido';
+            const tmplToSend = is50Covered ? 'reservacion_confirmada' : 'pago_anticipo_recibido';
 
-            const waRes = isConfirmedNowB24
+            const waRes = is50Covered
               ? await sendTemplate3_ReservacionConfirmada(booking)
               : await sendTemplate11_PagoAnticipoRecibido(booking);
 

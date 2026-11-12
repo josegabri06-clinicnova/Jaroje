@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token, BookingCancelledError } from '@/lib/beds24';
-import { isCancelledStatus } from '@/lib/booking-status';
+import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token } from '@/lib/beds24';
 import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage } from '@/lib/whatsapp';
 import { maskPhone } from '@/lib/log-mask';
-import { hasDepositPaid } from '@/lib/deposit-rule';
 
 export const dynamic = 'force-dynamic';
-
-const CANCELLED_BOOKING_MESSAGE = 'Esta reserva está cancelada y no puede recibir pagos. Reactívala primero (Reservas → Reactivar reserva) y después aprueba el comprobante.';
 
 export async function POST(req: Request) {
   try {
@@ -33,20 +29,9 @@ export async function POST(req: Request) {
       // 0. Obtener el recibo original de transferencia para verificar la plataforma
       const { data: receipt } = await supabase
         .from('transfer_receipts')
-        .select('notes, status')
+        .select('notes')
         .eq('id', receiptId)
         .maybeSingle();
-
-      // Un mismo comprobante no se aprueba dos veces (doble clic o reintento): duplicaría el pago. Otros comprobantes de la
-      // misma reserva (el 50% restante, el pago en el check-in...) sí se pueden aprobar cada uno por separado.
-      if (receipt?.status === 'approved') {
-        return NextResponse.json({ error: 'Este comprobante ya fue aprobado. No se registró el pago de nuevo.' }, { status: 409 });
-      }
-
-      // Una reserva cancelada no recibe pagos: primero hay que reactivarla (Reservas → Reactivar reserva)
-      if (localRes && isCancelledStatus(localRes.status)) {
-        return NextResponse.json({ error: CANCELLED_BOOKING_MESSAGE }, { status: 409 });
-      }
 
       let newDeposit = 0;
       let guestName = 'Huésped';
@@ -68,8 +53,10 @@ export async function POST(req: Request) {
       if (localRes) {
         // Reserva local: Actualizar depósito y status en local_reservas
         newDeposit = Number(localRes.deposit || 0) + Number(amount);
-        // Con cualquier anticipo la reserva queda confirmada (el gerente puede autorizar anticipos menores al 50%)
-        const nextStatus = hasDepositPaid(newDeposit) ? 'confirmed' : (localRes.status === 'confirmed' ? 'confirmed' : 'request');
+        const isMet50 = (Number(localRes.price || 0) > 0)
+          ? (newDeposit >= (Number(localRes.price) * 0.5 - 0.01))
+          : (newDeposit > 0);
+        const nextStatus = isMet50 ? 'confirmed' : (localRes.status === 'confirmed' ? 'confirmed' : 'request');
         const { error: dbError } = await supabase
           .from('local_reservas')
           .update({ 
@@ -129,16 +116,7 @@ export async function POST(req: Request) {
       } else {
         // Reserva de Beds24: Registrar pago en Beds24 con soporte para distribución de grupo
         const desc = `Abono por transferencia bancaria (Ref: ${receiptId.substring(0, 8)})`;
-        let beds24Success = false;
-        try {
-          beds24Success = await addBeds24GroupPayment(bookingId, amount, desc);
-        } catch (payErr) {
-          // Reserva cancelada en Beds24: no se registró nada (se comprueba antes de escribir)
-          if (payErr instanceof BookingCancelledError) {
-            return NextResponse.json({ error: CANCELLED_BOOKING_MESSAGE }, { status: 409 });
-          }
-          throw payErr;
-        }
+        const beds24Success = await addBeds24GroupPayment(bookingId, amount, desc);
 
         if (!beds24Success) {
           return NextResponse.json({ error: 'Fallo al registrar el pago en Beds24. Revisa las credenciales de la API.' }, { status: 500 });
@@ -463,12 +441,13 @@ export async function POST(req: Request) {
         let waRes: { success: boolean; error?: string; data?: any } | null = null;
         let templateLogged = '';
 
-        // Con cualquier anticipo la reserva queda confirmada
-        const isDepositCovered = hasDepositPaid(effectiveDeposit);
+        const isMin50Met = effectivePrice > 0
+          ? (effectiveDeposit >= (effectivePrice * 0.5 - 0.01))
+          : true;
 
-        // Calcular el depósito previo a este pago para detectar si ya tenía un anticipo (y ya se le confirmó)
+        // Calcular el depósito previo a este pago para detectar si el 50% ya estaba cubierto
         const prevEffectiveDeposit = Math.max(0, effectiveDeposit - Number(amount));
-        const wasAlreadyCovered = hasDepositPaid(prevEffectiveDeposit);
+        const wasAlreadyCovered50 = effectivePrice > 0 && (prevEffectiveDeposit >= (effectivePrice * 0.5 - 0.01));
 
         // Verificar si 'reservacion_confirmada' ya fue enviada a esta reserva o a algún miembro de su grupo
         let wasAlreadyConfirmed = false;
@@ -492,15 +471,15 @@ export async function POST(req: Request) {
           console.warn("[Approve Transfer] Error verificando logs de reservacion_confirmada previa:", chkLogErr);
         }
 
-        const isAlreadyConfirmed = wasAlreadyConfirmed || wasAlreadyCovered;
+        const isAlreadyConfirmed = wasAlreadyConfirmed || wasAlreadyCovered50;
 
         if (!isAlreadyConfirmed) {
-          if (isDepositCovered) {
-            console.log(`[Approve Transfer] Primer anticipo registrado ($${effectiveDeposit}/$${effectivePrice}). Enviando reservacion_confirmada (Mensaje 3) a ${maskPhone(phone)} (grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
+          if (isMin50Met) {
+            console.log(`[Approve Transfer] Mínimo 50% cubierto por primera vez ($${effectiveDeposit}/$${effectivePrice}). Enviando reservacion_confirmada (Mensaje 3) a ${maskPhone(phone)} (grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
             waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
             templateLogged = 'reservacion_confirmada';
           } else {
-            console.log(`[Approve Transfer] Sin anticipo registrado ($${effectiveDeposit}/$${effectivePrice}). Enviando pago_anticipo_recibido (Mensaje 11) a ${maskPhone(phone)}`);
+            console.log(`[Approve Transfer] Anticipo parcial inferior al 50% ($${effectiveDeposit}/$${effectivePrice}). Enviando pago_anticipo_recibido (Mensaje 11) a ${maskPhone(phone)}`);
             waRes = await sendTemplate11_PagoAnticipoRecibido(bookingForWA, true);
             templateLogged = 'pago_anticipo_recibido';
           }
@@ -530,7 +509,7 @@ export async function POST(req: Request) {
             console.log(`[Approve Transfer] Sending 100% full payment confirmation message to ${maskPhone(phone)}`);
             await sendWhatsAppTextMessage(phone, fullPaymentMsg);
           } else {
-            // Anticipo Aprobado (cualquier monto menor al total; el gerente puede autorizar anticipos menores al 50%)
+            // Anticipo Aprobado (50% u otro abono)
             const partialPaymentMsg = isGroupBooking
               ? `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para tu grupo de reservaciones (${groupTotalCount} condominios, ref: #${bookingId}).\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`
               : `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para la reserva #${bookingId}.\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`;
