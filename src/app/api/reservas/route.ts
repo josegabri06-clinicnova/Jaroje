@@ -1414,7 +1414,64 @@ export async function PUT(req: Request) {
       const BEDS24_TOKEN = await getBeds24Token();
       const beds24BatchPayload: any[] = [];
       const updatedBeds24Ids: string[] = [];
-      let groupCapacitySettings: any = undefined; // se carga una sola vez si hace falta
+
+      // Cargo por huéspedes extra del grupo, con la misma regla que el portal de venta: sobre el TOTAL del grupo (huéspedes -
+      // capacidad base de todas las habitaciones), no por habitación. Se calcula aquí, en el servidor, y se reparte en las
+      // líneas "Huéspedes adicionales". Solo si la pantalla lo pide (splitExtraGuestCharge), todas las habitaciones son de
+      // Beds24 y directas, y las fechas no cambian; si no, se mantiene el comportamiento de siempre.
+      const groupPlan = new Map<string, { price: number; extraAmount: number; extraPrice: number; nights: number }>();
+      const prefetchedMembers: Record<string, any> = {};
+      if (body.splitExtraGuestCharge === true) {
+        try {
+          const { getGroupExtraGuestFee, allocateGroupExtraFee, getCapacityRules, EXTRA_GUEST_CHARGE_LABEL } = await import('@/lib/beds24');
+          let eligible = true;
+          for (const m of body.groupBookings) {
+            const { data: localMem } = await supabase.from('local_reservas').select('id').eq('id', Number(m.id)).maybeSingle();
+            if (localMem || m.price === undefined) { eligible = false; break; }
+            const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${String(m.id)}&includeInvoiceItems=true`, {
+              headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+              cache: 'no-store'
+            });
+            const getJson = await getRes.json().catch(() => null);
+            const cur = getJson?.data?.[0];
+            if (!cur || isOtaSource(cur) || (checkIn && checkIn !== cur.arrival) || (checkOut && checkOut !== cur.departure)) { eligible = false; break; }
+            prefetchedMembers[String(m.id)] = cur;
+          }
+          if (eligible) {
+            const caps = (await loadCapacitySettings()) || undefined;
+            const members = body.groupBookings.map((m: any) => {
+              const cur = prefetchedMembers[String(m.id)];
+              const oldGuests = Number(cur.numAdult || 1) + Number(cur.numChild || 0);
+              const newGuests = (m.numAdult !== undefined ? Number(m.numAdult) : Number(cur.numAdult || 1))
+                + (m.numChild !== undefined ? Number(m.numChild) : Number(cur.numChild || 0));
+              const extraLine = (Array.isArray(cur.invoiceItems) ? cur.invoiceItems : []).find((c: any) =>
+                (c.type === 'charge' || !c.type) && (c.description || '').toLowerCase().includes(EXTRA_GUEST_CHARGE_LABEL.toLowerCase())
+                && (!(c.bookingId || c.bookId) || String(c.bookingId || c.bookId) === String(m.id)));
+              return { m, cur, oldGuests, newGuests, extraAmount: extraLine ? invoiceLineTotal(extraLine) : 0 };
+            });
+            const nights = nightsBetween(members[0].cur.arrival, members[0].cur.departure);
+            const feeInfo = getGroupExtraGuestFee(members.map((x: any) => ({ roomId: x.cur.roomId, oldGuests: x.oldGuests, newGuests: x.newGuests })), nights, caps);
+            if (feeInfo && members.every((x: any) => Number.isFinite(Number(x.m.price)))) {
+              const allocated = allocateGroupExtraFee(members.map((x: any) => ({
+                id: String(x.m.id),
+                guestsOverBase: x.newGuests - getCapacityRules(x.cur.roomId, caps).base,
+                price: Number(x.m.price),
+                extraAmount: x.extraAmount
+              })), feeInfo.fee);
+              allocated.forEach(a => groupPlan.set(a.id, {
+                price: Math.max(0, a.price),
+                extraAmount: Math.min(Math.max(0, a.extraAmount), Math.max(0, a.price)),
+                extraPrice: feeInfo.extraPrice,
+                nights
+              }));
+              console.log(`[Reservas PUT Group] Extras del grupo: variación ${feeInfo.deltaExtras} huésped(es) = $${feeInfo.fee}`);
+            }
+          }
+        } catch (planErr) {
+          console.error('[Reservas PUT Group] No se pudo calcular el cargo por huéspedes extra del grupo; se guarda como siempre:', planErr);
+          groupPlan.clear();
+        }
+      }
 
       for (const m of body.groupBookings) {
         const mIdStr = String(m.id);
@@ -1477,22 +1534,25 @@ export async function PUT(req: Request) {
           if (notes !== undefined) b24Item.notes = notes;
           if (m.deposit !== undefined) b24Item.deposit = Number(m.deposit);
 
-          let currentMemBooking: any = null;
-          try {
-            const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${mIdStr}&includeInvoiceItems=true`, {
-              headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-              cache: 'no-store'
-            });
-            const getJson = await getRes.json().catch(() => null);
-            if (getJson && getJson.data && getJson.data.length > 0) {
-              currentMemBooking = getJson.data[0];
+          let currentMemBooking: any = prefetchedMembers[mIdStr] || null;
+          if (!currentMemBooking) {
+            try {
+              const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${mIdStr}&includeInvoiceItems=true`, {
+                headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+                cache: 'no-store'
+              });
+              const getJson = await getRes.json().catch(() => null);
+              if (getJson && getJson.data && getJson.data.length > 0) {
+                currentMemBooking = getJson.data[0];
+              }
+            } catch (e) {
+              console.error(`[Reservas PUT Group] Error fetching member ${mIdStr}:`, e);
             }
-          } catch (e) {
-            console.error(`[Reservas PUT Group] Error fetching member ${mIdStr}:`, e);
           }
 
           if (m.price !== undefined) {
-            const finalPrice = Number(m.price);
+            const plan = groupPlan.get(mIdStr);
+            const finalPrice = plan ? plan.price : Number(m.price);
             b24Item.price = finalPrice;
             
             const currentItems = (currentMemBooking && Array.isArray(currentMemBooking.invoiceItems))
@@ -1505,30 +1565,12 @@ export async function PUT(req: Request) {
             const invoiceItemsUpdate: any[] = [];
 
             // Línea de "Huéspedes adicionales" (la crea el portal de venta): se conserva aparte de la habitación
-            const { splitExtraGuestCharge, EXTRA_GUEST_CHARGE_LABEL } = await import('@/lib/beds24');
+            const { EXTRA_GUEST_CHARGE_LABEL } = await import('@/lib/beds24');
             const extraGuestLine = charges.find((c: any) => (c.description || '').toLowerCase().includes(EXTRA_GUEST_CHARGE_LABEL.toLowerCase()));
-            let roomAmount = finalPrice;
-            let extraSplit: ReturnType<typeof splitExtraGuestCharge> = null;
-            // Solo las pantallas que ya suman el recargo al total envían splitExtraGuestCharge (no el check-in ni otras llamadas)
-            if (body.splitExtraGuestCharge === true && currentMemBooking && !isOtaSource(currentMemBooking)
-                && (!checkIn || checkIn === currentMemBooking.arrival) && (!checkOut || checkOut === currentMemBooking.departure)) {
-              if (groupCapacitySettings === undefined) groupCapacitySettings = await loadCapacitySettings();
-              const oldGuests = Number(currentMemBooking.numAdult || 1) + Number(currentMemBooking.numChild || 0);
-              const newGuests = (m.numAdult !== undefined ? Number(m.numAdult) : Number(currentMemBooking.numAdult || 1))
-                + (m.numChild !== undefined ? Number(m.numChild) : Number(currentMemBooking.numChild || 0));
-              extraSplit = splitExtraGuestCharge({
-                price: finalPrice,
-                currentPrice: Number(currentMemBooking.price),
-                existingExtraAmount: extraGuestLine ? invoiceLineTotal(extraGuestLine) : 0,
-                oldGuests,
-                newGuests,
-                roomId: currentMemBooking.roomId,
-                nights: nightsBetween(currentMemBooking.arrival, currentMemBooking.departure),
-                capacitySettings: groupCapacitySettings || undefined
-              });
-              if (extraSplit) roomAmount = extraSplit.roomAmount;
-            }
-            const keptExtraLine = extraSplit && extraSplit.extraAmount > 0 ? (extraGuestLine || true) : null;
+            // Con reparto del grupo, la habitación se queda con su tarifa base y los extras van en su línea aparte
+            const extraAmount = plan ? plan.extraAmount : 0;
+            const roomAmount = finalPrice - extraAmount;
+            const keptExtraLine = extraAmount > 0 ? (extraGuestLine || true) : null;
 
             let mainRoomCharge = charges.find((c: any) =>
               (c.description || '').includes('[ROOMNAME1]') ||
@@ -1563,12 +1605,12 @@ export async function PUT(req: Request) {
               });
             }
 
-            if (extraSplit && extraSplit.extraAmount > 0) {
+            if (plan && extraAmount > 0) {
               invoiceItemsUpdate.push({
                 ...(extraGuestLine && extraGuestLine.id ? { id: extraGuestLine.id } : { type: 'charge' }),
-                description: `${EXTRA_GUEST_CHARGE_LABEL} | Cargo extra (${extraSplit.extraGuests} pax x $${extraSplit.extraPrice} x ${nightsBetween(currentMemBooking.arrival, currentMemBooking.departure)} n.)`,
+                description: `${EXTRA_GUEST_CHARGE_LABEL} | Cargo extra (${Math.round(extraAmount / (plan.extraPrice * plan.nights))} pax x $${plan.extraPrice} x ${plan.nights} n.)`,
                 qty: 1,
-                amount: extraSplit.extraAmount,
+                amount: extraAmount,
                 vatRate: 19
               });
             }
@@ -1634,6 +1676,15 @@ export async function PUT(req: Request) {
           throw new Error(`Beds24 rechazó la modificación del grupo: ${errText}`);
         }
 
+        // Beds24 responde HTTP correcto aunque rechace una habitación concreta (success:false dentro de la respuesta)
+        const b24GroupBody = await b24Res.json().catch(() => null);
+        const b24GroupResults: any[] = Array.isArray(b24GroupBody) ? b24GroupBody : (Array.isArray(b24GroupBody?.data) ? b24GroupBody.data : []);
+        const b24GroupFailed = b24GroupResults.filter((r: any) => r && r.success === false);
+        if (b24GroupFailed.length > 0) {
+          console.error("[Reservas PUT Group] Beds24 rechazó habitaciones del grupo:", JSON.stringify(b24GroupFailed).slice(0, 1500));
+          throw new Error(`Beds24 rechazó la modificación de ${b24GroupFailed.length} habitación(es) del grupo: ${b24GroupFailed.map((r: any) => (r.errors || []).map((e: any) => `${e.field || ''} ${e.message || ''}`.trim()).join(', ') || r.message || 'sin detalle').join(' | ')}`);
+        }
+
         // Actualizar Supabase y checkins para cada miembro de Beds24
         for (const bId of updatedBeds24Ids) {
           try {
@@ -1648,10 +1699,13 @@ export async function PUT(req: Request) {
 
             // Actualización inmediata y directa en beds24_reservations
             const b24DirectUpdate: any = { updated_at: new Date().toISOString() };
+            // Precio final de la habitación: el calculado con el reparto de extras del grupo, si lo hubo
+            const plannedMem = groupPlan.get(String(bId));
+            const finalMemPrice = plannedMem ? plannedMem.price : (memberObj?.price !== undefined ? Number(memberObj.price) : undefined);
             if (memberObj?.deposit !== undefined) b24DirectUpdate.deposit = Number(memberObj.deposit);
-            if (memberObj?.price !== undefined) b24DirectUpdate.price = Number(memberObj.price);
-            if (memberObj?.deposit !== undefined || memberObj?.price !== undefined) {
-              const memP = memberObj?.price !== undefined ? Number(memberObj.price) : undefined;
+            if (finalMemPrice !== undefined) b24DirectUpdate.price = finalMemPrice;
+            if (memberObj?.deposit !== undefined || finalMemPrice !== undefined) {
+              const memP = finalMemPrice;
               const memD = memberObj?.deposit !== undefined ? Number(memberObj.deposit) : undefined;
               if (memP !== undefined && memD !== undefined) {
                 b24DirectUpdate.balance = Math.max(0, memP - memD);
@@ -1690,7 +1744,9 @@ export async function PUT(req: Request) {
       return NextResponse.json({
         success: true,
         message: `Grupo de ${body.groupBookings.length} habitaciones actualizado exitosamente.`,
-        count: body.groupBookings.length
+        count: body.groupBookings.length,
+        // Precio final de cada habitación cuando se repartió el cargo por huéspedes extra del grupo
+        members: Array.from(groupPlan.entries()).map(([id, p]) => ({ id, price: p.price }))
       });
     }
 
@@ -2175,7 +2231,8 @@ export async function PUT(req: Request) {
         let roomAmount = finalPrice;
         let extraSplit: ReturnType<typeof splitExtraGuestCharge> = null;
         // Solo las pantallas que ya suman el recargo al total envían splitExtraGuestCharge (no el check-in ni otras llamadas)
-        if (body.splitExtraGuestCharge === true && price !== undefined && currentBooking && !isOtaSource(currentBooking)
+        // Las habitaciones de un grupo (masterId) se reparten a nivel de grupo, no aquí por habitación
+        if (body.splitExtraGuestCharge === true && price !== undefined && currentBooking && !isOtaSource(currentBooking) && !currentBooking.masterId
             && (!checkIn || checkIn === currentBooking.arrival) && (!checkOut || checkOut === currentBooking.departure)) {
           const capSettings = await loadCapacitySettings();
           const oldGuests = Number(currentBooking.numAdult || 1) + Number(currentBooking.numChild || 0);

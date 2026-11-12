@@ -334,7 +334,11 @@ export async function POST(req: Request) {
         channel: currentBooking.channel || 'direct'
       };
 
-      const siblingBeds24 = allB24.filter(r => areBookingsInSameGroup(currentBooking, r));
+      // Se compara la reserva ya procesada (mismo formato que las demás) y no la devuelta en bruto por Beds24: en bruto el
+      // canal es otro texto (p. ej. "Directo whatssap") y el grupo no se reconocía, así que las otras habitaciones se
+      // descartaban sin avisar y solo se guardaba la principal.
+      const mainForGroup = allB24.find((r: any) => String(r.id) === String(currentBooking.id)) || currentBooking;
+      const siblingBeds24 = allB24.filter(r => areBookingsInSameGroup(mainForGroup, r));
 
       const groupList = [mainBookingMapped, ...siblingBeds24];
 

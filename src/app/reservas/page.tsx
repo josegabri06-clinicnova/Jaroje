@@ -8,7 +8,7 @@ import { uploadGuestFile } from '@/lib/files-client';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createDbClient } from '@/lib/db-client';
-import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests, areBookingsInSameGroup, isDummyOrInvalidPhone } from '@/lib/beds24';
+import { computeOtaSplit, getCapacityRules, getGroupExtraGuestFee, detectAndAdjustGroupGuests, areBookingsInSameGroup, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
@@ -2173,22 +2173,19 @@ function ReservasListInner() {
     setEditDailyRate(String(Math.round(newPrice / nights)));
   };
 
-  // Igual que arriba pero para una habitación de un grupo: cada habitación cobra solo sus huéspedes por encima de su propia
-  // capacidad base. Devuelve la habitación con los huéspedes nuevos y, si procede, su total y tarifa diaria ajustados.
-  const applyGuestsToGroupMember = (m: any, newAdults: number, newChildren: number) => {
-    const updated = { ...m, num_adult: newAdults, num_child: newChildren };
-    const channel = String(m.channel || '').toLowerCase();
-    if (['airbnb', 'booking', 'expedia', 'vrbo', 'google'].some(c => channel.includes(c))) return updated;
-    const rules = getCapacityRules(m.room_name || '', capacitySettings || undefined);
-    const prevPax = Number(m.num_adult) + Number(m.num_child);
-    // Dato antiguo con más personas que el máximo de la habitación: no es un cambio real de ocupación
-    if (prevPax > rules.max) return updated;
-    const delta = Math.max(0, newAdults + newChildren - rules.base) - Math.max(0, prevPax - rules.base);
-    if (delta === 0) return updated;
-    const extraPrice = (capacitySettings as any)?.extra_guest_price !== undefined ? Number((capacitySettings as any).extra_guest_price) : 500;
-    const nights = Number(m.nights) || 1;
-    const newPrice = Math.max(0, Math.round(Number(m.price || 0) + delta * extraPrice * nights));
-    return { ...updated, price: String(newPrice), daily_rate: String(Math.round(newPrice / nights)) };
+  // Vista previa del cargo por huéspedes extra de un GRUPO. Regla del portal de venta: se cobra sobre el total del grupo
+  // (huéspedes - capacidad base de todas las habitaciones), no por habitación. Es solo informativa: el cálculo real y el
+  // reparto en las líneas de factura los hace el servidor al guardar (los precios de cada habitación se envían sin tocar).
+  const groupExtraPreview = () => {
+    if (!isEditingRes || isOtaRes || editGroupMembers.length <= 1) return null;
+    const nights = getNightsBetweenDates(editCheckIn, editCheckOut) || 1;
+    return getGroupExtraGuestFee(editGroupMembers.map(m => {
+      const orig = groupBookings.find((gb: any) => String(gb.id) === String(m.id));
+      const oldGuests = orig
+        ? Number(orig.display_num_adult !== undefined ? orig.display_num_adult : (orig.num_adult || 1)) + Number(orig.display_num_child !== undefined ? orig.display_num_child : (orig.num_child || 0))
+        : Number(m.num_adult) + Number(m.num_child);
+      return { roomId: m.room_name || '', oldGuests, newGuests: Number(m.num_adult) + Number(m.num_child) };
+    }), nights, capacitySettings || undefined);
   };
 
   const handleSaveReservationEdit = async () => {
@@ -2255,8 +2252,18 @@ function ReservasListInner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar los cambios');
 
-      alert('✅ Reserva modificada con éxito.');
-      
+      // En grupos el servidor reparte el cargo por huéspedes extra del grupo: se usan los precios finales que devuelve
+      const finalGroupMembers = editGroupMembers.map(m => {
+        const f = Array.isArray(data.members) ? data.members.find((x: any) => String(x.id) === String(m.id)) : null;
+        return f ? { ...m, price: String(f.price) } : m;
+      });
+      const groupPriceBefore = editGroupMembers.reduce((sum, m) => sum + Number(m.price), 0);
+      const groupPriceAfter = finalGroupMembers.reduce((sum, m) => sum + Number(m.price), 0);
+
+      alert(editGroupMembers.length > 1 && groupPriceAfter !== groupPriceBefore
+        ? `✅ Reserva modificada. El total del grupo se actualizó a MX$${groupPriceAfter.toLocaleString('es-MX')} por los huéspedes extra.`
+        : '✅ Reserva modificada con éxito.');
+
       try {
         const emp = getOperatorForLog();
         const employeeNum = emp.employee_num;
@@ -2298,7 +2305,7 @@ function ReservasListInner() {
       }
 
       const totalGroupPrice = editGroupMembers.length > 1
-        ? editGroupMembers.reduce((sum, m) => sum + Number(m.price), 0)
+        ? groupPriceAfter
         : Number(editPrice);
       const totalGroupDeposit = editGroupMembers.length > 1
         ? editGroupMembers.reduce((sum, m) => sum + Number(m.deposit), 0)
@@ -2309,7 +2316,7 @@ function ReservasListInner() {
         const isGroupCard = prev.is_group_card;
         if (isGroupCard && editGroupMembers.length > 1) {
           const updatedMembers = (prev.group_members || []).map((gb: any) => {
-            const memberUpdate = editGroupMembers.find(m => String(m.id) === String(gb.id));
+            const memberUpdate = finalGroupMembers.find(m => String(m.id) === String(gb.id));
             if (memberUpdate) {
               return {
                 ...gb,
@@ -2365,7 +2372,7 @@ function ReservasListInner() {
 
       setReservas(prev => prev.map(r => {
         if (editGroupMembers.length > 1) {
-          const memberUpdate = editGroupMembers.find(m => String(m.id) === String(r.id));
+          const memberUpdate = finalGroupMembers.find(m => String(m.id) === String(r.id));
           if (memberUpdate) {
             return {
               ...r,
@@ -4545,7 +4552,7 @@ function ReservasListInner() {
                                   value={member.num_adult}
                                   onChange={e => {
                                     const val = Number(e.target.value);
-                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? applyGuestsToGroupMember(m, val, Number(m.num_child)) : m));
+                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? { ...m, num_adult: val } : m));
                                   }}
                                   className={`w-full border border-zinc-200 rounded-xl px-2.5 py-2 outline-none text-[12px] font-semibold shadow-sm ${
                                     isMemberOta ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
@@ -4563,7 +4570,7 @@ function ReservasListInner() {
                                   value={member.num_child}
                                   onChange={e => {
                                     const val = Number(e.target.value);
-                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? applyGuestsToGroupMember(m, Number(m.num_adult), val) : m));
+                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? { ...m, num_child: val } : m));
                                   }}
                                   className={`w-full border border-zinc-200 rounded-xl px-2.5 py-2 outline-none text-[12px] font-semibold shadow-sm ${
                                     isMemberOta ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
@@ -4642,6 +4649,19 @@ function ReservasListInner() {
                           </div>
                         );
                       })}
+
+                      {(() => {
+                        const preview = groupExtraPreview();
+                        if (!preview || preview.fee === 0) return null;
+                        const amount = Math.abs(preview.fee).toLocaleString('es-MX');
+                        return (
+                          <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold p-3 rounded-xl leading-snug">
+                            {preview.fee > 0
+                              ? `Huéspedes extra del grupo: +$${amount} al guardar (${preview.extraPrice} por huésped extra y noche, sobre el total de huéspedes del grupo).`
+                              : `Menos huéspedes extra en el grupo: se devolverá hasta $${amount} al guardar, solo lo que esté cobrado como "Huéspedes adicionales".`}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <>

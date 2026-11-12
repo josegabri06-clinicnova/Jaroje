@@ -2155,6 +2155,64 @@ export function splitExtraGuestCharge(args: {
 }
 
 /**
+ * Cargo por huéspedes extra de un GRUPO de habitaciones, con la misma regla que el portal de venta: se cobra sobre el
+ * total del grupo (huéspedes - capacidad base de todas las habitaciones), con tope en la capacidad máxima. Un huésped
+ * "extra" que cabe en otra habitación del grupo no se cobra. Devuelve la variación de extras y de dinero entre los
+ * huéspedes de antes y los de ahora, o null si los datos no son válidos.
+ */
+export function getGroupExtraGuestFee(
+  members: { roomId: any; oldGuests: number; newGuests: number }[],
+  nights: number,
+  capacitySettings?: Record<string, any>
+): { deltaExtras: number; fee: number; extraPrice: number } | null {
+  if (!members.length || !(nights > 0)) return null;
+  let base = 0, max = 0, oldTotal = 0, newTotal = 0;
+  for (const m of members) {
+    const rules = getCapacityRules(m.roomId, capacitySettings);
+    base += rules.base; max += rules.max; oldTotal += m.oldGuests; newTotal += m.newGuests;
+  }
+  if (![base, max, oldTotal, newTotal].every(Number.isFinite)) return null;
+  const extraPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+  if (!(extraPrice > 0)) return null;
+  // Más huéspedes guardados que el máximo del grupo: dato antiguo, no es un cambio real de ocupación
+  if (oldTotal > max) return { deltaExtras: 0, fee: 0, extraPrice };
+  const maxExtras = Math.max(0, max - base);
+  const oldExtras = Math.min(Math.max(0, oldTotal - base), maxExtras);
+  const newExtras = Math.min(Math.max(0, newTotal - base), maxExtras);
+  return { deltaExtras: newExtras - oldExtras, fee: (newExtras - oldExtras) * extraPrice * nights, extraPrice };
+}
+
+/**
+ * Reparte la variación de cargo de huéspedes extra (fee) entre las habitaciones del grupo. Si sube, se carga a la
+ * habitación con más huéspedes por encima de su base. Si baja, solo se devuelve lo que está realmente cobrado en las
+ * líneas de "Huéspedes adicionales" (de mayor a menor): un extra regalado o no cobrado no baja el precio.
+ */
+export function allocateGroupExtraFee(
+  members: { id: string; guestsOverBase: number; price: number; extraAmount: number }[],
+  fee: number
+): { id: string; price: number; extraAmount: number }[] {
+  const out = members.map(m => ({ id: m.id, price: m.price, extraAmount: m.extraAmount }));
+  if (!Number.isFinite(fee) || fee === 0 || !out.length) return out;
+  if (fee > 0) {
+    let j = 0;
+    members.forEach((m, i) => { if (m.guestsOverBase > members[j].guestsOverBase) j = i; });
+    out[j].price += fee;
+    out[j].extraAmount += fee;
+    return out;
+  }
+  let reduce = -fee;
+  const order = out.map((_, i) => i).sort((a, b) => out[b].extraAmount - out[a].extraAmount);
+  for (const i of order) {
+    if (reduce <= 0) break;
+    const take = Math.min(reduce, out[i].extraAmount);
+    out[i].extraAmount -= take;
+    out[i].price -= take;
+    reduce -= take;
+  }
+  return out;
+}
+
+/**
  * Retorna las reglas de capacidad de una habitación específica por su nombre o ID.
  */
 export function getCapacityRules(
