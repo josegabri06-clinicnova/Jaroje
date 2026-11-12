@@ -6,6 +6,37 @@ import { isTesterPhone } from '@/lib/test-phones';
 const requestCache = new Map<string, number>();
 const welcomeSentMemoryCache = new Map<string, number>();
 const wifiSentMemoryCache = new Map<string, number>();
+const portalSentMemoryCache = new Map<string, number>();
+
+const PORTAL_LINK_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** true si a ese teléfono ya se le envió la plantilla del Portal del Huésped hace menos de 24 h (memoria + whatsapp_logs) */
+async function wasPortalLinkSentRecently(phone: string): Promise<boolean> {
+  let lastSentAt = portalSentMemoryCache.get(phone) || 0;
+  try {
+    const { data } = await supabase
+      .from('whatsapp_logs')
+      .select('sent_at')
+      .eq('phone', phone)
+      .eq('template_name', 'portal_huesped_link')
+      .or('status.is.null,status.neq.failed')
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const logTime = data?.sent_at ? new Date(data.sent_at).getTime() : 0;
+    if (!isNaN(logTime) && logTime > lastSentAt) lastSentAt = logTime;
+  } catch (err) {
+    console.warn('[Inbound Handler] Error verificando whatsapp_logs para portal_huesped_link:', err);
+  }
+  return Date.now() - lastSentAt < PORTAL_LINK_WINDOW_MS;
+}
+
+function markPortalLinkSent(phone: string) {
+  portalSentMemoryCache.set(phone, Date.now());
+  if (portalSentMemoryCache.size > 100) {
+    Array.from(portalSentMemoryCache.keys()).slice(0, 20).forEach(k => portalSentMemoryCache.delete(k));
+  }
+}
 
 function phonesMatch(phoneA: string, phoneB: string): boolean {
   const normA = normalizePhone(phoneA);
@@ -334,8 +365,14 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     console.log(`[Inbound Handler] 📸 Comprobante/imagen recibida de ${guestBooking.guest_name} (Reserva #${guestBooking.id}).`);
 
     welcomeSentMemoryCache.set(phone, Date.now());
-    const portalRes = await sendTemplate_PortalHuespedLink(phone, guestBooking.id, guestBooking.guest_name, lang);
+    // La plantilla del portal se envía como máximo una vez cada 24 h por teléfono
+    const portalAlreadySent = await wasPortalLinkSentRecently(phone);
+    if (!portalAlreadySent) markPortalLinkSent(phone);
+    const portalRes = portalAlreadySent
+      ? { success: true }
+      : await sendTemplate_PortalHuespedLink(phone, guestBooking.id, guestBooking.guest_name, lang);
     if (!portalRes.success) {
+      portalSentMemoryCache.delete(phone);
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
       finalBotResponse = lang === 'en'
         ? `📸 *Payment receipt received!*\n\nThank you, ${guestBooking.guest_name}. Our reception desk is verifying your payment.\n\nYou can track your updated reservation and balance anytime in your Guest Portal:\n👉 ${siteUrl}/public/reserva/${guestBooking.id}?lang=en`
@@ -441,18 +478,29 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     if (bookingId) {
       const isEnglish = guestMsgClean.includes('view my reservation') || guestMsgClean.includes('view_booking_');
       const lang = isEnglish ? 'en' : 'es';
-      try {
-        const { sendTemplate_PortalHuespedLink } = await import('@/lib/whatsapp');
-        const templateResult = await sendTemplate_PortalHuespedLink(phone, bookingId, guestNameFromSearch, lang);
-        if (!templateResult.success) {
+      // Como máximo una vez cada 24 h por teléfono; dentro de ese periodo no se envía nada
+      const portalAlreadySent = await wasPortalLinkSentRecently(phone);
+      if (portalAlreadySent) {
+        console.log(`[Inbound Handler] 🔑 ${maskPhone(phone)} pidió el portal pero ya recibió 'portal_huesped_link' hace menos de 24 h. No se reenvía.`);
+        isAutoReplyTriggered = false;
+        finalBotResponse = null;
+      } else {
+        try {
+          markPortalLinkSent(phone);
+          const { sendTemplate_PortalHuespedLink } = await import('@/lib/whatsapp');
+          const templateResult = await sendTemplate_PortalHuespedLink(phone, bookingId, guestNameFromSearch, lang);
+          if (!templateResult.success) {
+            portalSentMemoryCache.delete(phone);
+            const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
+            finalBotResponse = `🔑 *Aquí tienes el enlace a tu reservación:*\n\n👉 ${siteUrl}/public/reserva/${bookingId}?lang=${lang}`;
+          } else {
+            finalBotResponse = null;
+          }
+        } catch (templateErr) {
+          portalSentMemoryCache.delete(phone);
           const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
           finalBotResponse = `🔑 *Aquí tienes el enlace a tu reservación:*\n\n👉 ${siteUrl}/public/reserva/${bookingId}?lang=${lang}`;
-        } else {
-          finalBotResponse = null;
         }
-      } catch (templateErr) {
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-        finalBotResponse = `🔑 *Aquí tienes el enlace a tu reservación:*\n\n👉 ${siteUrl}/public/reserva/${bookingId}?lang=${lang}`;
       }
     } else {
       finalBotResponse = `Hola. No logramos encontrar una reservación activa vinculada a tu número en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de inmediato. 🌴`;
