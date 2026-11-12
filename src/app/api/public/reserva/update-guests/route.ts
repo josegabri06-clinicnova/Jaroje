@@ -203,7 +203,7 @@ export async function POST(req: Request) {
 
       const isUSD = (localRes.guest_name || '').toUpperCase().includes('(US DOLLARS)');
       const extraGuestPrice = isUSD ? 25 : (capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500);
-
+      
       const arrivalDate = localRes.check_in ? new Date(localRes.check_in) : null;
       const departureDate = localRes.check_out ? new Date(localRes.check_out) : null;
       const nights = (arrivalDate && departureDate)
@@ -438,7 +438,7 @@ export async function POST(req: Request) {
 
     const isUSD = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.toUpperCase().includes('(US DOLLARS)');
     const extraGuestPrice = isUSD ? 25 : (capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500);
-
+    
     const arrivalDate = currentBooking.arrival ? new Date(currentBooking.arrival) : null;
     const departureDate = currentBooking.departure ? new Date(currentBooking.departure) : null;
     const nights = (arrivalDate && departureDate)
@@ -592,12 +592,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // Si el filtro de habitaciones válidas lo deja vacío no hay nada que guardar: no se debe responder "guardado"
-    if (beds24Updates.length === 0) {
-      console.error(`[Update Guests] Reserva ${id}: ninguna habitación válida tras filtrar`, JSON.stringify(rooms));
-      return NextResponse.json({ success: false, error: 'No se pudo identificar la habitación a modificar.' }, { status: 400 });
-    }
-
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
@@ -607,16 +601,6 @@ export async function POST(req: Request) {
     if (!beds24Response.ok) {
       const errText = await beds24Response.text();
       throw new Error(`Beds24 rechazó la modificación: ${errText}`);
-    }
-
-    // Beds24 responde HTTP correcto aunque rechace una reserva concreta (success:false dentro de la respuesta).
-    // Antes eso se ignoraba y el portal mostraba los huéspedes nuevos sin que Beds24 los hubiera guardado.
-    const b24Body = await beds24Response.json().catch(() => null);
-    const b24Results: any[] = Array.isArray(b24Body) ? b24Body : (Array.isArray(b24Body?.data) ? b24Body.data : []);
-    const b24Failed = b24Results.filter((r: any) => r && r.success === false);
-    if (b24Failed.length > 0) {
-      console.error(`[Update Guests] Beds24 rechazó la reserva ${id}:`, JSON.stringify(b24Failed).slice(0, 1500));
-      return NextResponse.json({ success: false, error: 'No se pudo guardar el cambio. Inténtalo de nuevo o contacta con recepción.' }, { status: 502 });
     }
 
     // Log de auditoría

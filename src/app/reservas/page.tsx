@@ -2205,7 +2205,6 @@ function ReservasListInner() {
       } else {
         payload.numAdult = editAdults;
         payload.numChild = editChildren;
-        payload.recalcGuestExtras = true;
         payload.price = Number(editPrice);
         payload.deposit = Number(editDeposit);
       }
@@ -2218,12 +2217,7 @@ function ReservasListInner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar los cambios');
 
-      // Si el servidor ajustó el total por huéspedes extra, usar ese valor en pantalla
-      const savedPrice = editGroupMembers.length <= 1 && data.recalculated_price !== undefined ? Number(data.recalculated_price) : Number(editPrice);
-
-      alert(savedPrice !== Number(editPrice)
-        ? `✅ Reserva modificada. El total se actualizó a MX$${savedPrice.toLocaleString('es-MX')} por los huéspedes extra.`
-        : '✅ Reserva modificada con éxito.');
+      alert('✅ Reserva modificada con éxito.');
       
       try {
         const emp = getOperatorForLog();
@@ -2267,7 +2261,7 @@ function ReservasListInner() {
 
       const totalGroupPrice = editGroupMembers.length > 1
         ? editGroupMembers.reduce((sum, m) => sum + Number(m.price), 0)
-        : savedPrice;
+        : Number(editPrice);
       const totalGroupDeposit = editGroupMembers.length > 1
         ? editGroupMembers.reduce((sum, m) => sum + Number(m.deposit), 0)
         : Number(editDeposit);
@@ -2318,9 +2312,9 @@ function ReservasListInner() {
             guest_phone: cleanPhone,
             num_adult: editAdults,
             num_child: editChildren,
-            price_estimate: savedPrice,
+            price_estimate: Number(editPrice),
             deposit: Number(editDeposit),
-            balance: savedPrice - Number(editDeposit),
+            balance: Number(editPrice) - Number(editDeposit),
             notes: editNotes,
             arrival: editCheckIn,
             check_in: editCheckIn,
@@ -2361,10 +2355,10 @@ function ReservasListInner() {
             guest_phone: cleanPhone,
             num_adult: editAdults,
             num_child: editChildren,
-            price_estimate: savedPrice,
-            price: savedPrice,
+            price_estimate: Number(editPrice),
+            price: Number(editPrice),
             deposit: Number(editDeposit),
-            balance: savedPrice - Number(editDeposit),
+            balance: Number(editPrice) - Number(editDeposit),
             notes: editNotes,
             arrival: editCheckIn,
             check_in: editCheckIn,

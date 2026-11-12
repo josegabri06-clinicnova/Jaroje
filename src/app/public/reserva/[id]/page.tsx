@@ -1464,13 +1464,8 @@ export default function PublicReservaPage() {
   // - Directo (local 500-507 o Beds24 Directo): booking.price = tarifa base × noches
   //   El sistema tiene las reglas de capacidad por habitación y calcula el extra automáticamente
   const EXTRA_GUEST_CHARGE = isUSD ? 25 : 500;
-  // Reservas en las que el gerente regaló el huésped extra: el precio guardado ya es solo la tarifa de la habitación,
-  // así que no se resta ningún recargo para mostrar la tarifa base.
-  const COURTESY_EXTRA_GUEST_BOOKING_IDS = new Set(['96095292']);
-  const isCourtesyExtra = [booking.id, ...(booking.rooms_detail || []).map((r: any) => r.room_id)]
-    .some((bid: any) => bid !== undefined && COURTESY_EXTRA_GUEST_BOOKING_IDS.has(String(bid)));
   const extraChargesTotal = (() => {
-    if (isOta || isCourtesyExtra) return 0; // OTAs: tarifa fija negociada con la plataforma
+    if (isOta) return 0; // OTAs: tarifa fija negociada con la plataforma
 
     // Para reservas directas (Beds24 o locales): usar rooms_detail si existe (grupos),
     // si no, usar num_adult/num_child del booking completo
@@ -1676,7 +1671,7 @@ export default function PublicReservaPage() {
                         roomExtraGuests = Math.min(extraGuestsToDistribute, totalGuests - baseCapacity);
                         extraGuestsToDistribute -= roomExtraGuests;
                       }
-                      const extraCharge = isCourtesyExtra ? 0 : roomExtraGuests * EXTRA_CHARGE;
+                      const extraCharge = roomExtraGuests * EXTRA_CHARGE;
 
                       return (
                         <div key={idx} className="bg-white rounded-lg border border-zinc-200 px-3 py-2">
@@ -1828,9 +1823,9 @@ export default function PublicReservaPage() {
                       // Calcular cargo por persona extra si aplica
                       const totalGuests = (room.num_adult || 0) + (room.num_child || 0);
                       const baseCapacity = getCapacityRulesForSingle(room.room_name || '').base;
-                      const EXTRA_CHARGE = EXTRA_GUEST_CHARGE;
+                      const EXTRA_CHARGE = 500;
                       const extraGuests = Math.max(0, totalGuests - baseCapacity);
-                      const roomExtraCharge = isCourtesyExtra ? 0 : extraGuests * EXTRA_CHARGE * roomNights;
+                      const roomExtraCharge = extraGuests * EXTRA_CHARGE * roomNights;
 
                       // Si el precio en Beds24 ya incluye el cargo extra, la tarifa base es (roomPrice - roomExtraCharge)
                       const roomBasePrice = (roomExtraCharge > 0 && roomPrice > roomExtraCharge)
