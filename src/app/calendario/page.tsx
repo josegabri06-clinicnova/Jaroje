@@ -342,6 +342,38 @@ export default function CalendarPage() {
   const [editedChildren, setEditedChildren] = useState(0);
   const [editedPrice, setEditedPrice] = useState('');
   const [editedDailyRate, setEditedDailyRate] = useState('');
+  const [capacitySettings, setCapacitySettings] = useState<Record<string, any> | null>(null);
+
+  // Capacidad base/máxima por habitación y precio del huésped extra (misma configuración que usa Recepción)
+  useEffect(() => {
+    supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle().then(({ data }: any) => {
+      try {
+        if (data?.value) setCapacitySettings(typeof data.value === 'string' ? JSON.parse(data.value) : data.value);
+      } catch (e) {
+        console.error('Error al parsear capacity_settings:', e);
+      }
+    });
+  }, []);
+
+  // Al cambiar adultos/niños en la edición, suma o resta al total el recargo por huésped extra (500 por noche con el
+  // impuesto incluido), igual que Recepción. Solo reservas individuales directas: las de grupo fijan el precio por
+  // habitación y las OTAs lo fija el canal. Parte del total que hay en pantalla, así respeta ediciones manuales.
+  const adjustEditedPriceForGuests = (newAdults: number, newChildren: number) => {
+    if (!selectedReserva || groupBookings.length > 1) return;
+    const channel = String(selectedReserva.channel || '').toLowerCase();
+    if (['airbnb', 'booking', 'expedia', 'vrbo', 'agoda', 'google'].some(c => channel.includes(c))) return;
+    const rules = getCapacityRules(selectedReserva.room, capacitySettings || undefined);
+    const prevPax = editedAdults + editedChildren;
+    // Dato antiguo con más personas que el máximo de la habitación: no es un cambio real de ocupación
+    if (prevPax > rules.max) return;
+    const delta = Math.max(0, newAdults + newChildren - rules.base) - Math.max(0, prevPax - rules.base);
+    if (delta === 0) return;
+    const extraPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+    const nights = selectedReserva.nights || 1;
+    const newPrice = Math.max(0, Math.round(Number(editedPrice || 0) + delta * extraPrice * nights));
+    setEditedPrice(String(newPrice));
+    setEditedDailyRate(String(Math.round(newPrice / nights)));
+  };
   const [editedDeposit, setEditedDeposit] = useState('');
   const [editedNotes, setEditedNotes] = useState('');
   const [isSavingChanges, setIsSavingChanges] = useState(false);
@@ -2581,7 +2613,7 @@ export default function CalendarPage() {
                         <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
                         <select
                           value={editedAdults}
-                          onChange={e => setEditedAdults(Number(e.target.value))}
+                          onChange={e => { const v = Number(e.target.value); adjustEditedPriceForGuests(v, editedChildren); setEditedAdults(v); }}
                           className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
                         >
                           {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
@@ -2593,7 +2625,7 @@ export default function CalendarPage() {
                         <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
                         <select
                           value={editedChildren}
-                          onChange={e => setEditedChildren(Number(e.target.value))}
+                          onChange={e => { const v = Number(e.target.value); adjustEditedPriceForGuests(editedAdults, v); setEditedChildren(v); }}
                           className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
                         >
                           {[0,1,2,3,4,5,6,7,8].map(n => (

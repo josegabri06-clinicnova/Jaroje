@@ -2155,6 +2155,42 @@ function ReservasListInner() {
     }
   };
 
+  // Al cambiar adultos/niños en la edición, suma o resta al total el recargo por huésped extra (500 por noche con el
+  // impuesto incluido), igual que Recepción. Solo reservas individuales directas: las de grupo fijan el precio por
+  // habitación y las OTAs lo fija el canal. Parte del total que hay en pantalla, así respeta ediciones manuales.
+  const adjustEditPriceForGuests = (newAdults: number, newChildren: number) => {
+    if (!selectedRes || isOtaRes || editGroupMembers.length > 1) return;
+    const rules = getCapacityRules(selectedRes.room_name || selectedRes.room_id || '', capacitySettings || undefined);
+    const prevPax = editAdults + editChildren;
+    // Dato antiguo con más personas que el máximo de la habitación: no es un cambio real de ocupación
+    if (prevPax > rules.max) return;
+    const delta = Math.max(0, newAdults + newChildren - rules.base) - Math.max(0, prevPax - rules.base);
+    if (delta === 0) return;
+    const extraPrice = (capacitySettings as any)?.extra_guest_price !== undefined ? Number((capacitySettings as any).extra_guest_price) : 500;
+    const nights = getNightsBetweenDates(editCheckIn, editCheckOut) || 1;
+    const newPrice = Math.max(0, Math.round(Number(editPrice || 0) + delta * extraPrice * nights));
+    setEditPrice(String(newPrice));
+    setEditDailyRate(String(Math.round(newPrice / nights)));
+  };
+
+  // Igual que arriba pero para una habitación de un grupo: cada habitación cobra solo sus huéspedes por encima de su propia
+  // capacidad base. Devuelve la habitación con los huéspedes nuevos y, si procede, su total y tarifa diaria ajustados.
+  const applyGuestsToGroupMember = (m: any, newAdults: number, newChildren: number) => {
+    const updated = { ...m, num_adult: newAdults, num_child: newChildren };
+    const channel = String(m.channel || '').toLowerCase();
+    if (['airbnb', 'booking', 'expedia', 'vrbo', 'google'].some(c => channel.includes(c))) return updated;
+    const rules = getCapacityRules(m.room_name || '', capacitySettings || undefined);
+    const prevPax = Number(m.num_adult) + Number(m.num_child);
+    // Dato antiguo con más personas que el máximo de la habitación: no es un cambio real de ocupación
+    if (prevPax > rules.max) return updated;
+    const delta = Math.max(0, newAdults + newChildren - rules.base) - Math.max(0, prevPax - rules.base);
+    if (delta === 0) return updated;
+    const extraPrice = (capacitySettings as any)?.extra_guest_price !== undefined ? Number((capacitySettings as any).extra_guest_price) : 500;
+    const nights = Number(m.nights) || 1;
+    const newPrice = Math.max(0, Math.round(Number(m.price || 0) + delta * extraPrice * nights));
+    return { ...updated, price: String(newPrice), daily_rate: String(Math.round(newPrice / nights)) };
+  };
+
   const handleSaveReservationEdit = async () => {
     if (!selectedRes) return;
 
@@ -4316,7 +4352,7 @@ function ReservasListInner() {
                               <select
                                 disabled={isOtaRes}
                                 value={editAdults}
-                                onChange={e => setEditAdults(Number(e.target.value))}
+                                onChange={e => { const v = Number(e.target.value); adjustEditPriceForGuests(v, editChildren); setEditAdults(v); }}
                                 className={`w-full border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold shadow-sm ${
                                   isOtaRes ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
                                 }`}
@@ -4331,7 +4367,7 @@ function ReservasListInner() {
                               <select
                                 disabled={isOtaRes}
                                 value={editChildren}
-                                onChange={e => setEditChildren(Number(e.target.value))}
+                                onChange={e => { const v = Number(e.target.value); adjustEditPriceForGuests(editAdults, v); setEditChildren(v); }}
                                 className={`w-full border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold shadow-sm ${
                                   isOtaRes ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
                                 }`}
@@ -4507,7 +4543,7 @@ function ReservasListInner() {
                                   value={member.num_adult}
                                   onChange={e => {
                                     const val = Number(e.target.value);
-                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? { ...m, num_adult: val } : m));
+                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? applyGuestsToGroupMember(m, val, Number(m.num_child)) : m));
                                   }}
                                   className={`w-full border border-zinc-200 rounded-xl px-2.5 py-2 outline-none text-[12px] font-semibold shadow-sm ${
                                     isMemberOta ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
@@ -4525,7 +4561,7 @@ function ReservasListInner() {
                                   value={member.num_child}
                                   onChange={e => {
                                     const val = Number(e.target.value);
-                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? { ...m, num_child: val } : m));
+                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? applyGuestsToGroupMember(m, Number(m.num_adult), val) : m));
                                   }}
                                   className={`w-full border border-zinc-200 rounded-xl px-2.5 py-2 outline-none text-[12px] font-semibold shadow-sm ${
                                     isMemberOta ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
