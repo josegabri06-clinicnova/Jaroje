@@ -2,6 +2,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Token, updateBeds24BookingPhone, extractPhoneFromBookingData, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { maskPhone } from '@/lib/log-mask';
 import { trackBeds24 } from '@/lib/beds24-credits';
+import { hasDepositPaid } from '@/lib/deposit-rule';
 import {
   normalizePhone,
   sendTemplate3_ReservacionConfirmada,
@@ -956,10 +957,9 @@ export async function processOta20MinuteFallback(): Promise<{
       // Airbnb y Expedia llegan con el pago anticipado ya hecho: nunca se les pide el anticipo de 24 h
       // (una reserva en estado "request" todavía no está confirmada, aunque venga de una OTA prepagada)
       const isPrepaidOta = bStatus !== 'request' && ['airbnb', 'expedia'].some(ota => channel.toLowerCase().includes(ota));
-      const bookingPrice = Number(b.price || 0);
       const effectivePaid = Number(b.actual_paid || b.deposit || 0);
-      const hasMin50Deposit = bookingPrice > 0 ? (effectivePaid >= (bookingPrice * 0.5 - 0.01)) : (effectivePaid > 0);
-      const isConfirmed = isPrepaidOta || (hasMin50Deposit && bStatus === 'confirmed');
+      // Con cualquier anticipo la reserva se considera confirmada (el gerente puede autorizar anticipos menores al 50%)
+      const isConfirmed = isPrepaidOta || (hasDepositPaid(effectivePaid) && bStatus === 'confirmed');
 
       const templateToSend = isConfirmed ? 'reservacion_confirmada' : 'solicitud_recibida';
 
