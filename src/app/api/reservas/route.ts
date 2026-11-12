@@ -25,6 +25,26 @@ const UNIT_TO_ROOM_600: Record<string, string> = {
 // unitIds disponibles para auto-asignación OTA (501-507 = unitId 2-8)
 const OTA_ASSIGNABLE_UNITS = ['2', '3', '4', '5', '6', '7', '8'];
 
+// --- Auxiliares para repartir el cargo de huéspedes extra en la factura de Beds24 ---
+// Reserva de un canal con precio fijo (el precio lo pone el canal, no se reparte)
+const isOtaSource = (b: any) =>
+  ['airbnb', 'booking', 'expedia', 'google', 'vrbo'].some(ch =>
+    `${b?.referer || ''} ${b?.source || ''} ${b?.apiSource || ''} ${b?.apiReference || ''} ${b?.channel || ''}`.toLowerCase().includes(ch));
+// Total de una línea de factura de Beds24
+const invoiceLineTotal = (item: any) =>
+  item.lineTotal !== undefined ? Number(item.lineTotal) : Number(item.qty || 1) * Number(item.price !== undefined ? item.price : (item.amount || 0));
+const nightsBetween = (arrival: string, departure: string) =>
+  Math.round((new Date(departure + 'T12:00:00').getTime() - new Date(arrival + 'T12:00:00').getTime()) / 86400000);
+async function loadCapacitySettings(): Promise<any> {
+  try {
+    const { data } = await supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle();
+    if (data?.value) return typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+  } catch (e) {
+    console.warn('[Reservas] No se pudo cargar capacity_settings:', e);
+  }
+  return null;
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -1394,6 +1414,7 @@ export async function PUT(req: Request) {
       const BEDS24_TOKEN = await getBeds24Token();
       const beds24BatchPayload: any[] = [];
       const updatedBeds24Ids: string[] = [];
+      let groupCapacitySettings: any = undefined; // se carga una sola vez si hace falta
 
       for (const m of body.groupBookings) {
         const mIdStr = String(m.id);
@@ -1483,20 +1504,46 @@ export async function PUT(req: Request) {
             const charges = currentItems.filter((item: any) => item.type === 'charge' || !item.type);
             const invoiceItemsUpdate: any[] = [];
 
-            let mainRoomCharge = charges.find((c: any) => 
-              (c.description || '').includes('[ROOMNAME1]') || 
+            // Línea de "Huéspedes adicionales" (la crea el portal de venta): se conserva aparte de la habitación
+            const { splitExtraGuestCharge, EXTRA_GUEST_CHARGE_LABEL } = await import('@/lib/beds24');
+            const extraGuestLine = charges.find((c: any) => (c.description || '').toLowerCase().includes(EXTRA_GUEST_CHARGE_LABEL.toLowerCase()));
+            let roomAmount = finalPrice;
+            let extraSplit: ReturnType<typeof splitExtraGuestCharge> = null;
+            // Solo las pantallas que ya suman el recargo al total envían splitExtraGuestCharge (no el check-in ni otras llamadas)
+            if (body.splitExtraGuestCharge === true && currentMemBooking && !isOtaSource(currentMemBooking)
+                && (!checkIn || checkIn === currentMemBooking.arrival) && (!checkOut || checkOut === currentMemBooking.departure)) {
+              if (groupCapacitySettings === undefined) groupCapacitySettings = await loadCapacitySettings();
+              const oldGuests = Number(currentMemBooking.numAdult || 1) + Number(currentMemBooking.numChild || 0);
+              const newGuests = (m.numAdult !== undefined ? Number(m.numAdult) : Number(currentMemBooking.numAdult || 1))
+                + (m.numChild !== undefined ? Number(m.numChild) : Number(currentMemBooking.numChild || 0));
+              extraSplit = splitExtraGuestCharge({
+                price: finalPrice,
+                currentPrice: Number(currentMemBooking.price),
+                existingExtraAmount: extraGuestLine ? invoiceLineTotal(extraGuestLine) : 0,
+                oldGuests,
+                newGuests,
+                roomId: currentMemBooking.roomId,
+                nights: nightsBetween(currentMemBooking.arrival, currentMemBooking.departure),
+                capacitySettings: groupCapacitySettings || undefined
+              });
+              if (extraSplit) roomAmount = extraSplit.roomAmount;
+            }
+            const keptExtraLine = extraSplit && extraSplit.extraAmount > 0 ? (extraGuestLine || true) : null;
+
+            let mainRoomCharge = charges.find((c: any) =>
+              (c.description || '').includes('[ROOMNAME1]') ||
               (c.description || '').toLowerCase().includes('room charge')
             );
-            const ivaCharge = charges.find((c: any) => 
+            const ivaCharge = charges.find((c: any) =>
               (c.description || '').toLowerCase().includes('iva')
             );
-            const lodgingTaxCharge = charges.find((c: any) => 
-              (c.description || '').toLowerCase().includes('hospedaje') || 
+            const lodgingTaxCharge = charges.find((c: any) =>
+              (c.description || '').toLowerCase().includes('hospedaje') ||
               (c.description || '').toLowerCase().includes('tax')
             );
 
             if (!mainRoomCharge) {
-              mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge);
+              mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge && c !== extraGuestLine);
             }
 
             if (mainRoomCharge && mainRoomCharge.id) {
@@ -1504,14 +1551,24 @@ export async function PUT(req: Request) {
                 id: mainRoomCharge.id,
                 description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
                 qty: 1,
-                amount: finalPrice,
+                amount: roomAmount,
                 vatRate: 19
               });
             } else {
               invoiceItemsUpdate.push({
                 description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
                 qty: 1,
-                amount: finalPrice,
+                amount: roomAmount,
+                vatRate: 19
+              });
+            }
+
+            if (extraSplit && extraSplit.extraAmount > 0) {
+              invoiceItemsUpdate.push({
+                ...(extraGuestLine && extraGuestLine.id ? { id: extraGuestLine.id } : { type: 'charge' }),
+                description: `${EXTRA_GUEST_CHARGE_LABEL} | Cargo extra (${extraSplit.extraGuests} pax x $${extraSplit.extraPrice} x ${nightsBetween(currentMemBooking.arrival, currentMemBooking.departure)} n.)`,
+                qty: 1,
+                amount: extraSplit.extraAmount,
                 vatRate: 19
               });
             }
@@ -1538,7 +1595,7 @@ export async function PUT(req: Request) {
 
             // Poner en 0 cualquier cargo duplicado previo para limpiar el folio de Beds24
             charges.forEach((c: any) => {
-              if (c.id && c !== mainRoomCharge && c !== ivaCharge && c !== lodgingTaxCharge) {
+              if (c.id && c !== mainRoomCharge && c !== ivaCharge && c !== lodgingTaxCharge && c !== keptExtraLine) {
                 invoiceItemsUpdate.push({
                   id: c.id,
                   amount: 0
@@ -2112,20 +2169,45 @@ export async function PUT(req: Request) {
         const charges = currentItems.filter((item: any) => item.type === 'charge');
         const invoiceItemsUpdate: any[] = [];
 
-        let mainRoomCharge = charges.find((c: any) => 
-          (c.description || '').includes('[ROOMNAME1]') || 
+        // Línea de "Huéspedes adicionales" (la crea el portal de venta): se conserva aparte de la habitación
+        const { splitExtraGuestCharge, EXTRA_GUEST_CHARGE_LABEL } = await import('@/lib/beds24');
+        const extraGuestLine = charges.find((c: any) => (c.description || '').toLowerCase().includes(EXTRA_GUEST_CHARGE_LABEL.toLowerCase()));
+        let roomAmount = finalPrice;
+        let extraSplit: ReturnType<typeof splitExtraGuestCharge> = null;
+        // Solo las pantallas que ya suman el recargo al total envían splitExtraGuestCharge (no el check-in ni otras llamadas)
+        if (body.splitExtraGuestCharge === true && price !== undefined && currentBooking && !isOtaSource(currentBooking)
+            && (!checkIn || checkIn === currentBooking.arrival) && (!checkOut || checkOut === currentBooking.departure)) {
+          const capSettings = await loadCapacitySettings();
+          const oldGuests = Number(currentBooking.numAdult || 1) + Number(currentBooking.numChild || 0);
+          const newGuests = (numAdult !== undefined ? Number(numAdult) : Number(currentBooking.numAdult || 1))
+            + (numChild !== undefined ? Number(numChild) : Number(currentBooking.numChild || 0));
+          extraSplit = splitExtraGuestCharge({
+            price: finalPrice,
+            currentPrice: Number(currentBooking.price),
+            existingExtraAmount: extraGuestLine ? invoiceLineTotal(extraGuestLine) : 0,
+            oldGuests,
+            newGuests,
+            roomId: currentBooking.roomId,
+            nights: nightsBetween(currentBooking.arrival, currentBooking.departure),
+            capacitySettings: capSettings || undefined
+          });
+          if (extraSplit) roomAmount = extraSplit.roomAmount;
+        }
+
+        let mainRoomCharge = charges.find((c: any) =>
+          (c.description || '').includes('[ROOMNAME1]') ||
           (c.description || '').toLowerCase().includes('room charge')
         );
-        const ivaCharge = charges.find((c: any) => 
+        const ivaCharge = charges.find((c: any) =>
           (c.description || '').toLowerCase().includes('iva')
         );
-        const lodgingTaxCharge = charges.find((c: any) => 
-          (c.description || '').toLowerCase().includes('hospedaje') || 
+        const lodgingTaxCharge = charges.find((c: any) =>
+          (c.description || '').toLowerCase().includes('hospedaje') ||
           (c.description || '').toLowerCase().includes('tax')
         );
 
         if (!mainRoomCharge) {
-          mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge);
+          mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge && c !== extraGuestLine);
         }
 
         // 1. Cargo principal de habitación
@@ -2134,14 +2216,25 @@ export async function PUT(req: Request) {
             id: mainRoomCharge.id,
             description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
             qty: 1,
-            amount: finalPrice,
+            amount: roomAmount,
             vatRate: 19
           });
         } else {
           invoiceItemsUpdate.push({
             description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
             qty: 1,
-            amount: finalPrice,
+            amount: roomAmount,
+            vatRate: 19
+          });
+        }
+
+        // 1b. Cargo de huéspedes adicionales (línea aparte, como en el portal de venta)
+        if (extraSplit && extraSplit.extraAmount > 0) {
+          invoiceItemsUpdate.push({
+            ...(extraGuestLine && extraGuestLine.id ? { id: extraGuestLine.id } : { type: 'charge' }),
+            description: `${EXTRA_GUEST_CHARGE_LABEL} | Cargo extra (${extraSplit.extraGuests} pax x $${extraSplit.extraPrice} x ${nightsBetween(currentBooking.arrival, currentBooking.departure)} n.)`,
+            qty: 1,
+            amount: extraSplit.extraAmount,
             vatRate: 19
           });
         }
@@ -2186,7 +2279,8 @@ export async function PUT(req: Request) {
         const handledIds = new Set([
           mainRoomCharge?.id,
           ivaCharge?.id,
-          lodgingTaxCharge?.id
+          lodgingTaxCharge?.id,
+          extraSplit && extraSplit.extraAmount > 0 ? extraGuestLine?.id : undefined
         ].filter(Boolean));
 
         charges.forEach((c: any) => {

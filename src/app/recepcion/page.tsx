@@ -1478,6 +1478,7 @@ export default function RecepcionPage() {
           phone: cleanPhone,
           numAdult: editedAdults,
           numChild: editedChildren,
+          splitExtraGuestCharge: true,
           price: Number(editedPrice),
           deposit: Number(editedDeposit),
           notes: editedNotes
