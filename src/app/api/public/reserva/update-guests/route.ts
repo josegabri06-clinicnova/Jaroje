@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment, EXTRA_GUEST_CHARGE_LABEL } from '@/lib/beds24';
 
 import { normalizeBookingId } from '@/lib/guest-auth';
 import { requireGuestWriteAccess } from '@/lib/guest-access';
@@ -210,7 +210,9 @@ export async function POST(req: Request) {
         ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
         : 1;
 
-      const priceAdjustment = Math.round(diffExtra * extraGuestPrice * nights);
+      // El cliente nunca reduce el precio desde el portal: una reserva local no guarda qué recargo se cobró, así que no se
+      // sabe si ese extra se pagó (puede haberse regalado). Las bajadas de precio las hace el personal.
+      const priceAdjustment = Math.max(0, Math.round(diffExtra * extraGuestPrice * nights));
       const groupNewPrice = Math.round(groupOriginalPrice + priceAdjustment);
       const newPrice = Math.round(Number(localRes.price || 0) + priceAdjustment);
       const newBalance = Math.max(0, groupNewPrice - groupDeposit);
@@ -445,8 +447,24 @@ export async function POST(req: Request) {
       ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
       : 1;
 
-    const priceAdjustment = Math.round(diffExtra * extraGuestPrice * nights);
-    
+    // Facturas de la habitación principal: la línea "Huéspedes adicionales" es el registro de lo cobrado por extras
+    const currentItems = Array.isArray(currentBooking.invoiceItems) ? currentBooking.invoiceItems : [];
+    const charges = currentItems.filter((item: any) => item.type === 'charge');
+    const invoiceItemsUpdate: any[] = [];
+    const extraGuestLine = charges.find((c: any) => (c.description || '').toLowerCase().includes(EXTRA_GUEST_CHARGE_LABEL.toLowerCase()));
+    const existingExtraAmount = extraGuestLine
+      ? (extraGuestLine.lineTotal !== undefined ? Number(extraGuestLine.lineTotal) : Number(extraGuestLine.qty || 1) * Number(extraGuestLine.price !== undefined ? extraGuestLine.price : (extraGuestLine.amount || 0)))
+      : 0;
+
+    // Reserva de un canal con precio fijo: el precio lo pone el canal, el cliente no lo cambia desde aquí
+    const mainSource = `${currentBooking.referer || ''} ${currentBooking.source || ''} ${currentBooking.apiSource || ''} ${currentBooking.apiReference || ''} ${currentBooking.channel || ''}`.toLowerCase();
+    const mainIsFixedPriceChannel = ['airbnb', 'booking', 'expedia', 'google', 'vrbo'].some(c => mainSource.includes(c));
+
+    // Subir huéspedes extra suma su cargo. Bajarlos solo devuelve lo que de verdad está cobrado en la línea de
+    // "Huéspedes adicionales": si el extra se regaló o no está cobrado no hay nada que devolver (no puede bajar el precio).
+    const rawAdjustment = Math.round(diffExtra * extraGuestPrice * nights);
+    const priceAdjustment = mainIsFixedPriceChannel ? 0 : (rawAdjustment >= 0 ? rawAdjustment : -Math.min(-rawAdjustment, existingExtraAmount));
+
     // Calcular el precio real del invoice de la principal
     let mainActualPaid = 0;
     let mainTotalInvoiceCharges = 0;
@@ -471,10 +489,10 @@ export async function POST(req: Request) {
     const groupNewPrice = Math.max(0, Math.round(groupOriginalPrice + priceAdjustment));
     const newBalance = Math.max(0, groupNewPrice - groupTotalPaid);
 
-    // Actualizar los ítems de factura de la habitación principal
-    const currentItems = Array.isArray(currentBooking.invoiceItems) ? currentBooking.invoiceItems : [];
-    const charges = currentItems.filter((item: any) => item.type === 'charge');
-    const invoiceItemsUpdate: any[] = [];
+    // Actualizar los ítems de factura de la habitación principal.
+    // El cargo de huéspedes extra va en su propia línea (como en el portal de venta) y la habitación se queda con la tarifa base.
+    const extraAmountNew = Math.min(Math.max(0, existingExtraAmount + priceAdjustment), newPrice);
+    const roomAmount = newPrice - extraAmountNew;
 
     let mainRoomCharge = charges.find((c: any) => 
       (c.description || '').includes('[ROOMNAME1]') || 
@@ -489,7 +507,7 @@ export async function POST(req: Request) {
     );
 
     if (!mainRoomCharge) {
-      mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge);
+      mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge && c !== extraGuestLine);
     }
 
     // 1. Cargo principal de habitación
@@ -498,14 +516,25 @@ export async function POST(req: Request) {
         id: mainRoomCharge.id,
         description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
         qty: 1,
-        amount: newPrice,
+        amount: roomAmount,
         vatRate: 19
       });
     } else {
       invoiceItemsUpdate.push({
         description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
         qty: 1,
-        amount: newPrice,
+        amount: roomAmount,
+        vatRate: 19
+      });
+    }
+
+    // 1b. Cargo de huéspedes adicionales (línea aparte)
+    if (extraAmountNew > 0) {
+      invoiceItemsUpdate.push({
+        ...(extraGuestLine && extraGuestLine.id ? { id: extraGuestLine.id } : { type: 'charge' }),
+        description: `${EXTRA_GUEST_CHARGE_LABEL} | Cargo extra (${Math.round(extraAmountNew / (extraGuestPrice * nights))} pax x $${extraGuestPrice} x ${nights} n.)`,
+        qty: 1,
+        amount: extraAmountNew,
         vatRate: 19
       });
     }
@@ -550,18 +579,15 @@ export async function POST(req: Request) {
     const handledIds = new Set([
       mainRoomCharge?.id,
       ivaCharge?.id,
-      lodgingTaxCharge?.id
+      lodgingTaxCharge?.id,
+      extraAmountNew > 0 ? extraGuestLine?.id : undefined
     ].filter(Boolean));
 
     charges.forEach((c: any) => {
       if (!handledIds.has(c.id)) {
-        invoiceItemsUpdate.push({
-          id: c.id,
-          description: "",
-          qty: "",
-          amount: "",
-          status: ""
-        });
+        // En la API V2 de Beds24, para eliminar un ítem de la factura se envía solo su id (igual que en la webapp).
+        // Antes se mandaban campos vacíos, que Beds24 puede rechazar y entonces no se guardaba ningún cambio.
+        invoiceItemsUpdate.push({ id: c.id });
       }
     });
 
@@ -569,7 +595,7 @@ export async function POST(req: Request) {
     const updatedIds = new Set(rooms.map((r: any) => String(r.bookingId)));
     const beds24Updates = rooms.map((r: any) => {
       const payload: any = {
-        id: String(r.bookingId),
+        id: Number(r.bookingId),
         numAdult: r.numAdult,
         numChild: r.numChild
       };
@@ -584,12 +610,18 @@ export async function POST(req: Request) {
 
     if (priceAdjustment !== 0 && !updatedIds.has(String(id))) {
       beds24Updates.push({
-        id: String(id),
+        id: Number(id),
         numAdult: Number(currentBooking.numAdult || 1),
         numChild: Number(currentBooking.numChild || 0),
         price: newPrice,
         invoiceItems: invoiceItemsUpdate
       });
+    }
+
+    // Si no queda ninguna habitación válida no hay nada que guardar: no se debe responder "guardado"
+    if (beds24Updates.length === 0) {
+      console.error(`[Update Guests] Reserva ${id}: ninguna habitación válida tras filtrar`, JSON.stringify(rooms));
+      return NextResponse.json({ success: false, error: 'No se pudo identificar la habitación a modificar.' }, { status: 400 });
     }
 
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
@@ -601,6 +633,16 @@ export async function POST(req: Request) {
     if (!beds24Response.ok) {
       const errText = await beds24Response.text();
       throw new Error(`Beds24 rechazó la modificación: ${errText}`);
+    }
+
+    // Beds24 responde HTTP correcto aunque rechace una reserva concreta (success:false dentro de la respuesta).
+    // Antes eso se ignoraba y el portal mostraba los huéspedes nuevos sin que Beds24 los hubiera guardado.
+    const b24Body = await beds24Response.json().catch(() => null);
+    const b24Results: any[] = Array.isArray(b24Body) ? b24Body : (Array.isArray(b24Body?.data) ? b24Body.data : []);
+    const b24Failed = b24Results.filter((r: any) => r && r.success === false);
+    if (b24Failed.length > 0) {
+      console.error(`[Update Guests] Beds24 rechazó la reserva ${id}:`, JSON.stringify(b24Failed).slice(0, 1500));
+      return NextResponse.json({ success: false, error: 'No se pudo guardar el cambio. Inténtalo de nuevo o contacta con recepción.' }, { status: 502 });
     }
 
     // Log de auditoría

@@ -3228,10 +3228,11 @@ export default function PublicReservaPage() {
                 const originalExtra = Math.max(0, totalOriginal - groupBase);
                 const newExtra = Math.max(0, totalTemp - groupBase);
                 const diff = newExtra - originalExtra;
-                const adj = diff * EXTRA_GUEST_CHARGE * booking.nights;
+                // Solo se muestran aumentos: una bajada solo devuelve lo realmente cobrado por extras, y eso lo decide el servidor
+                const adj = Math.max(0, diff * EXTRA_GUEST_CHARGE * booking.nights);
                 const estNewPrice = booking.price + adj;
 
-                if (diff === 0) return null;
+                if (adj === 0) return null;
 
                 return (
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 space-y-1.5 text-xs text-amber-900">
