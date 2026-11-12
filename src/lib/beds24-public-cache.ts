@@ -11,7 +11,7 @@
  *  2. Presupuesto de consultas nuevas a Beds24 entre todas las búsquedas públicas, con tres límites a la vez:
  *       - ráfaga: como máximo 12 por minuto;
  *       - créditos: como máximo ~30 créditos (estimados) cada 5 minutos, la duración de la ventana de Beds24;
- *       - RESERVA PARA EL PERSONAL: si Beds24 dijo hace poco que quedan menos de 50 créditos, el portal de venta no consulta
+ *       - RESERVA PARA EL PERSONAL: si Beds24 dijo hace poco que quedan menos de 25 créditos, el portal de venta no consulta
  *         (los últimos créditos de la ventana son de recepción, mantenimiento y las tareas automáticas).
  *     Pasados los límites se sirve el último dato bueno y, si no lo hay, se responde "intenta en unos minutos" sin tocar Beds24.
  *  3. Si Beds24 falla o responde vacío, se sirve el último dato bueno y el fallo no se guarda en la caché.
@@ -30,7 +30,7 @@ export const PUBLIC_BUDGET_WINDOW_MS = 60_000;
 export const PUBLIC_BUDGET_MAX_CALLS = 12;
 export const PUBLIC_CREDIT_WINDOW_MS = 5 * 60_000;
 export const PUBLIC_CREDITS_PER_WINDOW = 30;
-export const PUBLIC_RESERVE_CREDITS = 50;
+export const PUBLIC_RESERVE_CREDITS = 25;
 const EST_COST_BOOKINGS = 2; // créditos estimados de un listado (suele ser 1-2 peticiones de 1 crédito; el primero de un mes puede ser más)
 const EST_COST_RATES = 1;
 const MAX_ENTRIES = 40;
