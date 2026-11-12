@@ -2064,6 +2064,36 @@ export async function PUT(req: Request) {
       }
     }
 
+    // Cambio de huéspedes desde la edición: el formulario reenvía el total sin cambios, así que el recargo
+    // por persona extra no se aplicaba. Se suma/resta solo la diferencia del recargo (respeta descuentos y
+    // precios editados). No aplica a OTA/Google (el canal fija el precio) ni a reservas agrupadas.
+    let guestAdjustedPrice: number | undefined = undefined;
+    // Solo se activa cuando el formulario de edición lo pide (recalcGuestExtras); las sincronizaciones del check-in no.
+    if (!preview && body.recalcGuestExtras === true && currentBooking && price !== undefined && (numAdult !== undefined || numChild !== undefined)
+        && Number(currentBooking.price) > 0 && Number(price) === Number(currentBooking.price) && !currentBooking.masterId) {
+      try {
+        const src = String(`${currentBooking.referer || ''} ${currentBooking.source || ''} ${currentBooking.apiSource || ''} ${currentBooking.apiReference || ''} ${currentBooking.channel || ''}`).toLowerCase();
+        if (!['airbnb', 'booking', 'expedia', 'google'].some(ch => src.includes(ch))) {
+          const oldGuests = Number(currentBooking.numAdult || 1) + Number(currentBooking.numChild || 0);
+          const newGuests = (numAdult !== undefined ? Number(numAdult) : Number(currentBooking.numAdult || 1))
+            + (numChild !== undefined ? Number(numChild) : Number(currentBooking.numChild || 0));
+          const nights = Math.round((new Date(currentBooking.departure + 'T12:00:00').getTime() - new Date(currentBooking.arrival + 'T12:00:00').getTime()) / 86400000);
+          let capSettings: any = null;
+          const { data: capRow } = await supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle();
+          if (capRow?.value) capSettings = typeof capRow.value === 'string' ? JSON.parse(capRow.value) : capRow.value;
+          const { getExtraGuestPriceDelta } = await import('@/lib/beds24');
+          const delta = getExtraGuestPriceDelta(currentBooking.roomId, oldGuests, newGuests, nights, capSettings);
+          if (delta !== 0) {
+            guestAdjustedPrice = Math.max(0, Number(currentBooking.price) + delta);
+            recalculatedPrice = guestAdjustedPrice;
+            console.log(`[Reservas PUT] Huéspedes ${oldGuests} → ${newGuests}: precio $${currentBooking.price} → $${guestAdjustedPrice}`);
+          }
+        }
+      } catch (guestErr) {
+        console.error("[Reservas PUT] Error ajustando precio por huéspedes extra:", guestErr);
+      }
+    }
+
     // Si es una petición de vista previa, retornar el precio actual sin marcar cambios
     if (preview) {
       const currentRoomId = currentBooking?.roomId ? String(currentBooking.roomId) : null;
@@ -2094,8 +2124,8 @@ export async function PUT(req: Request) {
     if (isOtaChannel && price === undefined) {
       console.log(`[Reservas PUT] Reserva OTA. Omitiendo actualizaciones de tarifas y facturas para proteger el precio del canal.`);
     } else {
-      const finalPrice = price !== undefined 
-        ? Number(price) 
+      const finalPrice = price !== undefined
+        ? (guestAdjustedPrice ?? Number(price))
         : (recalculatedPrice !== undefined 
             ? recalculatedPrice 
             : (currentBooking ? Number(currentBooking.price) : undefined));

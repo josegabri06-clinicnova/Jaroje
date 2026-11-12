@@ -2099,6 +2099,28 @@ export async function addBeds24GroupPayment(
 
 
 /**
+ * Diferencia de precio total (con el 19% de impuestos, igual que getDirectStayBreakdown) al pasar de
+ * oldGuests a newGuests en una estancia directa. Positiva si hay más huéspedes extra, negativa si hay menos.
+ */
+export function getExtraGuestPriceDelta(
+  roomNameOrId: any,
+  oldGuests: number,
+  newGuests: number,
+  nights: number,
+  capacitySettings?: Record<string, any>
+): number {
+  const { base, max } = getCapacityRules(roomNameOrId, capacitySettings);
+  // Si los huéspedes guardados superan la capacidad máxima son datos de grupo/antiguos: no es un cambio real de ocupación
+  if (oldGuests > max) return 0;
+  const extraDelta = Math.max(0, newGuests - base) - Math.max(0, oldGuests - base);
+  if (!Number.isFinite(extraDelta) || extraDelta === 0 || !(nights > 0)) return 0;
+  const extraPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+  const perNight = extraDelta * extraPrice;
+  const delta = (perNight + Math.round(perNight * 0.19)) * nights;
+  return Number.isFinite(delta) ? delta : 0;
+}
+
+/**
  * Retorna las reglas de capacidad de una habitación específica por su nombre o ID.
  */
 export function getCapacityRules(

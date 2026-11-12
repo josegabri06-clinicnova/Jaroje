@@ -1478,6 +1478,7 @@ export default function RecepcionPage() {
           phone: cleanPhone,
           numAdult: editedAdults,
           numChild: editedChildren,
+          recalcGuestExtras: true,
           price: Number(editedPrice),
           deposit: Number(editedDeposit),
           notes: editedNotes
@@ -1485,12 +1486,17 @@ export default function RecepcionPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar los cambios');
-      
+
+      // Si el servidor ajustó el total por huéspedes extra, usar ese valor en pantalla
+      const savedPrice = data.recalculated_price !== undefined ? Number(data.recalculated_price) : Number(editedPrice);
+
       setAbonoPaymentMode(null);
       setAbonoAccountId('');
       setRegisterAbonoInFinances(true);
-      
-      alert('✅ Cambios guardados con éxito.');
+
+      alert(savedPrice !== Number(editedPrice)
+        ? `✅ Cambios guardados. El total se actualizó a MX$${savedPrice.toLocaleString('es-MX')} por los huéspedes extra.`
+        : '✅ Cambios guardados con éxito.');
       
       try {
         const emp = getOperatorForLog();
@@ -1532,9 +1538,9 @@ export default function RecepcionPage() {
         guest_phone: cleanPhone,
         num_adult: editedAdults,
         num_child: editedChildren,
-        price_estimate: Number(editedPrice),
+        price_estimate: savedPrice,
         deposit: Number(editedDeposit),
-        balance: Number(editedPrice) - Number(editedDeposit),
+        balance: savedPrice - Number(editedDeposit),
         notes: editedNotes
       }));
 
@@ -1543,9 +1549,9 @@ export default function RecepcionPage() {
         guest_phone: cleanPhone,
         num_adult: editedAdults,
         num_child: editedChildren,
-        price_estimate: Number(editedPrice),
+        price_estimate: savedPrice,
         deposit: Number(editedDeposit),
-        balance: Number(editedPrice) - Number(editedDeposit),
+        balance: savedPrice - Number(editedDeposit),
         notes: editedNotes
       } : r));
 
