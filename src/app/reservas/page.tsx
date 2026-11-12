@@ -2227,7 +2227,9 @@ function ReservasListInner() {
         phone: cleanPhone,
         notes: editNotes,
         checkIn: editCheckIn,
-        checkOut: editCheckOut
+        checkOut: editCheckOut,
+        // Esta pantalla ya suma el recargo por huésped extra al total: el servidor lo reparte en su línea de factura
+        splitExtraGuestCharge: true
       };
 
       if (editGroupMembers.length > 1) {

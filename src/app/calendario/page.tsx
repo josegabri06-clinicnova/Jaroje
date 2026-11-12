@@ -965,6 +965,7 @@ export default function CalendarPage() {
           phone: editedPhone,
           numAdult: editedAdults,
           numChild: editedChildren,
+          splitExtraGuestCharge: true,
           price: Number(editedPrice),
           deposit: Number(editedDeposit),
           notes: editedNotes

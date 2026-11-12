@@ -2098,6 +2098,62 @@ export async function addBeds24GroupPayment(
 
 
 
+/** Descripción de la línea de factura del cargo por huéspedes extra (la misma que crea el portal de venta) */
+export const EXTRA_GUEST_CHARGE_LABEL = 'Huéspedes adicionales';
+
+/**
+ * Diferencia de precio total al pasar de oldGuests a newGuests en una estancia directa. En venta directa el huésped
+ * extra cuesta 500 con el impuesto ya incluido. Positiva si hay más huéspedes extra, negativa si hay menos.
+ */
+export function getExtraGuestPriceDelta(
+  roomNameOrId: any,
+  oldGuests: number,
+  newGuests: number,
+  nights: number,
+  capacitySettings?: Record<string, any>
+): number {
+  const { base, max } = getCapacityRules(roomNameOrId, capacitySettings);
+  // Si los huéspedes guardados superan la capacidad máxima son datos de grupo/antiguos: no es un cambio real de ocupación
+  if (oldGuests > max) return 0;
+  const extraDelta = Math.max(0, newGuests - base) - Math.max(0, oldGuests - base);
+  if (!Number.isFinite(extraDelta) || extraDelta === 0 || !(nights > 0)) return 0;
+  const extraPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+  const delta = extraDelta * extraPrice * nights;
+  return Number.isFinite(delta) ? delta : 0;
+}
+
+/**
+ * Reparte el total de una reserva directa entre la línea de habitación y la línea de "Huéspedes adicionales", igual
+ * que el portal de venta. La línea de extras es el registro de lo que realmente se cobró por huéspedes extra: solo se
+ * mueve por el cambio de huéspedes de esta edición (no se deduce de la ocupación, porque un extra puede haberse
+ * regalado). Devuelve null si el precio enviado no es el actual más el recargo de este cambio (p. ej. tarifa editada
+ * a mano): en ese caso quien llama debe dejar el comportamiento de siempre.
+ */
+export function splitExtraGuestCharge(args: {
+  price: number;
+  currentPrice: number;
+  existingExtraAmount: number;
+  oldGuests: number;
+  newGuests: number;
+  roomId: any;
+  nights: number;
+  capacitySettings?: Record<string, any>;
+}): { roomAmount: number; extraAmount: number; extraGuests: number; extraPrice: number } | null {
+  const { price, currentPrice, existingExtraAmount, oldGuests, newGuests, roomId, nights, capacitySettings } = args;
+  if (![price, currentPrice, existingExtraAmount, oldGuests, newGuests, nights].every(Number.isFinite) || nights <= 0) return null;
+  const delta = getExtraGuestPriceDelta(roomId, oldGuests, newGuests, nights, capacitySettings);
+  if (Math.abs(price - (currentPrice + delta)) > 1) return null;
+  const extraPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+  if (!(extraPrice > 0)) return null;
+  const extraAmount = Math.min(Math.max(0, existingExtraAmount + delta), price);
+  return {
+    roomAmount: price - extraAmount,
+    extraAmount,
+    extraGuests: extraAmount > 0 ? Math.round(extraAmount / (extraPrice * nights)) : 0,
+    extraPrice
+  };
+}
+
 /**
  * Retorna las reglas de capacidad de una habitación específica por su nombre o ID.
  */
