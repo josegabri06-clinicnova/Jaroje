@@ -415,7 +415,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     adultsLabel: 'Adultos',
     childrenLabel: 'Niños (2-12 años)',
     capacityInfo: (base: number, max: number) => `Capacidad sin costo adicional: ${base} huéspedes. Capacidad máxima: ${max} huéspedes.`,
-    extraChargeInfo: 'Cada persona extra tiene un costo adicional de $500 MXN + 19% de impuestos ($595 MXN) por noche.',
+    extraChargeInfo: 'Cada persona extra tiene un costo adicional de $500 MXN por noche.',
     estimatedTotal: 'Total de la estancia estimado:',
     priceAdjustmentLabel: 'Ajuste por personas adicionales:',
     maxCapacityExceeded: (max: number) => `La cantidad de huéspedes supera la capacidad máxima de la habitación (${max} personas).`,
@@ -546,7 +546,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     adultsLabel: 'Adults',
     childrenLabel: 'Children (2-12 years)',
     capacityInfo: (base: number, max: number) => `Included capacity: ${base} guests. Max capacity: ${max} guests.`,
-    extraChargeInfo: 'Each extra person has an additional cost of $500 MXN + 19% tax ($595 MXN) per night.',
+    extraChargeInfo: 'Each extra person has an additional cost of $500 MXN per night.',
     estimatedTotal: 'Estimated total stay amount:',
     priceAdjustmentLabel: 'Extra guests surcharge:',
     maxCapacityExceeded: (max: number) => `The number of guests exceeds the maximum capacity of the room (${max} people).`,
@@ -1463,8 +1463,7 @@ export default function PublicReservaPage() {
   // - OTAs (Airbnb, Booking, Expedia): precio fijo, sin cargo extra adicional
   // - Directo (local 500-507 o Beds24 Directo): booking.price = tarifa base × noches
   //   El sistema tiene las reglas de capacidad por habitación y calcula el extra automáticamente
-  // 500 MXN por persona extra + 19% de impuestos (el impuesto va sobre el cargo extra, no sobre la tarifa de la habitación)
-  const EXTRA_GUEST_CHARGE = isUSD ? 25 : 595;
+  const EXTRA_GUEST_CHARGE = isUSD ? 25 : 500;
   // Reservas en las que el gerente regaló el huésped extra: el precio guardado ya es solo la tarifa de la habitación,
   // así que no se resta ningún recargo para mostrar la tarifa base.
   const COURTESY_EXTRA_GUEST_BOOKING_IDS = new Set(['96095292']);

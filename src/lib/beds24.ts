@@ -2099,8 +2099,9 @@ export async function addBeds24GroupPayment(
 
 
 /**
- * Diferencia de precio total (con el 19% de impuestos, igual que getDirectStayBreakdown) al pasar de
- * oldGuests a newGuests en una estancia directa. Positiva si hay más huéspedes extra, negativa si hay menos.
+ * Diferencia de precio total al pasar de oldGuests a newGuests en una estancia directa. En venta directa
+ * el huésped extra cuesta 500 con el impuesto ya incluido (igual que en nueva reserva y recepción).
+ * Positiva si hay más huéspedes extra, negativa si hay menos.
  */
 export function getExtraGuestPriceDelta(
   roomNameOrId: any,
@@ -2115,8 +2116,7 @@ export function getExtraGuestPriceDelta(
   const extraDelta = Math.max(0, newGuests - base) - Math.max(0, oldGuests - base);
   if (!Number.isFinite(extraDelta) || extraDelta === 0 || !(nights > 0)) return 0;
   const extraPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
-  const perNight = extraDelta * extraPrice;
-  const delta = (perNight + Math.round(perNight * 0.19)) * nights;
+  const delta = extraDelta * extraPrice * nights;
   return Number.isFinite(delta) ? delta : 0;
 }
 
@@ -2289,6 +2289,8 @@ export function getDirectStayBreakdown(
   let sampleBasePricePerNight = 0;
   let sampleTaxPerNight = 0;
   let sampleTotalPerNight = 0;
+  let surchargeTaxStay = 0;
+  let sampleSurchargeTax = 0;
 
   for (let i = 0; i < nights; i++) {
     const curr = new Date(checkInDate);
@@ -2416,15 +2418,19 @@ export function getDirectStayBreakdown(
     const nightBase = Math.round(priceUsed * discountMult) + surchargePerNight;
     const nightTax = Math.round(nightBase * 0.19);
     const nightTotal = nightBase + nightTax;
+    // Parte del impuesto que cae sobre el recargo de huéspedes extra (0 si no hay extras)
+    const nightSurchargeTax = nightTax - Math.round((nightBase - surchargePerNight) * 0.19);
 
     subtotalBaseStay += nightBase;
     subtotalTaxStay += nightTax;
     totalDirect += nightTotal;
+    surchargeTaxStay += nightSurchargeTax;
 
     if (i === 0) {
       sampleBasePricePerNight = nightBase;
       sampleTaxPerNight = nightTax;
       sampleTotalPerNight = nightTotal;
+      sampleSurchargeTax = nightSurchargeTax;
     }
   }
 
@@ -2464,7 +2470,13 @@ export function getDirectStayBreakdown(
     finalTotal = Math.round(totalDirect * channelMultiplier);
   }
 
-  let summaryFormula = `${nights} ${nights === 1 ? 'noche' : 'noches'} × $${sampleTotalPerNight.toLocaleString('es-MX')} MXN`;
+  // Venta directa: el huésped extra cuesta 500 con el impuesto ya incluido, así que no se le suma el 19%.
+  // totalDirect no cambia (lo usa la detección de OTA ya ajustadas); solo cambia lo que ve y cobra la reserva directa.
+  const isDirectChannel = channelMultiplier === 1.0;
+  if (isDirectChannel) finalTotal = totalDirect - surchargeTaxStay;
+  const displayTotalPerNight = isDirectChannel ? sampleTotalPerNight - sampleSurchargeTax : sampleTotalPerNight;
+
+  let summaryFormula = `${nights} ${nights === 1 ? 'noche' : 'noches'} × $${displayTotalPerNight.toLocaleString('es-MX')} MXN`;
   if (isAirbnbChannel) {
     summaryFormula += ` × ${channelMultiplier} (Airbnb * 1.20 MUL * 1.21 TAX) = $${finalTotal.toLocaleString('es-MX')} MXN`;
   } else if (isBookingChannel) {
@@ -2488,8 +2500,8 @@ export function getDirectStayBreakdown(
     rateName: appliedRateName || 'Tarifa Estándar',
     isDiscount,
     basePricePerNight: sampleBasePricePerNight,
-    taxPerNight: sampleTaxPerNight,
-    totalPerNight: sampleTotalPerNight,
+    taxPerNight: isDirectChannel ? sampleTaxPerNight - sampleSurchargeTax : sampleTaxPerNight,
+    totalPerNight: displayTotalPerNight,
     totalGuests,
     baseCapacity: capRules.base,
     extraGuests,
