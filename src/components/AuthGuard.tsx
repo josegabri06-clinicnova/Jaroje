@@ -12,9 +12,9 @@ const PUBLIC_ROUTES = ['/login'];
 
 const PERMITTED_ROUTES: Record<string, string[]> = {
   admin: ['/'], // Admin has universal access
-  recepcion: ['/recepcion', '/calendario', '/reservas', '/nueva'],
-  staff_limpieza: ['/staff', '/calendario'],
-  staff_mantenimiento: ['/staff', '/calendario'],
+  recepcion: ['/recepcion', '/calendario', '/reservas', '/nueva', '/inventario'],
+  staff_limpieza: ['/staff', '/calendario', '/inventario'],
+  staff_mantenimiento: ['/staff', '/calendario', '/inventario'],
 };
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {

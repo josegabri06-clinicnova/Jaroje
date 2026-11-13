@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   try {
     // 1. Control de acceso: Verificar sesión (admin/recepcion) o token de exportación
-    const auth = await authorizeExportRequest(req, ['admin', 'recepcion']);
+    const auth = await authorizeExportRequest(req, ['admin', 'recepcion', 'staff_limpieza', 'staff_mantenimiento']);
     if (!auth.authorized) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized: Se requiere sesión autorizada o token válido para exportar inventario.' },

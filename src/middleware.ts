@@ -197,6 +197,7 @@ export async function middleware(req: NextRequest) {
         '/api/auth/logout',
         '/api/employee-logs',
         '/api/room-status',
+        '/api/inventory', // exportación del inventario (la propia ruta limita los roles)
         '/api/db' // pasarela de base de datos: ella misma decide por rol qué puede hacer cada perfil
       ];
       const isAllowed = allowedStaffApis.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
@@ -215,7 +216,7 @@ export async function middleware(req: NextRequest) {
         );
       }
     } else {
-      const isAllowedStaffPage = pathname === '/staff' || pathname.startsWith('/staff') || pathname === '/calendario' || pathname.startsWith('/calendario');
+      const isAllowedStaffPage = pathname === '/staff' || pathname.startsWith('/staff') || pathname === '/calendario' || pathname.startsWith('/calendario') || pathname === '/inventario' || pathname.startsWith('/inventario');
       if (!isAllowedStaffPage) {
         return NextResponse.redirect(new URL('/staff', req.url));
       }
