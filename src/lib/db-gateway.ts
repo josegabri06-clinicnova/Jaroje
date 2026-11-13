@@ -43,7 +43,7 @@ export const TABLE_RULES: Record<string, TableRule> = {
   room_status: { select: ADMIN_REC },
   employee_logs: { insert: ADMIN_REC },
   tasks: { insert: ADMIN_STAFF, update: ADMIN_STAFF, delete: ADMIN },
-  inventory: { select: ALL, insert: ADMIN, update: ALL, delete: ADMIN },
+  inventory: { select: ALL, insert: ALL, update: ALL, delete: ALL }, // todos los perfiles gestionan el inventario; vaciarlo entero (borrado sin id) sigue siendo solo de admin (ver más abajo)
   settings: { select: ALL, insert: ADMIN_STAFF, update: ADMIN_STAFF }, // el detalle por clave está en SETTINGS_READ / SETTINGS_WRITE
 };
 
@@ -253,6 +253,13 @@ export function evaluateDbRequest(input: GatewayInput): GatewayDecision {
 
   // 6) Cambios y borrados: siempre con algún filtro (nunca masivos por descuido)
   if ((op === 'update' || op === 'delete') && filters.length === 0) return deny(400, 'Se exige al menos un filtro.');
+
+  // 6b) Inventario: limpieza, mantenimiento y recepción borran artículos de uno en uno (filtro id=eq.<id>); el borrado masivo
+  // (vaciar el catálogo entero) es solo del administrador.
+  if (table === 'inventory' && op === 'delete' && role !== 'admin') {
+    const idFilters = filters.filter(([n]) => n === 'id');
+    if (idFilters.length !== 1 || !idFilters[0][1].startsWith('eq.')) return deny(403, 'Solo el administrador puede borrar varios artículos a la vez.');
+  }
 
   // 7) Cuerpo
   let body: string | undefined;
