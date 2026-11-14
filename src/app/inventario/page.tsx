@@ -299,19 +299,10 @@ export default function InventarioPage() {
     setIsSubmitting(false);
   };
 
+  // Los botones − y + suman o restan UNA unidad por toque. Antes abrían un cuadro de texto ("¿qué cantidad deseas sumar?") y lo que
+  // se escribía se SUMABA al stock (3 + 10 = 13), en vez de fijar el valor. Para poner una cantidad exacta se edita el artículo.
   const handleAdjustStock = async (item: InventoryItem, direction: 'add' | 'remove') => {
-    const actionLabel = direction === 'add' ? 'sumar al' : 'restar del';
-    const quantityStr = prompt(`¿Qué cantidad deseas ${actionLabel} stock de "${item.item_name}"?`, "1");
-    if (quantityStr === null) return;
-    
-    const quantity = parseInt(quantityStr.trim(), 10);
-    if (isNaN(quantity) || quantity <= 0) {
-      alert("Por favor, ingresa una cantidad entera válida mayor a 0.");
-      return;
-    }
-    
-    const change = direction === 'add' ? quantity : -quantity;
-    await updateStock(item.id, item.stock, change);
+    await updateStock(item.id, item.stock, direction === 'add' ? 1 : -1);
   };
 
   const isMobileOrPWA = () => {
@@ -403,10 +394,15 @@ export default function InventarioPage() {
       empDept = activeEmp.department;
     }
 
-    const { error } = await supabase
+    const newStock = currentStock + change;
+    let { error } = await supabase
       .from('inventory')
-      .update({ stock: currentStock + change, last_updated_by: empName })
+      .update({ stock: newStock, last_updated_by: empName })
       .eq('id', id);
+    // Si el esquema no tiene la columna last_updated_by, se reintenta solo con el stock (igual que al crear o editar un artículo)
+    if (error) {
+      ({ error } = await supabase.from('inventory').update({ stock: newStock }).eq('id', id));
+    }
 
     if (error) {
       console.error(error);
@@ -497,8 +493,8 @@ export default function InventarioPage() {
     const basePayload = {
       item_name: formName.trim(),
       category: formCategory || 'Blancos',
-      stock: parseInt(formStock) || 0,
-      min_stock: parseInt(formMinStock) || 0
+      stock: Math.max(0, parseInt(formStock) || 0),
+      min_stock: Math.max(0, parseInt(formMinStock) || 0)
     };
     
     const { error } = await executeInventoryDbAction('insert', basePayload, empName);
@@ -551,8 +547,8 @@ export default function InventarioPage() {
     const updated = {
       item_name: formName.trim(),
       category: formCategory || editingItem.category || 'Blancos',
-      stock: parseInt(formStock) || 0,
-      min_stock: parseInt(formMinStock) || 0
+      stock: Math.max(0, parseInt(formStock) || 0),
+      min_stock: Math.max(0, parseInt(formMinStock) || 0)
     };
 
     const { error } = await executeInventoryDbAction('update', updated, empName, editingItem.id);
