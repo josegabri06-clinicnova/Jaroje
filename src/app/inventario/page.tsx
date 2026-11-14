@@ -8,6 +8,13 @@ import { getActiveEmployee, verifyAdminPin } from '@/lib/auth';
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
 const supabase = createDbClient();
 
+// Clave para comparar categorías sin importar mayúsculas: la base de datos guarda 'limpieza' y la lista de la pantalla 'Limpieza'.
+// 'otro' (valor que permite la restricción actual de la base) y 'Otros' son la misma categoría.
+const categoryKey = (c: string | null | undefined) => {
+  const k = String(c || '').trim().toLowerCase();
+  return k === 'otro' ? 'otros' : k;
+};
+
 const normalizeText = (text: string) => 
   (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -95,7 +102,8 @@ export default function InventarioPage() {
   useEffect(() => {
     if (items.length > 0 && categoriesOrder.length > 0) {
       const dbCategories = [...new Set(items.map(item => item.category))];
-      const missing = dbCategories.filter(cat => cat && !categoriesOrder.includes(cat));
+      const known = new Set(categoriesOrder.map(categoryKey));
+      const missing = dbCategories.filter(cat => cat && !known.has(categoryKey(cat)));
       if (missing.length > 0) {
         const updated = [...categoriesOrder, ...missing];
         setCategoriesOrder(updated);
@@ -429,68 +437,43 @@ export default function InventarioPage() {
     setUpdatingId(null);
   };
 
+  const isCategoryCheckViolation = (e: any) => Boolean(e) && (e.code === '23514' || String(e.message || '').includes('inventory_category_check'));
+
+  // Guarda el artículo EXACTAMENTE en la categoría elegida. Antes, si la base de datos rechazaba la categoría (restricción
+  // inventory_category_check), el código probaba otras categorías en silencio ('Otros', 'Blancos'…) y el artículo acababa en
+  // "Blancos" sin avisar. Ahora, si la categoría no está permitida, se devuelve un error que la nombra y no se guarda nada.
   const executeInventoryDbAction = async (
     action: 'insert' | 'update',
     payload: { item_name: string; category: string; stock: number; min_stock: number },
     empName: string,
     itemId?: string
   ) => {
-    const candidateCategories = [
-      payload.category?.trim(),
-      payload.category?.trim().toLowerCase(),
-      payload.category?.trim().toUpperCase(),
-      'Otros',
-      'otros',
-      'OTROS',
-      'Blancos',
-      'blancos',
-      'Limpieza',
-      'limpieza',
-      'Amenidades',
-      'amenidades',
-      'Bebidas',
-      'bebidas',
-      'Alimentos',
-      'alimentos'
-    ].filter(Boolean);
+    const category = (payload.category || '').trim();
+    const run = (data: Record<string, unknown>) => action === 'insert'
+      ? supabase.from('inventory').insert([data])
+      : supabase.from('inventory').update(data).eq('id', itemId);
 
-    if (items && items.length > 0) {
-      items.forEach(i => {
-        if (i.category) candidateCategories.push(i.category);
-      });
-    }
-
-    const uniqueCategories = [...new Set(candidateCategories)];
+    // Formas de ESTA misma categoría que la base puede aceptar: tal cual, en minúsculas (la restricción actual es
+    // blancos / amenidades / limpieza / bebidas / otro) y, para "Otros", su valor singular 'otro'.
+    const forms = [...new Set([category, category.toLowerCase(), categoryKey(category) === 'otros' ? 'otro' : ''].filter(Boolean))];
     let lastError: any = null;
-
-    for (const cat of uniqueCategories) {
-      const itemData: any = {
-        item_name: payload.item_name,
-        category: cat,
-        stock: payload.stock,
-        min_stock: payload.min_stock
-      };
-
-      let res = action === 'insert'
-        ? await supabase.from('inventory').insert([{ ...itemData, last_updated_by: empName }])
-        : await supabase.from('inventory').update({ ...itemData, last_updated_by: empName }).eq('id', itemId);
-
-      if (!res.error) return { error: null, categoryUsed: cat };
-
-      res = action === 'insert'
-        ? await supabase.from('inventory').insert([itemData])
-        : await supabase.from('inventory').update(itemData).eq('id', itemId);
-
-      if (!res.error) return { error: null, categoryUsed: cat };
-
+    for (const form of forms) {
+      const itemData = { item_name: payload.item_name, category: form, stock: payload.stock, min_stock: payload.min_stock };
+      let res = await run({ ...itemData, last_updated_by: empName });
+      // Si el esquema no tiene la columna last_updated_by, se reintenta sin ella (la categoría no cambia)
+      if (res.error && !isCategoryCheckViolation(res.error)) res = await run(itemData);
+      if (!res.error) return { error: null, categoryUsed: form };
       lastError = res.error;
-      const isCheckViolation = res.error.message?.includes('inventory_category_check') || res.error.code === '23514';
-      if (!isCheckViolation) {
-        break;
-      }
+      if (!isCategoryCheckViolation(res.error)) break; // otro tipo de error: se muestra tal cual
     }
 
-    return { error: lastError, categoryUsed: payload.category };
+    if (isCategoryCheckViolation(lastError)) {
+      return {
+        error: { ...lastError, message: `La categoría "${category}" no está permitida por la base de datos (restricción inventory_category_check). El artículo NO se guardó. Avisa al administrador para habilitarla.` },
+        categoryUsed: category
+      };
+    }
+    return { error: lastError, categoryUsed: category };
   };
 
   const handleAddItem = async () => {
@@ -656,7 +639,7 @@ export default function InventarioPage() {
   const openEditModal = (item: InventoryItem) => {
     setEditingItem(item);
     setFormName(item.item_name);
-    setFormCategory(item.category);
+    setFormCategory(categoriesOrder.find(c => categoryKey(c) === categoryKey(item.category)) || item.category);
     setFormStock(item.stock.toString());
     setFormMinStock(item.min_stock.toString());
   };
@@ -670,7 +653,11 @@ export default function InventarioPage() {
   });
 
   // Categories for grouping
-  const categories = [...new Set(filteredItems.map(i => i.category))];
+  // (sin duplicar por mayúsculas: 'limpieza' de la base y 'Limpieza' de la lista son el mismo grupo)
+  const categories = [...new Map(filteredItems.map(i => [
+    categoryKey(i.category),
+    categoriesOrder.find(c => categoryKey(c) === categoryKey(i.category)) || i.category
+  ] as [string, string])).values()];
 
   // Sort categories by custom categoriesOrder
   const sortedCategories = categories.sort((a, b) => {
@@ -790,7 +777,7 @@ export default function InventarioPage() {
             <div key={cat}>
               <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-3 px-1">{cat}</h3>
               <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col divide-y divide-zinc-100 overflow-hidden">
-                {filteredItems.filter(i => i.category === cat).map(item => {
+                {filteredItems.filter(i => categoryKey(i.category) === categoryKey(cat)).map(item => {
                   const isLowStock = item.stock <= item.min_stock;
                   return (
                     <div key={item.id} className="p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors">
