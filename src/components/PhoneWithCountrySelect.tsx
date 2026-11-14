@@ -23,6 +23,8 @@ interface PhoneWithCountrySelectProps {
   required?: boolean;
   className?: string;
   showSaveButton?: boolean;
+  /** El teléfono es obligatorio sea cual sea el canal (check-in: toda reserva debe terminar con un teléfono guardado) */
+  alwaysRequired?: boolean;
 }
 
 export function PhoneWithCountrySelect({
@@ -35,7 +37,8 @@ export function PhoneWithCountrySelect({
   savedSuccess = false,
   required = false,
   className = '',
-  showSaveButton = true
+  showSaveButton = true,
+  alwaysRequired = false
 }: PhoneWithCountrySelectProps) {
   // Inicializar prefijo y número nacional a partir del valor externo
   const parsed = useMemo(() => {
@@ -53,7 +56,7 @@ export function PhoneWithCountrySelect({
 
   const isOta = isOtaReservation(channel);
   const isMissing = isOtaPhoneMissingOrInvalid(value);
-  const isMandatoryOta = isOta && (required || true); // Obligatorio siempre para OTAs
+  const isMandatoryOta = alwaysRequired || (isOta && (required || true)); // Obligatorio siempre para OTAs (y para todos si alwaysRequired)
 
   const handleDialCodeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newDial = e.target.value;
@@ -136,10 +139,10 @@ export function PhoneWithCountrySelect({
           <AlertCircle size={15} className="text-amber-800 shrink-0 mt-0.5" />
           <div className="text-[11px] text-amber-950 leading-tight">
             <p className="font-extrabold text-amber-900">
-              🚨 Obligatorio para {channel || 'Booking / Expedia'}:
+              🚨 Obligatorio{isOta ? ` para ${channel || 'Booking / Expedia'}` : ''}:
             </p>
             <p className="font-medium mt-0.5">
-              Las plataformas no proporcionan el teléfono real. <strong>Debes registrar el WhatsApp</strong> del huésped para que reciba sus claves de acceso y el portal digital. No se puede finalizar el Check-In sin este dato.
+              {isOta ? 'Las plataformas no proporcionan el teléfono real. ' : ''}<strong>Debes registrar el WhatsApp</strong> del huésped para que reciba sus claves de acceso y el portal digital. No se puede finalizar el Check-In sin este dato.
             </p>
           </div>
         </div>

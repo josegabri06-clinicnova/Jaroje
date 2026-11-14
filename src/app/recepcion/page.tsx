@@ -3292,14 +3292,23 @@ export default function RecepcionPage() {
     }
   };
 
+  // Todo check-in debe terminar con un teléfono real guardado (OTA, directa, local o walk-in): sin él no salen las plantillas ni las claves.
+  const isCheckinPhoneInvalid = (): boolean => {
+    if (!selectedReserva) return true;
+    const phone = selectedReserva.id === 'walkin' ? String(selectedReserva.guest_phone || '') : (editedPhone || '');
+    const digits = phone.replace(/\D/g, '');
+    // Sin el canal a propósito: el filtro de Booking descarta números de 10 dígitos que empiezan por 63-67, y eso incluye teléfonos reales
+    // (Tijuana 664, Culiacán 667, Nueva York 646, Bay Area 650…). Aquí el número lo teclea recepción, no lo inyecta la OTA.
+    return digits.length < 8 || phone.includes('@') || digits.startsWith('0000') || isDummyOrInvalidPhone(phone, selectedReserva.notes, null);
+  };
+
   const processCheckIn = async () => {
     if (!selectedReserva) return;
 
-    const channel = (selectedReserva.channel || '').toLowerCase();
-    const isOta = channel.includes('booking') || channel.includes('expedia') || channel.includes('airbnb') || channel.includes('agoda');
-    const cleanDigits = (editedPhone || '').replace(/\D/g, '');
-    if (isOta && (cleanDigits.length < 8 || editedPhone.includes('@') || cleanDigits.startsWith('0000') || isDummyOrInvalidPhone(editedPhone, selectedReserva.notes, selectedReserva.channel))) {
-      alert(`🚨 TELÉFONO OBLIGATORIO:\nEsta reserva proviene de ${selectedReserva.channel || 'Booking / Expedia'}.\nEs estrictamente obligatorio registrar el número de WhatsApp del huésped para enviarle las plantillas de bienvenida, claves de acceso y portal digital.`);
+    if (isCheckinPhoneInvalid()) {
+      alert(`🚨 TELÉFONO OBLIGATORIO:
+No se puede terminar el check-in sin el número de WhatsApp real del huésped.
+Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal digital.`);
       setSubmitting(false);
       return;
     }
@@ -3984,8 +3993,18 @@ export default function RecepcionPage() {
               .update({ phone: cleanPhone })
               .eq('id', Number(selectedReserva.id));
           } catch (_) {}
-          if (!(await persistCheckinPhone(selectedReserva.id, editedPhone))) {
-            alert('⚠️ El check-in se registró, pero el teléfono NO se pudo guardar en la reserva. Pulsa "Guardar teléfono" junto al campo del teléfono para guardarlo.');
+          // Una reserva de varias habitaciones llega como varias reservas (un id por habitación) pero con un solo campo de teléfono:
+          // el número va a la reserva abierta y a las demás habitaciones del grupo que no tengan uno válido (nunca se pisa un teléfono real).
+          const phoneTargets = groupBookings.filter(r =>
+            String(r.id) === String(selectedReserva.id) ||
+            isDummyOrInvalidPhone(r.guest_phone || r.phone || r.mobile, r.notes, r.channel)
+          );
+          let phoneSaveFailed = false;
+          for (const target of phoneTargets) {
+            if (!(await persistCheckinPhone(target.id, editedPhone))) phoneSaveFailed = true;
+          }
+          if (phoneSaveFailed) {
+            alert('⚠️ El check-in se registró, pero el teléfono NO se pudo guardar en alguna de las habitaciones. Abre esa reserva y pulsa "Guardar teléfono" junto al campo del teléfono.');
           }
         }
 
@@ -6694,6 +6713,7 @@ export default function RecepcionPage() {
                     savingOnly={savingPhoneOnly}
                     savedSuccess={phoneSavedSuccess}
                     required={true}
+                    alwaysRequired={!selectedReserva.checked_in}
                   />
 
 
@@ -8718,21 +8738,12 @@ export default function RecepcionPage() {
                   return null;
                 })()}
 
-                {(() => {
-                  const channel = (selectedReserva.channel || '').toLowerCase();
-                  const isOta = channel.includes('booking') || channel.includes('expedia') || channel.includes('airbnb') || channel.includes('agoda');
-                  const cleanDigits = (editedPhone || '').replace(/\D/g, '');
-                  const isPhoneMissing = isOta && (cleanDigits.length < 8 || editedPhone.includes('@') || cleanDigits.startsWith('0000') || isDummyOrInvalidPhone(editedPhone, selectedReserva.notes, selectedReserva.channel));
-                  if (isPhoneMissing) {
-                    return (
-                      <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-xl py-2 px-3 text-center flex items-center justify-center gap-1.5 animate-in fade-in duration-200">
-                        <AlertCircle size={13} className="text-amber-700 shrink-0" />
-                        <span>Obligatorio registrar el WhatsApp del huésped para completar el Check-In ({selectedReserva.channel || 'OTA'})</span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
+                {isCheckinPhoneInvalid() && (
+                  <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-xl py-2 px-3 text-center flex items-center justify-center gap-1.5 animate-in fade-in duration-200">
+                    <AlertCircle size={13} className="text-amber-700 shrink-0" />
+                    <span>Obligatorio registrar el WhatsApp del huésped para completar el Check-In</span>
+                  </div>
+                )}
 
                 <button
                   onClick={() => runWithSignature('checkin', () => processCheckIn())}
@@ -8743,13 +8754,8 @@ export default function RecepcionPage() {
 
                     if (submitting) return true;
 
-                    // Validación obligatoria de WhatsApp para OTAs (Booking, Expedia, etc.)
-                    const ch = (selectedReserva.channel || '').toLowerCase();
-                    const isOtaBooking = ch.includes('booking') || ch.includes('expedia') || ch.includes('airbnb') || ch.includes('agoda');
-                    const cleanPhoneDigits = (editedPhone || '').replace(/\D/g, '');
-                    if (isOtaBooking && (cleanPhoneDigits.length < 8 || editedPhone.includes('@') || cleanPhoneDigits.startsWith('0000') || isDummyOrInvalidPhone(editedPhone, selectedReserva.notes, selectedReserva.channel))) {
-                      return true;
-                    }
+                    // Validación obligatoria de WhatsApp en todo check-in
+                    if (isCheckinPhoneInvalid()) return true;
 
                     // Validación DNI obligatoria para todas las reservas y walk-ins
                     if (!dniPreview) return true;
