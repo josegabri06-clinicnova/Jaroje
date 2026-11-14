@@ -1109,6 +1109,27 @@ export default function RecepcionPage() {
     }
   };
 
+  // Guarda el teléfono tecleado en el check-in donde de verdad se lee: Beds24 + beds24_reservations (por /api/reservas, que lo
+  // sincroniza). Escribir directo en beds24_reservations desde el navegador no hace nada (tabla cerrada), así que antes el número
+  // de una reserva de Booking/Expedia no quedaba guardado y no se podían enviar las plantillas.
+  const persistCheckinPhone = async (reservaId: string | number, rawPhone: string): Promise<boolean> => {
+    const clean = normalizePhone(rawPhone.trim(), selectedReserva?.country2 || selectedReserva?.country);
+    if (!clean) return true;
+    try {
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: reservaId, phone: clean }),
+        signal: AbortSignal.timeout(20000) // un Beds24 lento no debe dejar el check-in colgado
+      });
+      const json = await res.json().catch(() => ({}));
+      return res.ok && json?.success !== false;
+    } catch (e) {
+      console.warn('Aviso guardando teléfono en el check-in:', e);
+      return false;
+    }
+  };
+
   // Estados para abono dedicado en Recepción
   const [showAbonoFlow, setShowAbonoFlow] = useState(false);
   const [abonoAmount, setAbonoAmount] = useState('');
@@ -3963,6 +3984,9 @@ export default function RecepcionPage() {
               .update({ phone: cleanPhone })
               .eq('id', Number(selectedReserva.id));
           } catch (_) {}
+          if (!(await persistCheckinPhone(selectedReserva.id, editedPhone))) {
+            alert('⚠️ El check-in se registró, pero el teléfono NO se pudo guardar en la reserva. Pulsa "Guardar teléfono" junto al campo del teléfono para guardarlo.');
+          }
         }
 
         const sentGroupWelcomePhones = new Set<string>();
@@ -4617,6 +4641,9 @@ export default function RecepcionPage() {
               .update({ phone: cleanPhone })
               .eq('id', Number(selectedReserva.id));
           } catch (_) {}
+          if (!(await persistCheckinPhone(selectedReserva.id, editedPhone))) {
+            alert('⚠️ El check-in se registró, pero el teléfono NO se pudo guardar en la reserva. Pulsa "Guardar teléfono" junto al campo del teléfono para guardarlo.');
+          }
         }
 
         // Enviar plantilla de bienvenida WhatsApp en segundo plano
