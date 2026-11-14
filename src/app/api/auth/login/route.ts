@@ -12,6 +12,7 @@ const DB_KEY_MAP: Record<string, string> = {
   staff_limpieza: 'pin_limpieza',
   staff_mantenimiento: 'pin_mantenimiento',
   recepcion: 'pin_recepcion',
+  staff_inventario: 'pin_inventario',
 };
 
 export async function POST(req: Request) {
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
     const cleanPin = pin.trim();
     const cleanRole = String(role).trim() as SessionPayload['role'];
 
-    if (!DB_KEY_MAP[cleanRole]) {
+    if (!Object.prototype.hasOwnProperty.call(DB_KEY_MAP, cleanRole)) {
       return NextResponse.json({ success: false, error: 'Rol inválido especificado.' }, { status: 400 });
     }
 
@@ -59,6 +60,8 @@ export async function POST(req: Request) {
         ? process.env.RECEPCION_PIN 
         : cleanRole === 'staff_limpieza' 
         ? process.env.STAFF_LIMPIEZA_PIN 
+        : cleanRole === 'staff_inventario'
+        ? process.env.STAFF_INVENTARIO_PIN
         : process.env.STAFF_MANTENIMIENTO_PIN;
 
       if (envPin && envPin.trim()) {

@@ -7,6 +7,7 @@ export const PIN_DB_KEY = {
   recepcion: 'pin_recepcion',
   staff_limpieza: 'pin_limpieza',
   staff_mantenimiento: 'pin_mantenimiento',
+  staff_inventario: 'pin_inventario',
 } as const;
 
 export type PinRole = keyof typeof PIN_DB_KEY;
@@ -20,6 +21,7 @@ const ENV_PIN: Record<PinRole, string | undefined> = {
   get recepcion() { return process.env.RECEPCION_PIN; },
   get staff_limpieza() { return process.env.STAFF_LIMPIEZA_PIN; },
   get staff_mantenimiento() { return process.env.STAFF_MANTENIMIENTO_PIN; },
+  get staff_inventario() { return process.env.STAFF_INVENTARIO_PIN; },
 };
 
 // PIN vigente del rol: primero `settings`; si la fila no existe, la variable de entorno. '' = no configurado.

@@ -4,7 +4,7 @@
  */
 
 export interface SessionPayload {
-  role: 'admin' | 'recepcion' | 'staff_limpieza' | 'staff_mantenimiento';
+  role: 'admin' | 'recepcion' | 'staff_limpieza' | 'staff_mantenimiento' | 'staff_inventario';
   exp: number; // Unix timestamp en segundos
   iat: number; // Unix timestamp en segundos
 }
