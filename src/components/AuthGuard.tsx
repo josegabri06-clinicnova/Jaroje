@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout, fetchServerSession, clearServerSessionCache, clearLegacyPinCopies } from '@/lib/auth';
-import { LogOut, Shield, Wrench, Sparkles, KeyRound, Hammer, RefreshCw, Settings } from 'lucide-react';
+import { LogOut, Shield, Wrench, Sparkles, KeyRound, Hammer, RefreshCw, Settings, Package } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
 
-type Role = 'admin' | 'recepcion' | 'staff_limpieza' | 'staff_mantenimiento' | null;
+type Role = 'admin' | 'recepcion' | 'staff_limpieza' | 'staff_mantenimiento' | 'staff_inventario' | null;
 
 const PUBLIC_ROUTES = ['/login'];
 
@@ -15,6 +15,7 @@ const PERMITTED_ROUTES: Record<string, string[]> = {
   recepcion: ['/recepcion', '/calendario', '/reservas', '/nueva', '/inventario'],
   staff_limpieza: ['/staff', '/calendario', '/inventario'],
   staff_mantenimiento: ['/staff', '/calendario', '/inventario'],
+  staff_inventario: ['/inventario'], // solo la pantalla de inventario
 };
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -76,6 +77,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       // Si está autenticado e intenta ir a /login, redirigir a su panel por defecto
       if (pathname === '/login') {
         if (stored === 'admin' || stored === 'recepcion') router.replace('/calendario');
+        else if (stored === 'staff_inventario') router.replace('/inventario');
         else router.replace('/staff');
         return;
       }
@@ -100,6 +102,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         console.warn(`Acceso denegado a ${pathname} para el rol ${stored}. Redirigiendo...`);
         if (stored === 'recepcion') {
           router.replace('/calendario');
+        } else if (stored === 'staff_inventario') {
+          router.replace('/inventario');
         } else {
           router.replace('/staff');
         }
@@ -151,6 +155,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
               <span className="text-[10px] font-bold text-white tracking-wide uppercase">Limpieza</span>
             </div>
           )}
+          {role === 'staff_inventario' && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-600 border border-emerald-700">
+              <Package size={10} className="text-white" />
+              <span className="text-[10px] font-bold text-white tracking-wide uppercase">Inventario</span>
+            </div>
+          )}
           {role === 'staff_mantenimiento' && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-600 border border-rose-700">
               <Hammer size={10} className="text-white" />
@@ -159,7 +169,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           )}
 
           {/* Copilot */}
-          {role && role !== 'staff_mantenimiento' && role !== 'staff_limpieza' && (
+          {role && role !== 'staff_mantenimiento' && role !== 'staff_limpieza' && role !== 'staff_inventario' && (
             <button
               onClick={() => window.dispatchEvent(new Event('open-copilot'))}
               className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-zinc-100 transition-colors"

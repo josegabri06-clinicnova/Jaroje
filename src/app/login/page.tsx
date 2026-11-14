@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { checkPinAsync, setRole } from '@/lib/auth';
 import { safeFilesNext } from '@/lib/safe-next';
-import { Shield, Wrench, Sparkles, KeyRound, Fingerprint } from 'lucide-react';
+import { Shield, Wrench, Sparkles, KeyRound, Fingerprint, Package } from 'lucide-react';
 // @ts-ignore
 import { startAuthentication } from '@simplewebauthn/browser';
 
-type Mode = 'select' | 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'recepcion';
+type Mode = 'select' | 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'staff_inventario' | 'recepcion';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -130,6 +130,7 @@ export default function LoginPage() {
             if (fileNext) { window.location.assign(fileNext); return; }
             if (mode === 'admin') router.replace('/calendario');
             else if (mode === 'recepcion') router.replace('/calendario');
+            else if (mode === 'staff_inventario') router.replace('/inventario');
             else router.replace('/staff');
           }
         } catch {
@@ -153,6 +154,7 @@ export default function LoginPage() {
     recepcion:           '#2563eb',
     staff_limpieza:      '#f59e0b',
     staff_mantenimiento: '#dc2626',
+    staff_inventario:    '#059669',
     select:              '#18181b',
   }[mode];
 
@@ -174,6 +176,7 @@ export default function LoginPage() {
             { id: 'recepcion',            label: 'Recepción',              sub: 'Check-in, Check-out y pagos',         color: '#2563eb', Icon: KeyRound },
             { id: 'staff_limpieza',       label: 'Equipo de Limpieza',     sub: 'Gestión de limpieza y cuartos',       color: '#f59e0b', Icon: Sparkles },
             { id: 'staff_mantenimiento',  label: 'Equipo de Mantenimiento',sub: 'Reparaciones y desperfectos',         color: '#dc2626', Icon: Wrench   },
+            { id: 'staff_inventario',     label: 'Inventario',             sub: 'Control de almacén y existencias',    color: '#059669', Icon: Package  },
           ].map(({ id, label, sub, color, Icon }) => (
             <button
               key={id}
@@ -202,10 +205,11 @@ export default function LoginPage() {
               {mode === 'admin' ? <Shield size={18} className="text-white" /> :
                mode === 'recepcion' ? <KeyRound size={18} className="text-white" /> :
                mode === 'staff_limpieza' ? <Sparkles size={18} className="text-white" /> :
+               mode === 'staff_inventario' ? <Package size={18} className="text-white" /> :
                <Wrench size={18} className="text-white" />}
             </div>
             <p className="text-zinc-800 font-semibold text-base mt-1">
-              {mode === 'admin' ? 'Administrador' : mode === 'recepcion' ? 'Recepción' : mode === 'staff_limpieza' ? 'Limpieza' : 'Mantenimiento'}
+              {mode === 'admin' ? 'Administrador' : mode === 'recepcion' ? 'Recepción' : mode === 'staff_limpieza' ? 'Limpieza' : mode === 'staff_inventario' ? 'Inventario' : 'Mantenimiento'}
             </p>
             <p className="text-zinc-400 text-xs">
               {mode === 'admin' 

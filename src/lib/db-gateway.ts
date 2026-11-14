@@ -12,7 +12,7 @@
  *  - los cambios y borrados exigen siempre algún filtro, así que no hay actualizaciones ni borrados masivos por descuido.
  */
 
-export type DbRole = 'admin' | 'recepcion' | 'staff_limpieza' | 'staff_mantenimiento';
+export type DbRole = 'admin' | 'recepcion' | 'staff_limpieza' | 'staff_mantenimiento' | 'staff_inventario';
 export type DbOp = 'select' | 'insert' | 'update' | 'delete';
 
 const ADMIN: DbRole[] = ['admin'];
@@ -20,6 +20,8 @@ const ADMIN_REC: DbRole[] = ['admin', 'recepcion'];
 const STAFF: DbRole[] = ['staff_limpieza', 'staff_mantenimiento'];
 const ADMIN_STAFF: DbRole[] = [...ADMIN, ...STAFF];
 const ALL: DbRole[] = [...ADMIN_REC, ...STAFF];
+// El rol de inventario solo tiene la pantalla de inventario: aparece SOLO en esa tabla (no en ALL, que da acceso a otras)
+const INVENTORY_ROLES: DbRole[] = [...ALL, 'staff_inventario'];
 
 type TableRule = Partial<Record<DbOp, DbRole[]>>;
 
@@ -43,8 +45,9 @@ export const TABLE_RULES: Record<string, TableRule> = {
   room_status: { select: ADMIN_REC },
   employee_logs: { insert: ADMIN_REC },
   tasks: { insert: ADMIN_STAFF, update: ADMIN_STAFF, delete: ADMIN },
-  inventory: { select: ALL, insert: ALL, update: ALL, delete: ALL }, // todos los perfiles gestionan el inventario; vaciarlo entero (borrado sin id) sigue siendo solo de admin (ver más abajo)
-  settings: { select: ALL, insert: ADMIN_STAFF, update: ADMIN_STAFF }, // el detalle por clave está en SETTINGS_READ / SETTINGS_WRITE
+  inventory: { select: INVENTORY_ROLES, insert: INVENTORY_ROLES, update: INVENTORY_ROLES, delete: INVENTORY_ROLES }, // todos los perfiles gestionan el inventario; vaciarlo entero (borrado sin id) sigue siendo solo de admin (ver más abajo)
+  // Recepción y el rol de inventario solo pueden tocar `settings` por las claves que SETTINGS_READ / SETTINGS_WRITE les nombran (hoy: la lista de categorías)
+  settings: { select: INVENTORY_ROLES, insert: [...ADMIN_STAFF, 'recepcion', 'staff_inventario'], update: [...ADMIN_STAFF, 'recepcion', 'staff_inventario'] },
 };
 
 /** Claves de `settings` que cada rol puede leer. Los PIN, la clave de recuperación y la agenda de excluidos NUNCA salen por aquí. */
@@ -63,6 +66,7 @@ export const SETTINGS_READ: Record<string, DbRole[]> = {
   maintenance_wa_group_url: ADMIN,
   google_sheet_nominas_url: ADMIN,
   official_employees: ADMIN,
+  inventory_categories: INVENTORY_ROLES, // lista de categorías del inventario: común para todos los perfiles del inventario
 };
 
 /** Claves de `settings` que cada rol puede escribir (solo las que las páginas escriben hoy desde el navegador). */
@@ -72,6 +76,7 @@ export const SETTINGS_WRITE: Record<string, DbRole[]> = {
   admin_notification_phone: ADMIN,
   reception_wa_group_url: ADMIN,
   maintenance_wa_group_url: ADMIN,
+  inventory_categories: INVENTORY_ROLES,
 };
 
 /** Relaciones incrustadas que se permiten en un select: tabla -> { texto exacto: tabla relacionada } */
@@ -111,7 +116,7 @@ const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 const deny = (status: number, reason: string): GatewayDecision => ({ ok: false, status, reason });
 
 function isRole(r: string): r is DbRole {
-  return r === 'admin' || r === 'recepcion' || r === 'staff_limpieza' || r === 'staff_mantenimiento';
+  return r === 'admin' || r === 'recepcion' || r === 'staff_limpieza' || r === 'staff_mantenimiento' || r === 'staff_inventario';
 }
 
 /** Divide por comas que no estén dentro de paréntesis: "*, accounts(name)" -> ["*", "accounts(name)"] */

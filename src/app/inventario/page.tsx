@@ -3,13 +3,17 @@
 import { useState, useEffect } from 'react';
 import { createDbClient } from '@/lib/db-client';
 import { Package, Search, Plus, Minus, AlertTriangle, Edit2, Trash2, X, History, Settings, Download, ArrowUp, ArrowDown, Eye, Share2 } from 'lucide-react';
-import { getActiveEmployee, verifyAdminPin } from '@/lib/auth';
+import { getActiveEmployee, verifyAdminPin, getRole } from '@/lib/auth';
 
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
 const supabase = createDbClient();
 
 // Clave para comparar categorías sin importar mayúsculas: la base de datos guarda 'limpieza' y la lista de la pantalla 'Limpieza'.
 // 'otro' (valor que permite la restricción actual de la base) y 'Otros' son la misma categoría.
+const CATEGORIES_DB_KEY = 'inventory_categories';
+const CATEGORIES_LOCAL_KEY = 'jaroje_inventory_categories';
+const DEFAULT_CATEGORIES = ['Blancos', 'Amenidades', 'Limpieza', 'Bebidas', 'Alimentos', 'Otros'];
+
 const categoryKey = (c: string | null | undefined) => {
   const k = String(c || '').trim().toLowerCase();
   return k === 'otro' ? 'otros' : k;
@@ -77,25 +81,46 @@ export default function InventarioPage() {
     fetchInventory();
   }, []);
 
-  // Initialize and load custom categories order
+  // La lista de categorías es COMÚN para todos los perfiles (se guarda en la base de datos, en `settings`), igual que los artículos.
+  // El navegador solo conserva una copia para pintar al instante y como último recurso si la base no responde.
+  const saveCategories = (list: string[]) => {
+    setCategoriesOrder(list);
+    try { localStorage.setItem(CATEGORIES_LOCAL_KEY, JSON.stringify(list)); } catch { /* almacenamiento no disponible */ }
+    supabase.from('settings')
+      .upsert({ key: CATEGORIES_DB_KEY, value: JSON.stringify(list) }, { onConflict: 'key' })
+      .then(({ error }) => { if (error) console.error('No se pudo guardar la lista de categorías compartida:', error.message); });
+  };
+
+  // Cargar la lista compartida; si todavía no existe (primera vez), se parte de la copia de este navegador o de las categorías base
+  // y se publica para todos. Si la base no responde, NO se escribe nada (no se pisa la lista compartida con una copia local).
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('jaroje_inventory_categories');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCategoriesOrder(parsed);
-            return;
-          }
-        } catch (e) {
-          console.warn("Error parsing saved categories:", e);
-        }
+    let cancelled = false;
+    const parseList = (raw: unknown): string[] | null => {
+      try {
+        const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return Array.isArray(v) && v.length > 0 ? v.filter((c): c is string => typeof c === 'string' && c.trim() !== '') : null;
+      } catch { return null; }
+    };
+    (async () => {
+      let shared: string[] | null = null;
+      let readOk = false;
+      try {
+        const { data, error } = await supabase.from('settings').select('value').eq('key', CATEGORIES_DB_KEY).maybeSingle();
+        if (!error) { readOk = true; shared = parseList(data?.value); }
+      } catch { /* sin conexión: se usa la copia local */ }
+      if (cancelled) return;
+      if (shared) {
+        setCategoriesOrder(shared);
+        try { localStorage.setItem(CATEGORIES_LOCAL_KEY, JSON.stringify(shared)); } catch { /* ignorar */ }
+        return;
       }
-      const defaults = ['Blancos', 'Amenidades', 'Limpieza', 'Bebidas', 'Alimentos', 'Otros'];
-      localStorage.setItem('jaroje_inventory_categories', JSON.stringify(defaults));
-      setCategoriesOrder(defaults);
-    }
+      let local: string[] | null = null;
+      try { local = parseList(localStorage.getItem(CATEGORIES_LOCAL_KEY)); } catch { /* ignorar */ }
+      const initial = local || DEFAULT_CATEGORIES;
+      if (readOk) saveCategories(initial); // la base respondió y no había lista: se publica la inicial
+      else setCategoriesOrder(initial);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Auto-sync missing database categories into custom categories
@@ -105,9 +130,7 @@ export default function InventarioPage() {
       const known = new Set(categoriesOrder.map(categoryKey));
       const missing = dbCategories.filter(cat => cat && !known.has(categoryKey(cat)));
       if (missing.length > 0) {
-        const updated = [...categoriesOrder, ...missing];
-        setCategoriesOrder(updated);
-        localStorage.setItem('jaroje_inventory_categories', JSON.stringify(updated));
+        saveCategories([...categoriesOrder, ...missing]);
       }
     }
   }, [items, categoriesOrder]);
@@ -149,8 +172,7 @@ export default function InventarioPage() {
     updated[idx] = updated[nextIdx];
     updated[nextIdx] = catName;
     
-    setCategoriesOrder(updated);
-    localStorage.setItem('jaroje_inventory_categories', JSON.stringify(updated));
+    saveCategories(updated);
   };
 
   const handleClearAllInventory = async () => {
@@ -203,13 +225,11 @@ export default function InventarioPage() {
   const handleAddCategory = (name: string) => {
     const clean = name.trim();
     if (!clean) return;
-    if (categoriesOrder.includes(clean)) {
+    if (categoriesOrder.some(c => categoryKey(c) === categoryKey(clean))) {
       alert("La categoría ya existe.");
       return;
     }
-    const updated = [...categoriesOrder, clean];
-    setCategoriesOrder(updated);
-    localStorage.setItem('jaroje_inventory_categories', JSON.stringify(updated));
+    saveCategories([...categoriesOrder, clean]);
   };
 
   const handleDeleteCategory = async (catName: string) => {
@@ -228,17 +248,16 @@ export default function InventarioPage() {
         if (!updated.includes('Otros')) {
           updated.push('Otros');
         }
-        setCategoriesOrder(updated);
-        localStorage.setItem('jaroje_inventory_categories', JSON.stringify(updated));
+        saveCategories(updated);
         
         try {
           await fetch('/api/employee-logs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              employee_num: '999',
-              employee_name: 'Administrador',
-              department: 'Administración',
+              employee_num: getRole() === 'staff_inventario' ? '000' : '999',
+              employee_name: getRole() === 'staff_inventario' ? 'Inventario' : 'Administrador',
+              department: getRole() === 'staff_inventario' ? 'Inventario' : 'Administración',
               module: 'inventario',
               action: 'eliminar_categoria',
               details: `Eliminó la categoría de inventario "${catName}" y movilizó sus artículos a "Otros"`
@@ -273,17 +292,16 @@ export default function InventarioPage() {
       alert("Error al renombrar la categoría en el servidor de base de datos.");
     } else {
       const updated = categoriesOrder.map(cat => cat === oldName ? cleanNew : cat);
-      setCategoriesOrder(updated);
-      localStorage.setItem('jaroje_inventory_categories', JSON.stringify(updated));
+      saveCategories(updated);
       
       try {
         await fetch('/api/employee-logs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            employee_num: '999',
-            employee_name: 'Administrador',
-            department: 'Administración',
+            employee_num: getRole() === 'staff_inventario' ? '000' : '999',
+            employee_name: getRole() === 'staff_inventario' ? 'Inventario' : 'Administrador',
+            department: getRole() === 'staff_inventario' ? 'Inventario' : 'Administración',
             module: 'inventario',
             action: 'renombrar_categoria',
             details: `Renombró la categoría de inventario: "${oldName}" ➔ "${cleanNew}"`
@@ -380,9 +398,11 @@ export default function InventarioPage() {
     // Optimistic UI update
     setItems(prev => prev.map(item => item.id === id ? { ...item, stock: item.stock + change } : item));
 
-    let empName = 'Administrador';
-    let empNum = '999';
-    let empDept = 'Administración';
+    // Quien entra con el rol de Inventario queda registrado como tal (no como "Administrador")
+    const isInventoryRole = getRole() === 'staff_inventario';
+    let empName = isInventoryRole ? 'Inventario' : 'Administrador';
+    let empNum = isInventoryRole ? '000' : '999';
+    let empDept = isInventoryRole ? 'Inventario' : 'Administración';
     
     const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
       .map(dept => getActiveEmployee(dept as any))
@@ -476,9 +496,11 @@ export default function InventarioPage() {
     if (!formName.trim()) return;
     setIsSubmitting(true);
     
-    let empName = 'Administrador';
-    let empNum = '999';
-    let empDept = 'Administración';
+    // Quien entra con el rol de Inventario queda registrado como tal (no como "Administrador")
+    const isInventoryRole = getRole() === 'staff_inventario';
+    let empName = isInventoryRole ? 'Inventario' : 'Administrador';
+    let empNum = isInventoryRole ? '000' : '999';
+    let empDept = isInventoryRole ? 'Inventario' : 'Administración';
     
     const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
       .map(dept => getActiveEmployee(dept as any))
@@ -530,9 +552,11 @@ export default function InventarioPage() {
     if (!editingItem || !formName.trim()) return;
     setIsSubmitting(true);
     
-    let empName = 'Administrador';
-    let empNum = '999';
-    let empDept = 'Administración';
+    // Quien entra con el rol de Inventario queda registrado como tal (no como "Administrador")
+    const isInventoryRole = getRole() === 'staff_inventario';
+    let empName = isInventoryRole ? 'Inventario' : 'Administrador';
+    let empNum = isInventoryRole ? '000' : '999';
+    let empDept = isInventoryRole ? 'Inventario' : 'Administración';
     
     const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
       .map(dept => getActiveEmployee(dept as any))
@@ -586,9 +610,11 @@ export default function InventarioPage() {
     if (!confirm("¿Seguro que quieres eliminar este artículo?")) return;
     setIsSubmitting(true);
     
-    let empName = 'Administrador';
-    let empNum = '999';
-    let empDept = 'Administración';
+    // Quien entra con el rol de Inventario queda registrado como tal (no como "Administrador")
+    const isInventoryRole = getRole() === 'staff_inventario';
+    let empName = isInventoryRole ? 'Inventario' : 'Administrador';
+    let empNum = isInventoryRole ? '000' : '999';
+    let empDept = isInventoryRole ? 'Inventario' : 'Administración';
     
     const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
       .map(dept => getActiveEmployee(dept as any))

@@ -21,7 +21,7 @@ const supabase = createDbClient();
 import { format, subDays, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-type PinTarget = 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'recepcion' | null;
+type PinTarget = 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'staff_inventario' | 'recepcion' | null;
 
 interface Employee {
   employee_num: string;
@@ -1408,6 +1408,7 @@ export default function AjustesPage() {
           <Row label="Cambiar PIN Recepción" value="••••" onPress={() => openPinModal('recepcion')} />
           <Row label="Cambiar PIN Limpieza" value="••••" onPress={() => openPinModal('staff_limpieza')} />
           <Row label="Cambiar PIN Mantenimiento" value="••••" onPress={() => openPinModal('staff_mantenimiento')} />
+          <Row label="Cambiar PIN Inventario" value="••••" onPress={() => openPinModal('staff_inventario')} />
 
           <div className="py-3.5 flex items-center justify-between border-b border-zinc-100 last:border-none">
             <div className="flex flex-col">
@@ -2448,7 +2449,7 @@ export default function AjustesPage() {
               <div className="flex items-center gap-2">
                 <Key size={16} className="text-zinc-650"/>
                 <h3 className="font-bold text-zinc-900 text-base">
-                  PIN {pinModal === 'admin' ? 'Finanzas' : pinModal === 'recepcion' ? 'Recepción' : pinModal === 'staff_limpieza' ? 'Limpieza' : 'Mantenimiento'}
+                  PIN {pinModal === 'admin' ? 'Finanzas' : pinModal === 'recepcion' ? 'Recepción' : pinModal === 'staff_limpieza' ? 'Limpieza' : pinModal === 'staff_inventario' ? 'Inventario' : 'Mantenimiento'}
                 </h3>
               </div>
               <button onClick={() => setPinModal(null)} className="p-2 rounded-xl hover:bg-zinc-100 transition-colors">

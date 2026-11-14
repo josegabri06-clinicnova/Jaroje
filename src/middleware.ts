@@ -64,6 +64,9 @@ export async function middleware(req: NextRequest) {
           if (session.role === 'staff_limpieza' || session.role === 'staff_mantenimiento') {
             return NextResponse.redirect(new URL('/staff', req.url));
           }
+          if (session.role === 'staff_inventario') {
+            return NextResponse.redirect(new URL('/inventario', req.url));
+          }
           return NextResponse.redirect(new URL('/calendario', req.url));
         }
       }
@@ -220,6 +223,30 @@ export async function middleware(req: NextRequest) {
       if (!isAllowedStaffPage) {
         return NextResponse.redirect(new URL('/staff', req.url));
       }
+    }
+  }
+
+  // Rol de Inventario: SOLO la pantalla de inventario y lo mínimo que ella necesita. Todo lo demás se rechaza (lista cerrada).
+  if (role === 'staff_inventario') {
+    if (pathname.startsWith('/api/')) {
+      const isLogs = pathname === '/api/employee-logs';
+      // El historial solo se lee filtrado por el módulo de inventario; escribir es solo añadir entradas (nunca borrar)
+      const logsOk = isLogs && (
+        (isReadMethod && req.nextUrl.searchParams.get('module') === 'inventario') ||
+        req.method === 'POST'
+      );
+      const isOtherAllowed =
+        pathname === '/api/auth/logout' ||
+        pathname === '/api/db' || pathname.startsWith('/api/db/') || // la pasarela decide qué tablas y operaciones
+        pathname === '/api/inventory' || pathname.startsWith('/api/inventory/');
+      if (!(logsOk || isOtherAllowed)) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Permisos insuficientes para este recurso.' },
+          { status: 403 }
+        );
+      }
+    } else if (!(pathname === '/inventario' || pathname.startsWith('/inventario/'))) {
+      return NextResponse.redirect(new URL('/inventario', req.url));
     }
   }
 

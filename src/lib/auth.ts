@@ -2,7 +2,7 @@
 // Los PIN viven solo en el servidor (tabla settings, accesible únicamente con la clave de servicio).
 // El navegador nunca lee ni guarda un PIN: valida y cambia PIN a través de las rutas /api.
 
-export type Role = 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'recepcion' | null;
+export type Role = 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'staff_inventario' | 'recepcion' | null;
 
 const ROLE_KEY = 'jaroje_role';
 
@@ -10,7 +10,7 @@ const ROLE_KEY = 'jaroje_role';
 export function clearLegacyPinCopies() {
   if (typeof window === 'undefined') return;
   try {
-    ['jaroje_admin_pin', 'jaroje_staff_limpieza_pin', 'jaroje_staff_mantenimiento_pin', 'jaroje_recepcion_pin']
+    ['jaroje_admin_pin', 'jaroje_staff_limpieza_pin', 'jaroje_staff_mantenimiento_pin', 'jaroje_staff_inventario_pin', 'jaroje_recepcion_pin']
       .forEach(k => localStorage.removeItem(k));
   } catch { /* almacenamiento no disponible */ }
 }
