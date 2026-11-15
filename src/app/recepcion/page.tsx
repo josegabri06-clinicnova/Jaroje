@@ -2227,10 +2227,18 @@ export default function RecepcionPage() {
       const isCheckedIn = r.checked_in === true;
       if (isOta || isCheckedIn) return sum;
 
-      const bal = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
+      const isCurrentSelected = String(r.id) === String(selectedReserva?.id);
+      const priceVal = (isCurrentSelected && editedPrice !== '')
+        ? Number(editedPrice)
+        : Number(r.price_estimate || r.price || 0);
+      const depVal = (isCurrentSelected && editedDeposit !== '')
+        ? Number(editedDeposit)
+        : Number(r.deposit || 0);
+
+      const bal = Math.max(0, priceVal - depVal);
       return sum + bal;
     }, 0);
-  }, [directGroupBookings]);
+  }, [directGroupBookings, selectedReserva?.id, editedPrice, editedDeposit]);
 
   // Modal Mtto
   const [showForm, setShowForm] = useState(false);
@@ -2803,17 +2811,22 @@ export default function RecepcionPage() {
         setPaymentMode('efectivo');
         setIsSplitPayment(false);
       }
-      const modalKey = `${selectedReserva.id}-${payGroupConsolidated}`;
+      const isGroupReservation = siblingBookings.length > 0;
+      const isConsolidatedActive = isGroupReservation && payGroupConsolidated;
+
+      const modalKey = `${selectedReserva.id}-${isConsolidatedActive}`;
       if (checkInModalInitializedRef.current !== modalKey) {
         checkInModalInitializedRef.current = modalKey;
-        if (payGroupConsolidated) {
+        if (isConsolidatedActive) {
           if (directGroupTotalBalance > 0) {
             setPaymentAmount(directGroupTotalBalance.toString());
           } else {
             setPaymentAmount('');
           }
         } else {
-          const balanceVal = Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
+          const currentTotal = Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || selectedReserva.price || 0));
+          const currentDep = Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
+          const balanceVal = Math.max(0, currentTotal - currentDep);
           
           if (balanceVal > 0) {
             setPaymentAmount(balanceVal.toString());
@@ -2823,7 +2836,7 @@ export default function RecepcionPage() {
         }
       }
     }
-  }, [showCheckInModal, selectedReserva?.id, payGroupConsolidated, directGroupTotalBalance, selectedReserva?.guest_name]);
+  }, [showCheckInModal, selectedReserva?.id, payGroupConsolidated, directGroupTotalBalance, selectedReserva?.guest_name, siblingBookings.length, editedPrice, editedDeposit]);
 
   useEffect(() => {
     if (selectedReserva && selectedReserva.id === 'walkin') {
@@ -3960,7 +3973,8 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
         }
       }
 
-      if (payGroupConsolidated) {
+      const isGroupReservation = siblingBookings.length > 0;
+      if (payGroupConsolidated && isGroupReservation) {
         // --- PROCESO GRUPAL CONSOLIDADO ---
         const amt1 = Number(paymentAmount) || 0;
         const amt2 = Number(paymentAmount2) || 0;
@@ -7124,18 +7138,36 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                     </div>
                   )}
 
-                  {/* 7. Anticipo depositado */}
+                  {/* 7. Anticipo depositado / Total Pagado */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo depositado</span>
-                      <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                        {fmtCurrency(
-                          selectedReserva.id === 'walkin'
-                            ? 0
-                            : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0)),
-                          selectedReserva.guest_name
-                        )}
-                      </p>
+                      {(() => {
+                        const isOta = !!(selectedReserva?.channel && ['airbnb', 'booking', 'expedia'].some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
+                        const isCheckedIn = selectedReserva?.checked_in === true;
+                        const currentPrice = selectedReserva.id === 'walkin'
+                          ? (selectedReserva.price_estimate || 0)
+                          : Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0));
+                        const currentDep = selectedReserva.id === 'walkin'
+                          ? 0
+                          : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
+                        const isFullyPaid = isCheckedIn || (!isOta && currentPrice > 0 && currentDep >= currentPrice);
+
+                        return (
+                          <>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">
+                              {isFullyPaid ? "Total Pagado (Liquidado)" : "Anticipo depositado"}
+                            </span>
+                            <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
+                              {fmtCurrency(currentDep, selectedReserva.guest_name)}
+                              {isFullyPaid && (
+                                <span className="ml-2 text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                                  100% Cubierto ✓
+                                </span>
+                              )}
+                            </p>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -7150,8 +7182,8 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                           ? Math.max(0, (selectedReserva.price_estimate || 0) - Number(paymentAmount || 0))
                           : Math.max(0, Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)) - Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0))));
                         return (
-                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
-                            {fmtCurrency(balanceVal, selectedReserva.guest_name)}
+                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {balanceVal > 0 ? fmtCurrency(balanceVal, selectedReserva.guest_name) : 'MX$0 (Liquidado ✓)'}
                           </p>
                         );
                       })()}
@@ -7752,11 +7784,13 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
 
                   {/* Editar Número de Huéspedes */}
                   {selectedReserva.id !== 'walkin' && (() => {
-                    const roomsToRender = payGroupConsolidated ? groupBookings : [selectedReserva];
+                    const isGroupReservation = siblingBookings.length > 0;
+                    const isConsolidatedActive = isGroupReservation && payGroupConsolidated;
+                    const roomsToRender = isConsolidatedActive ? groupBookings : [selectedReserva];
                     return (
                       <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-4 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left animate-in fade-in duration-200">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
-                          {payGroupConsolidated ? 'Editar Huéspedes por Habitación' : 'Editar Número de Huéspedes'}
+                          {isConsolidatedActive ? 'Editar Huéspedes por Habitación' : 'Editar Número de Huéspedes'}
                         </span>
                         
                         <div className="space-y-4">
@@ -7889,7 +7923,9 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                   {(() => {
                     if (selectedReserva.id === 'walkin') return null;
                     
-                    const roomsToSum = payGroupConsolidated ? groupBookings : [selectedReserva];
+                    const isGroupReservation = siblingBookings.length > 0;
+                    const isConsolidatedActive = isGroupReservation && payGroupConsolidated;
+                    const roomsToSum = isConsolidatedActive ? groupBookings : [selectedReserva];
                     let totalAdultsSum = 0;
                     let totalChildrenSum = 0;
                     let totalCapacityLimit = 0;
@@ -7922,7 +7958,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 space-y-2 text-left shadow-[0_2px_8px_rgba(0,0,0,0.01)] animate-in fade-in duration-200">
                         <div className="flex justify-between items-center">
                           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
-                            {payGroupConsolidated ? 'Resumen de Huéspedes (Grupo)' : 'Resumen de Huéspedes'}
+                            {isConsolidatedActive ? 'Resumen de Huéspedes (Grupo)' : 'Resumen de Huéspedes'}
                           </span>
                           <span className="text-[10px] font-bold text-zinc-500 bg-zinc-200/60 px-2 py-0.5 rounded-full">
                             {totalCapacityLimit > totalBaseCapacity 
@@ -8043,7 +8079,10 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
                     
                     const isOta = !!(selectedReserva?.channel && ['airbnb', 'booking', 'expedia'].some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
-                    const balanceVal = isOta ? 0 : (payGroupConsolidated
+                    const isGroupReservation = siblingBookings.length > 0;
+                    const isConsolidatedActive = isGroupReservation && payGroupConsolidated;
+
+                    const balanceVal = isOta ? 0 : (isConsolidatedActive
                       ? directGroupTotalBalance
                       : Math.max(0, totalVal - depositVal));
 
@@ -8052,10 +8091,10 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
                           <div className="space-y-0.5">
                             <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest block">
-                              {payGroupConsolidated ? "Grupo Liquidado" : "Estancia Liquidada"}
+                              {isConsolidatedActive ? "Grupo Liquidado" : "Estancia Liquidada"}
                             </span>
                             <p className="text-[11px] text-emerald-600 font-medium">
-                              {payGroupConsolidated 
+                              {isConsolidatedActive 
                                 ? "Todas las habitaciones directas están al corriente."
                                 : `Total: ${fmtCurrency(totalVal, selectedReserva.guest_name)} | Anticipos: ${fmtCurrency(depositVal, selectedReserva.guest_name)} (100% Pagado)`}
                             </p>
@@ -8073,9 +8112,9 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
                         <div className="space-y-0.5">
                           <span className="text-[10px] font-extrabold text-rose-800 uppercase tracking-widest block">
-                            {payGroupConsolidated ? "Adeudo Global del Grupo" : "Adeudo por Pagar"}
+                            {isConsolidatedActive ? "Adeudo Global del Grupo" : "Adeudo por Pagar"}
                           </span>
-                          {payGroupConsolidated ? (
+                          {isConsolidatedActive ? (
                             <p className="text-[10px] text-rose-600 font-medium leading-tight">
                               Consolidado de {directGroupBookings.length} habitaciones directas.
                             </p>
@@ -8165,7 +8204,9 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                           const depositVal = selectedReserva.id === 'walkin'
                             ? 0
                             : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
-                          const totalDebt = isOta ? 0 : (payGroupConsolidated
+                          const isGroupReservation = siblingBookings.length > 0;
+                          const isConsolidatedActive = isGroupReservation && payGroupConsolidated;
+                          const totalDebt = isOta ? 0 : (isConsolidatedActive
                             ? directGroupTotalBalance
                             : Math.max(0, totalVal - depositVal));
 
@@ -8783,9 +8824,12 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       ? Number(paymentAmount || 0)
                       : Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
 
+                    const isGroupReservation = siblingBookings.length > 0;
+                    const isConsolidatedActive = isGroupReservation && payGroupConsolidated;
+
                     if (isSplitPayment) {
                       const totalPaid = (Number(paymentAmount) || 0) + (Number(paymentAmount2) || 0);
-                      const targetBalance = payGroupConsolidated ? directGroupTotalBalance : pendingBalance;
+                      const targetBalance = isConsolidatedActive ? directGroupTotalBalance : pendingBalance;
 
                       if (!paymentMode || !selectedAccountId) return true;
                       if (paymentMode === 'efectivo' && !selectedEnvelope) return true;
@@ -8795,7 +8839,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       return false;
                     }
 
-                    if (payGroupConsolidated) {
+                    if (isConsolidatedActive) {
                       if (directGroupTotalBalance > 0) {
                         const currentPayment = Number(paymentAmount || 0);
                         if (!paymentMode) return true;
