@@ -1,7 +1,8 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Token, updateBeds24BookingPhone, extractPhoneFromBookingData, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { maskPhone } from '@/lib/log-mask';
-import { trackBeds24 } from '@/lib/beds24-credits';
+import { trackBeds24, knownRemainingCredits } from '@/lib/beds24-credits';
+import { splitOtaPolls, OTA_POLL_FRESH_WINDOW_MS, OTA_POLL_LOW_CREDITS } from '@/lib/ota-poll-plan';
 import {
   normalizePhone,
   sendTemplate3_ReservacionConfirmada,
@@ -635,7 +636,7 @@ export async function sendOtaWelcomeMessage({
 /**
  * Consulta el historial de mensajes de una reserva en Beds24 API v2
  */
-export async function fetchBeds24OtaMessages(bookingId: string | number, tracker?: { add(res: Response): void }): Promise<any[]> {
+export async function fetchBeds24OtaMessages(bookingId: string | number, tracker?: { add(res: Response): void }, state?: { rateLimited?: boolean }): Promise<any[]> {
   const cleanId = String(bookingId).replace(/\D/g, '');
   if (!cleanId) return [];
 
@@ -660,6 +661,7 @@ export async function fetchBeds24OtaMessages(bookingId: string | number, tracker
       tracker?.add(res);
     }
 
+    if (res.status === 429 && state) state.rateLimited = true; // sin créditos: quien llama debe dejar de insistir
     if (!res.ok) {
       console.warn(`[Beds24 Messages] GET messages falló con status ${res.status}`);
       return [];
@@ -753,6 +755,19 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
 
     const requestedSet = new Set((requestedLogs || []).map(l => String(l.booking_id)));
 
+    // A qué reservas se les pidió el WhatsApp hace poco (la más reciente de cada una): se consultan con más frecuencia porque el huésped
+    // suele contestar enseguida. Consulta propia y acotada a la ventana reciente, para que no dependa del tamaño de todo el historial.
+    const requestedAtMs = new Map<string, number>();
+    const { data: recentRequests } = await supabase
+      .from('ota_messages_log')
+      .select('booking_id, created_at')
+      .eq('template_type', 'ota_welcome_request_phone')
+      .gte('created_at', new Date(Date.now() - OTA_POLL_FRESH_WINDOW_MS).toISOString());
+    for (const l of recentRequests || []) {
+      const t = Date.parse(String(l.created_at));
+      if (!isNaN(t)) requestedAtMs.set(String(l.booking_id), Math.max(requestedAtMs.get(String(l.booking_id)) ?? 0, t));
+    }
+
     const thirtyDaysAgo = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const { data: otaBookings, error } = await supabase
@@ -780,11 +795,28 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
       return hasInvalidPhone || wasRequested;
     });
 
-    // Medición de créditos: una fila por ejecución del cron con todas sus consultas de mensajes (una por reserva pendiente)
-    const msgTracker = trackBeds24('cron:ota-messages', 'mensajes', { reservas_pendientes: pendingBookings.length });
-    for (const b of pendingBookings) {
+    // No se consulta a Beds24 por cada reserva pendiente en cada ejecución (eso gastaba el 70 % de los créditos): solo las que toca ahora
+    // (ver ota-poll-plan.ts) y, si ya se sabe que quedan muy pocos créditos, ninguna hasta que se renueven.
+    // Prioritarias (llegan hoy o mañana, ya alojadas, o con petición reciente): SIEMPRE, igual que antes. De llegada lejana: por turnos.
+    const { priority, dueStale } = splitOtaPolls(pendingBookings, requestedAtMs);
+    // Con los créditos casi a cero solo se consultan las prioritarias; el resto espera a que se renueven. Ojo: el saldo suele estar bajo
+    // de forma normal (5-20), por eso el umbral es bajo.
+    const creditsLeft = knownRemainingCredits();
+    const lowCredits = creditsLeft !== null && creditsLeft < OTA_POLL_LOW_CREDITS;
+    if (lowCredits) console.warn(`[OTA Replies Worker] Quedan ~${creditsLeft} créditos de Beds24: solo se consultan las reservas prioritarias.`);
+    const planned = new Set(lowCredits ? priority : [...priority, ...dueStale]);
+    const toPoll = pendingBookings.filter(b => planned.has(String(b.id)));
+
+    // Medición de créditos: una fila por ejecución del cron con todas sus consultas de mensajes
+    const msgTracker = trackBeds24('cron:ota-messages', 'mensajes', { reservas_pendientes: pendingBookings.length, consultadas: toPoll.length, prioritarias: priority.length, creditos_bajos: lowCredits });
+    const pollState: { rateLimited?: boolean } = {};
+    for (const b of toPoll) {
       const bId = String(b.id);
-      const messages = await fetchBeds24OtaMessages(bId, msgTracker);
+      const messages = await fetchBeds24OtaMessages(bId, msgTracker, pollState);
+      if (pollState.rateLimited) {
+        console.warn('[OTA Replies Worker] Beds24 respondió 429 (sin créditos): se detiene la ronda; el resto se consultará en la siguiente.');
+        break;
+      }
 
       if (!messages || messages.length === 0) continue;
 
@@ -867,7 +899,7 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
     await msgTracker.flush();
 
     return {
-      processedCount: pendingBookings.length,
+      processedCount: toPoll.length,
       upgradedCount,
       details
     };
