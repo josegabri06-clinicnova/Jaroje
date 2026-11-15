@@ -408,6 +408,14 @@ export async function GET(req: Request) {
 
     // --- DEBUG LOGGING REMOVED FOR HIGH PERFORMANCE ---
 
+    // ?ids=1,2,3 -> solo esas reservas (máx. 20). Se calcula igual que la lista completa (mismo reparto de anticipos de grupo y mismas reglas),
+    // así que sirve para comprobar el saldo actual de una reserva sin traer todas las demás. Sin el parámetro, no cambia nada.
+    const idsParam = searchParams.get('ids');
+    if (idsParam) {
+      const wanted = new Set(idsParam.split(',').map(x => x.trim()).filter(Boolean).slice(0, 20));
+      return NextResponse.json({ success: true, data: combined.filter((b: any) => wanted.has(String(b.id))) });
+    }
+
     return NextResponse.json({ success: true, data: combined });
   } catch (err: any) {
     if (err.message === 'TOKEN_EXPIRED' || err.message === 'REFRESH_TOKEN_EXPIRED') {
