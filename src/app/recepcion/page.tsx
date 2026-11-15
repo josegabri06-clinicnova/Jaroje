@@ -3292,6 +3292,70 @@ export default function RecepcionPage() {
     }
   };
 
+  // ── Saldo fresco del servidor ────────────────────────────────────────────────────────────────────────────────────────────
+  // La reserva abierta en el check-in es una copia que se tomó al tocarla en la lista (que a su vez se refresca cada 45 s). Para no
+  // mostrar "Liquidado" ni cobrar con cifras viejas, al abrir el check-in y otra vez al completarlo se pide el saldo actual al servidor.
+  const [freshBalance, setFreshBalance] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [freshRetry, setFreshRetry] = useState(0);
+
+  const fetchFreshBalances = async (ids: Array<string | number>): Promise<Record<string, any>> => {
+    const res = await fetch(`/api/reservas?ids=${encodeURIComponent(ids.map(String).join(','))}`, { cache: 'no-store' });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success || !Array.isArray(json.data)) throw new Error('No se pudo leer el saldo');
+    const map: Record<string, any> = {};
+    json.data.forEach((r: any) => { map[String(r.id)] = r; });
+    return map;
+  };
+
+  const freshTotals = (r: any) => ({
+    price: Number(r?.price_estimate || r?.price || 0),
+    deposit: Number(r?.deposit || 0)
+  });
+
+  // Aplica las cifras del servidor a la reserva abierta, a sus hermanas y a los campos editables que no haya tocado recepción
+  const applyFreshBalances = (map: Record<string, any>) => {
+    if (!selectedReserva) return;
+    let anyChange = false;
+    const mine = map[String(selectedReserva.id)];
+    if (mine) {
+      const f = freshTotals(mine);
+      const oldPrice = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
+      const oldDeposit = Number(selectedReserva.deposit || 0);
+      if (Math.round(f.price) !== Math.round(oldPrice) || Math.round(f.deposit) !== Math.round(oldDeposit)) anyChange = true;
+      // Solo se sustituyen los campos editables si recepción no los cambió a mano
+      if (editedPrice === '' || Number(editedPrice) === oldPrice) setEditedPrice(String(f.price));
+      if (editedDeposit === '' || Number(editedDeposit) === oldDeposit) setEditedDeposit(String(f.deposit));
+      setSelectedReserva((prev: any) => prev ? { ...prev, price_estimate: f.price, deposit: f.deposit, balance: Math.max(0, f.price - f.deposit) } : prev);
+    }
+    setReservas(prev => prev.map(r => {
+      const m = map[String(r.id)];
+      if (!m) return r;
+      const f = freshTotals(m);
+      if (Math.round(f.price) !== Math.round(Number(r.price_estimate || r.price || 0)) || Math.round(f.deposit) !== Math.round(Number(r.deposit || 0))) anyChange = true;
+      return { ...r, price_estimate: f.price, deposit: f.deposit, balance: Math.max(0, f.price - f.deposit) };
+    }));
+    if (anyChange) checkInModalInitializedRef.current = null; // el "Monto a cobrar" se recalcula con las cifras nuevas
+  };
+
+  useEffect(() => {
+    if (!showCheckInModal || !selectedReserva || selectedReserva.id === 'walkin') { setFreshBalance('idle'); return; }
+    let cancelled = false;
+    setFreshBalance('loading');
+    const ids = [selectedReserva.id, ...siblingBookings.map(sb => sb.id)];
+    (async () => {
+      try {
+        const map = await fetchFreshBalances(ids);
+        if (cancelled) return;
+        applyFreshBalances(map);
+        setFreshBalance('ok');
+      } catch (e) {
+        console.warn('No se pudo verificar el saldo con el servidor:', e);
+        if (!cancelled) setFreshBalance('error');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showCheckInModal, selectedReserva?.id, freshRetry]);
+
   // Todo check-in debe terminar con un teléfono real guardado (OTA, directa, local o walk-in): sin él no salen las plantillas ni las claves.
   const isCheckinPhoneInvalid = (): boolean => {
     if (!selectedReserva) return true;
@@ -3314,6 +3378,39 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
     }
 
     setSubmitting(true);
+
+    // Antes de cobrar o registrar nada: ¿el saldo sigue siendo el que vio recepción? Si cambió (otro cobro, otra pantalla, datos viejos),
+    // se actualiza la pantalla y se detiene para que se revise. Si el servidor no responde, no se bloquea el check-in.
+    if (selectedReserva.id !== 'walkin') {
+      try {
+        const members = [selectedReserva, ...siblingBookings];
+        const map = await fetchFreshBalances(members.map(m => m.id));
+        const changed = members.filter(m => {
+          const f = map[String(m.id)];
+          if (!f) return false;
+          const a = freshTotals(m), b = freshTotals(f);
+          return Math.round(a.price) !== Math.round(b.price) || Math.round(a.deposit) !== Math.round(b.deposit);
+        });
+        if (changed.length > 0) {
+          applyFreshBalances(map);
+          const lines = changed.map(m => {
+            const a = freshTotals(m), b = freshTotals(map[String(m.id)]);
+            return `• Hab. ${m.room || m.id}: adeudo ${Math.max(0, a.price - a.deposit)} ➔ ${Math.max(0, b.price - b.deposit)}`;
+          }).join('\n');
+          alert(`⚠️ El saldo de esta reserva cambió mientras estaba abierta:\n${lines}\n\nLa pantalla ya se actualizó. Revisa el monto a cobrar y vuelve a pulsar "Completar Check-In".`);
+          setSubmitting(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('No se pudo re-verificar el saldo antes del check-in:', e);
+      }
+    }
+    const saldoLogNote = (() => {
+      if (selectedReserva.id === 'walkin') return '';
+      const parts = (payGroupConsolidated && siblingBookings.length > 0 ? directGroupBookings : [selectedReserva]).map(m => freshTotals(m));
+      const price = parts.reduce((s0, x) => s0 + x.price, 0), dep = parts.reduce((s0, x) => s0 + x.deposit, 0);
+      return ` Saldo visto: total $${price}, anticipo $${dep}, adeudo $${Math.max(0, price - dep)}.`;
+    })();
 
     let finalDniUrl: string | null = null;
     let finalVoucherUrl: string | null = null;
@@ -4089,7 +4186,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                 module: 'recepcion',
                 action: 'check_in',
                 room: r.room,
-                details: `${r.guest_name || 'Huésped'} ${guests.adults}/${guests.children} (ID: ${r.id}) de la Habitación ${r.room} (Grupo Consolidado) - Registró Check-In.`
+                details: `${r.guest_name || 'Huésped'} ${guests.adults}/${guests.children} (ID: ${r.id}) de la Habitación ${r.room} (Grupo Consolidado) - Registró Check-In.${saldoLogNote}`
               })
             });
           }
@@ -4726,7 +4823,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
               module: 'recepcion',
               action: 'check_in',
               room: selectedReserva.room,
-              details: `${selectedReserva.guest_name || 'Huésped'} ${editedAdults}/${editedChildren} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Registró Check-In.`
+              details: `${selectedReserva.guest_name || 'Huésped'} ${editedAdults}/${editedChildren} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Registró Check-In.${saldoLogNote}`
             })
           });
         }
@@ -8034,7 +8131,18 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                   )}
 
                   {/* Adeudo por Pagar */}
-                  {(() => {
+                  {freshBalance === 'error' && (
+                    <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3 text-[11px] font-bold text-amber-900 flex items-center justify-between gap-2">
+                      <span>⚠️ No se pudo verificar el saldo con el servidor. Revisa el adeudo antes de cobrar.</span>
+                      <button type="button" onClick={() => setFreshRetry(n => n + 1)}
+                        className="shrink-0 px-2.5 py-1 rounded-lg bg-amber-200 text-amber-950 font-extrabold cursor-pointer">Reintentar</button>
+                    </div>
+                  )}
+                  {freshBalance === 'loading' ? (
+                    <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-[12px] font-bold text-zinc-500 flex items-center gap-2 animate-pulse">
+                      Verificando saldo con el servidor…
+                    </div>
+                  ) : (() => {
                     const totalVal = selectedReserva.id === 'walkin'
                       ? (selectedReserva.price_estimate || 0)
                       : Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0));
@@ -8756,6 +8864,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
 
                     // Validación obligatoria de WhatsApp en todo check-in
                     if (isCheckinPhoneInvalid()) return true;
+                    if (freshBalance === 'loading') return true; // todavía se está verificando el saldo con el servidor
 
                     // Validación DNI obligatoria para todas las reservas y walk-ins
                     if (!dniPreview) return true;
