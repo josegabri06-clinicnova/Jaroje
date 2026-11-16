@@ -2,6 +2,7 @@ import { supabaseAdmin as supabase } from './supabase-admin';
 import { normalizePhone } from '@/lib/phone';
 import { maskPhone } from '@/lib/log-mask';
 import { trackBeds24, beds24FetchTracked } from '@/lib/beds24-credits';
+import { mapBeds24Status } from '@/lib/beds24-status';
 
 // ─── SERVICIO CENTRALIZADO DE BEDS24 JAROJE ─────────────────────────────────────
 // Fuente de verdad para reservas del Hotel Condominios Jaroje.
@@ -1544,7 +1545,8 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
         guest_phone: extractPhoneFromBookingData(b) || null,
         guest_email: b.email || null,
-        status: (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending'),
+        // Una reserva de Airbnb/Booking/Expedia con pago registrado en Payments se guarda confirmada (ver lib/beds24-status.ts)
+        status: mapBeds24Status(b.status, { channel, actualPaid }),
         source: 'beds24',
         channel: channel,
         room_name: displayRoomName,
@@ -3097,7 +3099,8 @@ export async function syncBeds24BookingLocal(b: any, overrides?: { phone?: strin
   }
   const email = b.email || null;
 
-  const dbStatus = (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending');
+  // Una reserva de Airbnb/Booking/Expedia con pago registrado en Payments se guarda confirmada (ver lib/beds24-status.ts)
+  const dbStatus = mapBeds24Status(b.status, { channel, actualPaid });
 
   let dbUpdatedAt = new Date().toISOString();
   if (dbStatus === 'cancelled') {
@@ -3360,7 +3363,7 @@ export async function syncBeds24ReservationsRange(
         ? ((actualPaid > 0 || depositVal > 0) ? 0 : Math.max(0, calculatedCharges - depositVal)) 
         : Math.max(0, calculatedCharges - depositVal);
 
-      const dbStatus = (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending');
+      const dbStatus = mapBeds24Status(b.status, { channel, actualPaid });
 
       return {
         id: b.id || Math.random().toString(),
