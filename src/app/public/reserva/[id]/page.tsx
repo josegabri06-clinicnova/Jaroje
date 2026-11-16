@@ -1346,7 +1346,6 @@ export default function PublicReservaPage() {
 
   const bPrice = Number(booking.price || 0);
   const bDeposit = Number(booking.deposit || 0);
-  const hasMinDeposit = bPrice > 0 ? (bDeposit >= (bPrice * 0.5 - 0.01)) : (bDeposit > 0);
 
   const rawChannel = (booking.channel || '').toLowerCase();
   const rawName = (booking.guest_name || '').toLowerCase();
@@ -1379,8 +1378,8 @@ export default function PublicReservaPage() {
 
   // Solo se considera confirmada si:
   // 1. Es OTA (prepagada / garantizada por canal), O
-  // 2. NO está en estado 'request' Y cuenta con al menos el 50% de anticipo cubierto (o confirmada explícita en Beds24 con anticipo)
-  const isConfirmed = isOta || (!isRequestStatus && hasMinDeposit && isBedsConfirmed);
+  // 2. NO está en estado 'request', está confirmada en Beds24 y tiene algún anticipo aprobado (en venta directa cualquier comprobante aprobado la confirma)
+  const isConfirmed = isOta || (!isRequestStatus && hasPaid && isBedsConfirmed);
 
   // Fechas clave
   const checkInDate = booking.check_in ? new Date(booking.check_in) : null;

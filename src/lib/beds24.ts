@@ -1866,6 +1866,14 @@ function isExpediaBeds24Booking(b: any): boolean {
   return /expedia/i.test(`${b?.channel || ''} ${b?.referer || ''} ${b?.source || ''} ${b?.apiSource || ''}`);
 }
 
+/**
+ * ¿La reserva viene de una OTA (Airbnb, Booking.com, Expedia, Vrbo, Agoda)? Las demás son de venta directa.
+ * Ante la duda (canal desconocido) se trata como directa solo si no menciona ninguna OTA.
+ */
+export function isOtaBeds24Booking(b: any): boolean {
+  return /airbnb|expedia|vrbo|agoda|booking\.com/i.test(`${b?.channel || ''} ${b?.referer || ''} ${b?.source || ''} ${b?.apiSource || ''}`);
+}
+
 export async function addBeds24Payment(bookId: number | string, amount: number, description: string = 'Pago por transferencia'): Promise<boolean> {
   const token = await getBeds24Token();
   // 1. Obtener la reserva actual para conocer el valor del campo 'deposit', 'price' y 'status' previos
@@ -1873,6 +1881,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
   let bookingPrice = 0;
   let currentStatus = 'request';
   let isExpedia = false;
+  let isOtaBooking = false;
   try {
     const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookId}`, {
       headers: { 'token': token },
@@ -1885,6 +1894,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
         bookingPrice = Number(getData.data[0].price || 0);
         currentStatus = getData.data[0].status || 'request';
         isExpedia = isExpediaBeds24Booking(getData.data[0]);
+        isOtaBooking = isOtaBeds24Booking(getData.data[0]);
       }
     }
   } catch (e) {
@@ -1903,6 +1913,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
         bookingPrice = Number(dbB.price || 0);
         if (dbB.status) currentStatus = dbB.status;
         if (!isExpedia) isExpedia = isExpediaBeds24Booking(dbB);
+        if (!isOtaBooking) isOtaBooking = isOtaBeds24Booking(dbB);
       }
     } catch (_) {}
   }
@@ -1911,7 +1922,9 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
   const is50PercentMet = (bookingPrice > 0)
     ? (newDeposit >= (bookingPrice * 0.5 - 0.01))
     : (newDeposit > 0);
-  const targetStatus = is50PercentMet
+  // Venta directa: cualquier comprobante aprobado (30 %, 40 %, 50 %…) confirma la reserva. Las OTA mantienen su regla (50 %).
+  const confirmOnAnyPayment = !isOtaBooking && Number(amount) > 0;
+  const targetStatus = (is50PercentMet || confirmOnAnyPayment)
     ? 'confirmed'
     : (currentStatus === 'confirmed' ? 'confirmed' : 'request');
 
@@ -2047,7 +2060,9 @@ export async function addBeds24GroupPayment(
       const is50PercentMet = (item.price > 0)
         ? (newDep >= (item.price * 0.5 - 0.01))
         : (newDep > 0);
-      const targetStatus = is50PercentMet
+      // Venta directa: cualquier comprobante aprobado confirma la reserva (las OTA mantienen su regla del 50 %)
+      const confirmOnAnyPayment = !isOtaBeds24Booking(item.b) && shareAmount > 0;
+      const targetStatus = (is50PercentMet || confirmOnAnyPayment)
         ? 'confirmed'
         : (item.b.status === 'confirmed' ? 'confirmed' : 'request');
 
