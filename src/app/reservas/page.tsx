@@ -2093,7 +2093,7 @@ function ReservasListInner() {
           const isOta = r.channel && CHANNEL_COLLECT_OTAS.some((c: string) => r.channel.toLowerCase().includes(c));
           const depositVal = isSettled 
             ? priceVal 
-            : (isOta ? 0 : Number(r.deposit || 0));
+            : Number(r.deposit || 0);
           const balanceVal = (isOta || isSettled) ? 0 : Math.max(0, priceVal - depositVal);
 
           const voucherFromCheckin = checkinMap[resIdStr]?.voucher_url;

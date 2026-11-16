@@ -435,7 +435,10 @@ export async function GET(req: Request) {
           b.deposit = bPrice;
           b.balance = 0;
         } else if (isOta) {
-          b.deposit = 0;
+          // Airbnb/Booking cobran online: el anticipo es lo pagado en Beds24 (Payments), sin pasar del precio. Saldo en hotel = 0.
+          const bPrice = Number(b.price_estimate || b.price || 0);
+          const paid = Number(b.actualPaid || 0) > 0 ? Number(b.actualPaid) : Number(b.deposit || 0);
+          b.deposit = bPrice > 0 ? Math.min(bPrice, paid) : paid;
           b.balance = 0;
         }
       });
