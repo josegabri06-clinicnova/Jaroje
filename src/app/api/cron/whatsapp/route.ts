@@ -844,20 +844,9 @@ export async function GET(req: Request) {
       }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Revisar respuestas de huéspedes en OTAs (Airbnb / Booking / Expedia)
-    // ─────────────────────────────────────────────────────────────────────────────
-    try {
-      const { checkAndProcessOtaGuestReplies } = await import('@/lib/beds24-messages');
-      const otaRes = await checkAndProcessOtaGuestReplies();
-      if (otaRes.upgradedCount > 0) {
-        otaRes.details.forEach(d => {
-          reports.push(`🎉 Huésped OTA ${d.guestName} respondió su teléfono (${d.phone}) en ${d.channel}! WhatsApp activado.`);
-        });
-      }
-    } catch (otaWorkerErr) {
-      console.warn('[Cron WhatsApp] Fallo no crítico en worker OTA:', otaWorkerErr);
-    }
+    // La revisión de respuestas de huéspedes en OTAs (captura del teléfono desde el chat de Airbnb / Booking / Expedia) ya NO se ejecuta
+    // aquí: la hace el cron propio /api/cron/ota-messages (fase 1), cada 5 minutos. Se ejecutaba también desde este cron, así que la misma
+    // función corría dos veces cada 5 minutos: el doble de créditos de Beds24 y riesgo de capturar y avisar dos veces a la vez.
 
     return NextResponse.json({
       success: true,
