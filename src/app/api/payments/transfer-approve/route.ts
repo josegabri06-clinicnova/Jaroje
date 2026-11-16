@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token } from '@/lib/beds24';
+import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token, isOtaBeds24Booking } from '@/lib/beds24';
 import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage } from '@/lib/whatsapp';
 import { maskPhone } from '@/lib/log-mask';
 
@@ -50,13 +50,18 @@ export async function POST(req: Request) {
       let groupTotalDeposit = 0;
       let groupMemberIds: string[] = [];
 
+      // Venta directa (no OTA): cualquier comprobante aprobado, sea del % que sea, confirma la reserva y envía "reservación confirmada".
+      // Si no se puede determinar el canal se queda en false y se aplica la regla de siempre (50 %).
+      let isDirectBooking = false;
+
       if (localRes) {
         // Reserva local: Actualizar depósito y status en local_reservas
         newDeposit = Number(localRes.deposit || 0) + Number(amount);
         const isMet50 = (Number(localRes.price || 0) > 0)
           ? (newDeposit >= (Number(localRes.price) * 0.5 - 0.01))
           : (newDeposit > 0);
-        const nextStatus = isMet50 ? 'confirmed' : (localRes.status === 'confirmed' ? 'confirmed' : 'request');
+        isDirectBooking = !isOtaBeds24Booking({ channel: localRes.channel });
+        const nextStatus = (isMet50 || isDirectBooking) ? 'confirmed' : (localRes.status === 'confirmed' ? 'confirmed' : 'request');
         const { error: dbError } = await supabase
           .from('local_reservas')
           .update({ 
@@ -137,6 +142,7 @@ export async function POST(req: Request) {
 
             if (rawB && (rawB.id || rawB.firstName || rawB.phone || rawB.mobile || rawB.guestPhone)) {
               guestName = `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim() || 'Huésped';
+              isDirectBooking = !isOtaBeds24Booking(rawB);
               const { normalizePhone } = await import('@/lib/whatsapp');
               phone = normalizePhone(rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile || '', rawB.country2 || rawB.country || rawB.guestCountry2 || rawB.guestCountry);
               price = Number(rawB.price || 0);
@@ -474,8 +480,8 @@ export async function POST(req: Request) {
         const isAlreadyConfirmed = wasAlreadyConfirmed || wasAlreadyCovered50;
 
         if (!isAlreadyConfirmed) {
-          if (isMin50Met) {
-            console.log(`[Approve Transfer] Mínimo 50% cubierto por primera vez ($${effectiveDeposit}/$${effectivePrice}). Enviando reservacion_confirmada (Mensaje 3) a ${maskPhone(phone)} (grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
+          if (isMin50Met || isDirectBooking) {
+            console.log(`[Approve Transfer] ${isMin50Met ? 'Mínimo 50% cubierto por primera vez' : 'Venta directa: comprobante aprobado (cualquier %), reserva confirmada'} ($${effectiveDeposit}/$${effectivePrice}). Enviando reservacion_confirmada (Mensaje 3) a ${maskPhone(phone)} (grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
             waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
             templateLogged = 'reservacion_confirmada';
           } else {
