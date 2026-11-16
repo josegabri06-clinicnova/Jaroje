@@ -20,6 +20,16 @@ export function expediaHasBalanceDue(channel: unknown, price: unknown, paid: unk
 }
 
 /**
+ * Recordatorio de 7 días: solo a Expedia que todavía NO ha dado ningún anticipo. Quien ya pagó algo (aprobado por el gerente o
+ * registrado en Payments de Beds24) se considera que viene y paga el resto en el check-in, así que no se le envía.
+ */
+export function expediaNeedsArrivalReminder(channel: unknown, paid: unknown): boolean {
+  if (!String(channel || '').toLowerCase().includes('expedia')) return false;
+  const paidNum = Number(paid);
+  return !(Number.isFinite(paidNum) && paidNum > 0);
+}
+
+/**
  * Decide si a esta reserva le corresponde la plantilla de Expedia con invitación a pagar.
  * Usa los datos que ya trae `booking`; si faltan (canal o precio), los completa desde Supabase.
  * Ante cualquier duda o error devuelve false (se envía la plantilla normal de siempre).

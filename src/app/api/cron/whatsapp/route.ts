@@ -20,6 +20,7 @@ import {
   detectLanguageFromPhone
 } from '@/lib/whatsapp';
 import { isOtaChannel, sendOfficialOtaTemplate, isDummyOrInvalidPhone } from '@/lib/beds24-messages';
+import { expediaNeedsArrivalReminder } from '@/lib/expedia-payable';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // Hasta 5 minutos de ejecución continua en Vercel Pro
@@ -743,9 +744,12 @@ export async function GET(req: Request) {
           }
         }
 
-        // --- RECORDATORIO A 7 DÍAS DEL CHECK-IN (solo Expedia) ---
-        // Avisa que falta una semana y pide que comuniquen si no van a llegar. Sale por WhatsApp y por la bandeja de Expedia.
+        // --- RECORDATORIO A 7 DÍAS DEL CHECK-IN (solo Expedia que aún no ha dado ningún anticipo) ---
+        // Expedia cobra en el hotel: el recordatorio sirve para saber si el huésped va a llegar. Avisa que falta una semana y pide que
+        // comuniquen si no van a llegar. Sale por WhatsApp y por la bandeja de Expedia. Con un anticipo (p. ej. comprobante aprobado
+        // por el gerente) se considera que viene y paga el resto en el check-in, así que ya no se envía.
         if (channelLower.includes('expedia') && !isCancelled && !isAlreadyCheckedIn && !isRequestStatus
+          && expediaNeedsArrivalReminder(channelLower, booking.actualPaid ?? booking.deposit)
           && daysUntilCheckIn === 7 && currentHour >= 10 && currentHour < 20) {
           if (shouldDispatch('recordatorio_7_dias')) {
             await dispatchTemplate('recordatorio_7_dias', () => sendTemplate_Recordatorio7Dias(booking), 'Recordatorio 7 días (Expedia)');
