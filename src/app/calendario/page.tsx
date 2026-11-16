@@ -14,7 +14,7 @@ import { createDbClient } from '@/lib/db-client';
 import { getActiveEmployee, verifyAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
 import { uploadGuestFile } from '@/lib/files-client';
 import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules, areBookingsInSameGroup } from '@/lib/beds24';
-import { getChannelBadge } from '@/lib/channels';
+import { getChannelBadge, CHANNEL_COLLECT_OTAS } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 
@@ -492,7 +492,7 @@ export default function CalendarPage() {
           const isSettled = isChIn || isChOut;
 
           const priceVal = Number(res.price_estimate || res.price || 0);
-          const isOta = res.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => res.channel.toLowerCase().includes(c));
+          const isOta = res.channel && CHANNEL_COLLECT_OTAS.some((c: string) => res.channel.toLowerCase().includes(c));
           const depositVal = isSettled 
             ? priceVal 
             : (isOta ? 0 : Number(res.deposit || 0));
@@ -2725,7 +2725,7 @@ export default function CalendarPage() {
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
-                        const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                        const isOta = selectedReserva.channel && CHANNEL_COLLECT_OTAS.some(c => selectedReserva.channel.toLowerCase().includes(c));
                         const isCheckedIn = selectedReserva.checked_in === true;
                         const balanceVal = (isOta || isCheckedIn) ? 0 : (Number(editedPrice || 0) - Number(editedDeposit || 0));
                         return (
@@ -3010,7 +3010,7 @@ export default function CalendarPage() {
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
-                        const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                        const isOta = selectedReserva.channel && CHANNEL_COLLECT_OTAS.some(c => selectedReserva.channel.toLowerCase().includes(c));
                         const isCheckedIn = selectedReserva.checked_in === true;
                         const balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
                         return (
@@ -3368,7 +3368,7 @@ export default function CalendarPage() {
                           {(() => {
                             const totalVal = selectedReserva.price_estimate || 0;
                             const depositVal = selectedReserva.deposit || 0;
-                            const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                            const isOta = selectedReserva.channel && CHANNEL_COLLECT_OTAS.some(c => selectedReserva.channel.toLowerCase().includes(c));
                             const balanceVal = isOta ? 0 : (selectedReserva.balance !== undefined
                               ? selectedReserva.balance
                               : totalVal - depositVal);
@@ -3414,7 +3414,7 @@ export default function CalendarPage() {
 
                           {/* Registro de Pago */}
                           {(() => {
-                            const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                            const isOta = selectedReserva.channel && CHANNEL_COLLECT_OTAS.some(c => selectedReserva.channel.toLowerCase().includes(c));
                             const pendingBalance = isOta ? 0 : (selectedReserva.balance !== undefined
                               ? selectedReserva.balance
                               : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
@@ -4021,7 +4021,7 @@ export default function CalendarPage() {
                               const requiresVoucher = paymentMode === 'tarjeta' || paymentMode === 'transferencia' || (isSplitPayment && (paymentMode2 === 'tarjeta' || paymentMode2 === 'transferencia'));
                               if (requiresVoucher && !voucherPreview) return true;
 
-                              const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                              const isOta = selectedReserva.channel && CHANNEL_COLLECT_OTAS.some(c => selectedReserva.channel.toLowerCase().includes(c));
                               
                               const pendingBalance = isOta ? 0 : (selectedReserva.balance !== undefined
                                 ? selectedReserva.balance

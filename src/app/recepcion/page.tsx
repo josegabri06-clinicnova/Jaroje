@@ -19,7 +19,7 @@ import EmployeeModal from '@/components/EmployeeModal';
 import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
 import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit, areBookingsInSameGroup, isDummyOrInvalidPhone } from '@/lib/beds24';
-import { getChannelBadge } from '@/lib/channels';
+import { getChannelBadge, CHANNEL_COLLECT_OTAS } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 import { normalizePhone } from '@/lib/phone';
@@ -764,7 +764,7 @@ export default function RecepcionPage() {
           const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
           
           // Si es una OTA (Airbnb, Booking.com, Expedia), el cobro lo maneja la plataforma (por lo tanto, para recepción está Pagado)
-          const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
+          const isOTA = CHANNEL_COLLECT_OTAS.some(c => (r.channel || '').toLowerCase().includes(c));
           const balanceVal = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
           const balanceStr = isOTA ? `(Pagado ✓)` : (balanceVal > 0 ? `(Adeuda: $${balanceVal.toLocaleString('es-MX')})` : `(Pagado ✓)`);
           
@@ -2223,7 +2223,7 @@ export default function RecepcionPage() {
 
   const directGroupTotalBalance = useMemo(() => {
     return directGroupBookings.reduce((sum, r) => {
-      const isOta = !!(r.channel && ['airbnb', 'booking', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c)));
+      const isOta = !!(r.channel && CHANNEL_COLLECT_OTAS.some(c => (r.channel || '').toLowerCase().includes(c)));
       const isCheckedIn = r.checked_in === true;
       if (isOta || isCheckedIn) return sum;
 
@@ -2926,7 +2926,7 @@ export default function RecepcionPage() {
             const isSettled = isChIn || isChOut;
 
             const priceVal = Number(res.price_estimate || res.price || 0);
-            const isOta = res.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => res.channel.toLowerCase().includes(c));
+            const isOta = res.channel && CHANNEL_COLLECT_OTAS.some((c: string) => res.channel.toLowerCase().includes(c));
             const depositVal = isSettled 
               ? priceVal 
               : (isOta ? 0 : Number(res.deposit || 0));
@@ -3312,7 +3312,8 @@ export default function RecepcionPage() {
   const [freshRetry, setFreshRetry] = useState(0);
 
   const fetchFreshBalances = async (ids: Array<string | number>): Promise<Record<string, any>> => {
-    const res = await fetch(`/api/reservas?ids=${encodeURIComponent(ids.map(String).join(','))}`, { cache: 'no-store' });
+    // live=true: las reservas de Expedia se refrescan desde Beds24 (Payments) antes de calcular el saldo
+    const res = await fetch(`/api/reservas?ids=${encodeURIComponent(ids.map(String).join(','))}&live=true`, { cache: 'no-store' });
     const json = await res.json().catch(() => null);
     if (!res.ok || !json?.success || !Array.isArray(json.data)) throw new Error('No se pudo leer el saldo');
     const map: Record<string, any> = {};
@@ -5812,7 +5813,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       const isPending = !r.checked_in;
                       const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
                       const rawBalance = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
-                      const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
+                      const isOta = r.channel && CHANNEL_COLLECT_OTAS.some(c => (r.channel || '').toLowerCase().includes(c));
                       const balanceVal = isOta ? 0 : rawBalance;
                       return (
                         <tr
@@ -7239,7 +7240,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       {(() => {
-                        const isOta = !!(selectedReserva?.channel && ['airbnb', 'booking', 'expedia'].some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
+                        const isOta = !!(selectedReserva?.channel && CHANNEL_COLLECT_OTAS.some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
                         const isCheckedIn = selectedReserva?.checked_in === true;
                         const currentPrice = selectedReserva.id === 'walkin'
                           ? (selectedReserva.price_estimate || 0)
@@ -7273,7 +7274,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
-                        const isOta = !!(selectedReserva?.channel && ['airbnb', 'booking', 'expedia'].some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
+                        const isOta = !!(selectedReserva?.channel && CHANNEL_COLLECT_OTAS.some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
                         const isCheckedIn = selectedReserva?.checked_in === true;
                         const balanceVal = (isOta || isCheckedIn) ? 0 : (selectedReserva.id === 'walkin'
                           ? Math.max(0, (selectedReserva.price_estimate || 0) - Number(paymentAmount || 0))
@@ -8186,7 +8187,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       ? Number(paymentAmount || 0)
                       : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
                     
-                    const isOta = !!(selectedReserva?.channel && ['airbnb', 'booking', 'expedia'].some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
+                    const isOta = !!(selectedReserva?.channel && CHANNEL_COLLECT_OTAS.some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
                     const isGroupReservation = siblingBookings.length > 0;
                     const isConsolidatedActive = isGroupReservation && payGroupConsolidated;
 
@@ -8304,7 +8305,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                     ) : (
                       <>
                         {(() => {
-                          const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel?.toLowerCase().includes(c));
+                          const isOta = selectedReserva.channel && CHANNEL_COLLECT_OTAS.some(c => selectedReserva.channel?.toLowerCase().includes(c));
                           const isUSD = (selectedReserva.guest_name || '').toUpperCase().includes('(US DOLLARS)');
                           const totalVal = selectedReserva.id === 'walkin'
                             ? (selectedReserva.price_estimate || 0)
@@ -8925,7 +8926,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       ) return true;
                     }
 
-                    const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel?.toLowerCase().includes(c));
+                    const isOta = selectedReserva.channel && CHANNEL_COLLECT_OTAS.some(c => selectedReserva.channel?.toLowerCase().includes(c));
                     if (isOta) return false;
 
                     // Calcular balance pendiente
