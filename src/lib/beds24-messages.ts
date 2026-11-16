@@ -1,6 +1,7 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Token, updateBeds24BookingPhone, extractPhoneFromBookingData, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { maskPhone } from '@/lib/log-mask';
+import { isExpediaWithBalance } from '@/lib/expedia-payable';
 import { trackBeds24, knownRemainingCredits } from '@/lib/beds24-credits';
 import { splitOtaPolls, OTA_POLL_FRESH_WINDOW_MS, OTA_POLL_LOW_CREDITS } from '@/lib/ota-poll-plan';
 import {
@@ -81,12 +82,15 @@ export function getOfficialOtaTemplateText(
     bookingId,
     guestName = 'Huésped',
     lang = 'es',
-    channel = 'OTA'
+    channel = 'OTA',
+    expediaPayable = false
   }: {
     bookingId: string | number;
     guestName?: string;
     lang?: string;
     channel?: string;
+    /** Expedia con saldo pendiente: añade la invitación (opcional) a pagar desde el portal */
+    expediaPayable?: boolean;
   }
 ): string {
   const name = (guestName || 'Huésped').trim().split(' ')[0] || 'Huésped';
@@ -107,6 +111,14 @@ export function getOfficialOtaTemplateText(
           `We are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\n` +
           `In "Guest Portal" you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n` +
           `👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.`;
+        if (expediaPayable) {
+          msg = `🎉 Your reservation is confirmed!\n\n` +
+            `Excellent, ${name}!\n\n` +
+            `We are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\n` +
+            `In our Guest Portal you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n` +
+            `💳 Want a faster arrival? If you wish, you can make your payment or deposit conveniently from the portal so your check-in day is much quicker and without queues.\n\n` +
+            `👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.`;
+        }
         if (allowLinks) {
           msg += `\n\n👇 Guest Portal\n${portalUrl}`;
         }
@@ -117,6 +129,14 @@ export function getOfficialOtaTemplateText(
           `Nos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\n` +
           `En "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n` +
           `👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.`;
+        if (expediaPayable) {
+          msg = `🎉 ¡Tu reservación está confirmada!\n\n` +
+            `¡Excelente, ${name}!\n\n` +
+            `Nos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\n` +
+            `En nuestro Portal del Huésped podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n` +
+            `💳 ¿Quieres agilizar tu llegada? Si lo deseas, puedes realizar tu pago o anticipo de forma cómoda desde el portal para que el día de tu check-in sea mucho más rápido y sin filas.\n\n` +
+            `👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.`;
+        }
         if (allowLinks) {
           msg += `\n\n👇 Portal del Huésped\n${portalUrl}`;
         }
@@ -559,11 +579,17 @@ export async function sendOfficialOtaTemplate(
     return { success: false, error: 'paused' };
   }
 
+  // Expedia con saldo pendiente: el texto de "reservación confirmada" incluye la invitación (opcional) a pagar desde el portal
+  const expediaPayable = templateName === 'reservacion_confirmada' && String(channel || '').toLowerCase().includes('expedia')
+    ? await isExpediaWithBalance({ id: cleanId, channel })
+    : false;
+
   const messageText = getOfficialOtaTemplateText(templateName, {
     bookingId: cleanId,
     guestName,
     lang,
-    channel
+    channel,
+    expediaPayable
   });
 
   const sendRes = await sendBeds24OtaMessage(cleanId, messageText);

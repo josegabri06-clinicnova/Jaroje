@@ -4,6 +4,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { isTesterPhone } from '@/lib/test-phones';
 import { maskPhone } from '@/lib/log-mask';
 import { normalizePhone } from '@/lib/phone';
+import { EXPEDIA_CONFIRMED_META_TEMPLATE, isExpediaWithBalance, isMetaTemplateUnavailableError } from '@/lib/expedia-payable';
 
 // Se sigue exportando desde aquí: el resto del código servidor lo importa de whatsapp.ts
 export { normalizePhone };
@@ -586,7 +587,8 @@ export async function sendWhatsAppTemplate(
   buttonType?: 'url' | 'quick_reply',
   bypassPause: boolean = false,
   languageOverride?: string,
-  forceResend: boolean = false
+  forceResend: boolean = false,
+  metaTemplateOverride?: string // nombre de la plantilla en Meta si difiere del interno (el registro y el anti-duplicado usan templateName)
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   let lockLogId: string | null = null;
   try {
@@ -936,7 +938,7 @@ export async function sendWhatsAppTemplate(
         'cotizacion_reserva': 'cotizacion_reserva',
         'portal_huesped_link_en': 'portal_huesped_link',
       };
-      const actualMetaTemplate = META_TEMPLATE_ALIASES[templateName] || templateName;
+      const actualMetaTemplate = metaTemplateOverride || META_TEMPLATE_ALIASES[templateName] || templateName;
       resolvedMetaTemplate = actualMetaTemplate;
 
       // Header de imagen para plantillas con portada multimedia (Conmutador y WhatsApp Directo)
@@ -1178,6 +1180,9 @@ export async function sendWhatsAppTemplate(
         if (lockLogId) {
           try { await supabase.from('whatsapp_logs').delete().eq('id', lockLogId); } catch (_) {}
         }
+        // Si falló el intento con una plantilla alternativa (p. ej. la de Expedia aún sin aprobar), se libera el candado en memoria
+        // para que el reintento con la plantilla normal (mismo nombre interno) no se descarte como duplicado.
+        if (metaTemplateOverride) groupMessageLocks.delete(lockKey);
         console.error(`Meta API error template ${templateName}:`, resBody);
         return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
       }
@@ -1195,6 +1200,8 @@ export async function sendWhatsAppTemplate(
             case 'ultimo_aviso':
             case 'ultimo_aviso_v2':
               return `⏳ Last reminder (1 hour left to confirm your reservation)\n\nHello, ${name}.\n\nWe just need your deposit to confirm your reservation. Remember that the deadline to receive it expires in approximately 1 hour.\n\nIn "Make deposit" you will find the available payment options. If you have already made your deposit, please send us your receipt.\n\n👇 Make Deposit\n\n[Button: Make deposit]`;
+            case 'reservacion_confirmada_expedia':
+              return `🎉 *Your reservation is confirmed!*\n\nExcellent, ${name}!\n\nWe are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\nIn our *Guest Portal* you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n💳 *Want a faster arrival?* If you wish, you can make your payment or deposit conveniently from the portal so your check-in day is much quicker and without queues.\n\n👥 *Did the number of guests change?* Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n[Button: Guest Portal]`;
             case 'reservacion_confirmada':
             case 'confirmacion_reserva_util':
               return `🎉 Your reservation is confirmed!\n\nExcellent, ${name}!\n\nWe are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\nIn "Guest Portal" you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n[Button: Guest Portal] [Button: How to get there]`;
@@ -1256,6 +1263,8 @@ export async function sendWhatsAppTemplate(
           case 'ultimo_aviso':
           case 'ultimo_aviso_v2':
             return `⏳ Último recordatorio (queda 1 hora para confirmar tu reservación)\n\nHola, ${name}.\n\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 1 hora.\n\nEn "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n👇 Realizar Depósito\n\n[Botón: Realizar depósito]`;
+          case 'reservacion_confirmada_expedia':
+            return `🎉 *¡Tu reservación está confirmada!*\n\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\nEn nuestro *Portal del Huésped* podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n💳 *¿Quieres agilizar tu llegada?* Si lo deseas, puedes realizar tu pago o anticipo de forma cómoda desde el portal para que el día de tu check-in sea mucho más rápido y sin filas.\n\n👥 *¿Cambió el número de huéspedes?* Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n[Botón: Portal del Huésped]`;
           case 'reservacion_confirmada':
           case 'confirmacion_reserva_util':
             return `🎉 ¡Tu reservación está confirmada!\n\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\nEn "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n[Botón: Portal del Huésped] [Botón: Cómo llegar]`;
@@ -1316,7 +1325,7 @@ export async function sendWhatsAppTemplate(
         }
       };
 
-      const summaryText = getTemplateText(templateName, parameters).replace('[BOOKID]', String(bookingId || ''));
+      const summaryText = getTemplateText(resolvedMetaTemplate === EXPEDIA_CONFIRMED_META_TEMPLATE ? EXPEDIA_CONFIRMED_META_TEMPLATE : templateName, parameters).replace('[BOOKID]', String(bookingId || ''));
       const wamid: string | null = resBody?.messages?.[0]?.id || null;
       const nowConvIso = new Date().toISOString();
 
@@ -1621,6 +1630,14 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPa
   const params = [
     name // {{1}} Nombre
   ];
+
+  // Expedia con saldo pendiente: plantilla con la invitación (opcional) a pagar desde el portal. Si Meta aún no la tiene aprobada
+  // (o falla por la plantilla), se envía la normal de siempre para que el huésped nunca se quede sin mensaje.
+  if (await isExpediaWithBalance(booking)) {
+    const expRes = await sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause, lang, forceResend, EXPEDIA_CONFIRMED_META_TEMPLATE);
+    if (expRes.success || !isMetaTemplateUnavailableError(expRes.error)) return expRes;
+    console.warn(`[WhatsApp] Plantilla ${EXPEDIA_CONFIRMED_META_TEMPLATE} no disponible (${expRes.error}); se envía reservacion_confirmada a la reserva ${booking.id}.`);
+  }
 
   return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause, lang, forceResend);
 }
