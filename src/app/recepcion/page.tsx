@@ -2929,7 +2929,7 @@ export default function RecepcionPage() {
             const isOta = res.channel && CHANNEL_COLLECT_OTAS.some((c: string) => res.channel.toLowerCase().includes(c));
             const depositVal = isSettled 
               ? priceVal 
-              : (isOta ? 0 : Number(res.deposit || 0));
+              : Number(res.deposit || 0);
             const balanceVal = (isOta || isSettled) ? 0 : Math.max(0, priceVal - depositVal);
 
             const alreadyCheckedIn = prevReservas.find(p => String(p.id).toLowerCase().trim() === resIdStr)?.checked_in;

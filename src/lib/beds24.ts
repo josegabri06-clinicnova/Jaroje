@@ -1527,9 +1527,12 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
-      const depositVal = (b.deposit !== undefined && Number(b.deposit) > 0) 
-        ? Number(b.deposit) 
-        : (actualPaid > 0 ? actualPaid : 0);
+      // Airbnb/Booking cobran online por adelantado: el anticipo es lo que consta en Payments de Beds24
+      // (el campo 'deposit' de Beds24 en estas OTAs no refleja el pago real).
+      const isCollectOtaChannel = /airbnb|booking/i.test(String(channel || ''));
+      const depositVal = (isCollectOtaChannel && actualPaid > 0)
+        ? actualPaid
+        : ((b.deposit !== undefined && Number(b.deposit) > 0) ? Number(b.deposit) : (actualPaid > 0 ? actualPaid : 0));
       // Para reservas OTA canal-collect, el saldo restante al huésped en el hotel siempre es 0
       const balanceVal = isOTA 
         ? ((actualPaid > 0 || depositVal > 0) ? 0 : Math.max(0, calculatedCharges - depositVal)) 
@@ -3097,9 +3100,12 @@ export async function syncBeds24BookingLocal(b: any, overrides?: { phone?: strin
     : (totalInvoiceCharges > 0 ? totalInvoiceCharges : finalPriceVal);
   const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
-  const depositVal = (b.deposit !== undefined && Number(b.deposit) > 0) 
-    ? Number(b.deposit) 
-    : (actualPaid > 0 ? actualPaid : 0);
+  // Airbnb/Booking cobran online por adelantado: el anticipo es lo que consta en Payments de Beds24
+  // (el campo 'deposit' de Beds24 en estas OTAs no refleja el pago real).
+  const isCollectOtaChannel = /airbnb|booking/i.test(String(channel || ''));
+  const depositVal = (isCollectOtaChannel && actualPaid > 0)
+    ? actualPaid
+    : ((b.deposit !== undefined && Number(b.deposit) > 0) ? Number(b.deposit) : (actualPaid > 0 ? actualPaid : 0));
   // Para reservas OTA canal-collect, el saldo restante al huésped en el hotel siempre es 0
   const balanceVal = isOTA 
     ? ((actualPaid > 0 || depositVal > 0) ? 0 : Math.max(0, calculatedCharges - depositVal)) 
@@ -3383,9 +3389,12 @@ export async function syncBeds24ReservationsRange(
         : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
-      const depositVal = (b.deposit !== undefined && Number(b.deposit) > 0) 
-        ? Number(b.deposit) 
-        : (actualPaid > 0 ? actualPaid : 0);
+      // Airbnb/Booking cobran online por adelantado: el anticipo es lo que consta en Payments de Beds24
+      // (el campo 'deposit' de Beds24 en estas OTAs no refleja el pago real).
+      const isCollectOtaChannel = /airbnb|booking/i.test(String(channel || ''));
+      const depositVal = (isCollectOtaChannel && actualPaid > 0)
+        ? actualPaid
+        : ((b.deposit !== undefined && Number(b.deposit) > 0) ? Number(b.deposit) : (actualPaid > 0 ? actualPaid : 0));
       // Para reservas OTA canal-collect, el saldo restante al huésped en el hotel siempre es 0
       const balanceVal = isOTA 
         ? ((actualPaid > 0 || depositVal > 0) ? 0 : Math.max(0, calculatedCharges - depositVal)) 

@@ -495,7 +495,7 @@ export default function CalendarPage() {
           const isOta = res.channel && CHANNEL_COLLECT_OTAS.some((c: string) => res.channel.toLowerCase().includes(c));
           const depositVal = isSettled 
             ? priceVal 
-            : (isOta ? 0 : Number(res.deposit || 0));
+            : Number(res.deposit || 0);
           const balanceVal = (isOta || isSettled) ? 0 : (res.balance !== undefined ? Number(res.balance) : Math.max(0, priceVal - depositVal));
 
           return {
