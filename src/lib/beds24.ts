@@ -1857,12 +1857,22 @@ export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
 }
 
 // Registrar un pago por transferencia en Beds24 como un ítem de factura (negativo)
+/**
+ * Expedia llega en "New (Confirmed)" y ya está confirmada para el hotel aunque no haya pagado nada. Un pago por debajo del 50 %
+ * no debe devolverla a "request" (como sí ocurre con una reserva directa): conserva el estado que ya tiene en Beds24.
+ * En la aplicación se muestra "confirmada" en cuanto hay un pago registrado (ver lib/beds24-status.ts).
+ */
+function isExpediaBeds24Booking(b: any): boolean {
+  return /expedia/i.test(`${b?.channel || ''} ${b?.referer || ''} ${b?.source || ''} ${b?.apiSource || ''}`);
+}
+
 export async function addBeds24Payment(bookId: number | string, amount: number, description: string = 'Pago por transferencia'): Promise<boolean> {
   const token = await getBeds24Token();
   // 1. Obtener la reserva actual para conocer el valor del campo 'deposit', 'price' y 'status' previos
   let currentDeposit = 0;
   let bookingPrice = 0;
   let currentStatus = 'request';
+  let isExpedia = false;
   try {
     const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookId}`, {
       headers: { 'token': token },
@@ -1874,6 +1884,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
         currentDeposit = Number(getData.data[0].deposit || 0);
         bookingPrice = Number(getData.data[0].price || 0);
         currentStatus = getData.data[0].status || 'request';
+        isExpedia = isExpediaBeds24Booking(getData.data[0]);
       }
     }
   } catch (e) {
@@ -1885,12 +1896,13 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
     try {
       const { data: dbB } = await supabase
         .from('beds24_reservations')
-        .select('price, status')
+        .select('price, status, channel')
         .eq('id', String(bookId))
         .maybeSingle();
       if (dbB) {
         bookingPrice = Number(dbB.price || 0);
         if (dbB.status) currentStatus = dbB.status;
+        if (!isExpedia) isExpedia = isExpediaBeds24Booking(dbB);
       }
     } catch (_) {}
   }
@@ -1907,7 +1919,8 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
     {
       id: Number(bookId),
       bookId: Number(bookId),
-      status: targetStatus,
+      // Expedia con menos del 50 %: no se toca el estado (conserva el suyo). Con el 50 % o más se confirma como en cualquier reserva.
+      ...((isExpedia && !is50PercentMet) ? {} : { status: targetStatus }),
       deposit: newDeposit,
       invoiceItems: [
         {
@@ -2042,7 +2055,7 @@ export async function addBeds24GroupPayment(
         {
           id: Number(item.b.id),
           bookId: Number(item.b.id),
-          status: targetStatus,
+          ...((isExpediaBeds24Booking(item.b) && !is50PercentMet) ? {} : { status: targetStatus }),
           deposit: newDep,
           invoiceItems: [
             {
