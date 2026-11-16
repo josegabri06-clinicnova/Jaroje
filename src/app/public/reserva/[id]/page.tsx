@@ -1372,6 +1372,11 @@ export default function PublicReservaPage() {
     rawName.includes('booking.com')
   ) && !rawName.includes('overbooking') && !rawChannel.includes('google');
 
+  // Expedia cobra en el hotel: el huésped puede reservar sin pagar y liquida después (portal o check-in). Por eso, a diferencia de
+  // Airbnb/Booking (que llegan pagadas), en el portal debe poder ver su saldo y pagarlo por tarjeta o transferencia como en una reserva directa.
+  const isExpedia = isOta && (rawChannel.includes('expedia') || rawSource.includes('expedia'));
+  const isPrepaidOta = isOta && !isExpedia;
+
   // Solo se considera confirmada si:
   // 1. Es OTA (prepagada / garantizada por canal), O
   // 2. NO está en estado 'request' Y cuenta con al menos el 50% de anticipo cubierto (o confirmada explícita en Beds24 con anticipo)
@@ -1614,7 +1619,7 @@ export default function PublicReservaPage() {
         )}
 
         {/* ALERTA DE PAGO PARCIAL / SALDO PENDIENTE (Solo para reservas directas) */}
-        {currentState !== 'liberada' && !isOta && booking.deposit > 0 && booking.balance > 0 && (
+        {currentState !== 'liberada' && !isPrepaidOta && booking.deposit > 0 && booking.balance > 0 && (
           <div className="bg-amber-50 border border-amber-250/30 rounded-2xl p-4 flex gap-3 text-amber-900 text-xs shadow-sm">
             <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5 animate-pulse" />
             <div className="space-y-1">
@@ -1790,8 +1795,8 @@ export default function PublicReservaPage() {
           </div>
         </div>
 
-        {/* 4. ESTADO DE CUENTA */}
-        {!isOta && (
+        {/* 4. ESTADO DE CUENTA (Expedia incluida: cobra en el hotel) */}
+        {!isPrepaidOta && (
           <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
             <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
               <Clock size={18} className="text-indigo-600" />
@@ -1903,7 +1908,7 @@ export default function PublicReservaPage() {
                   <strong className="text-zinc-900 font-black text-base">${totalConExtras.toLocaleString('es-MX')} {curr}</strong>
                 </div>
               )}
-              {isOta ? (
+              {isPrepaidOta ? (
                 <div className="flex justify-between items-center text-emerald-700 font-semibold bg-emerald-50 px-3 py-2.5 rounded-xl border border-emerald-100">
                   <span className="flex items-center gap-1.5">
                     <Check size={15} className="text-emerald-600" />
@@ -1947,7 +1952,7 @@ export default function PublicReservaPage() {
         )}
 
         {/* 5. PAGO / CARGA DE COMPROBANTE (Solo cuando aplica saldo pendiente) */}
-        {!isOta && booking.balance > 0 && currentState !== 'liberada' && !isCheckedOut && (() => {
+        {!isPrepaidOta && booking.balance > 0 && currentState !== 'liberada' && !isCheckedOut && (() => {
           const targetAmount = booking.deposit === 0
             ? (paymentSplit === '50' ? Math.ceil(booking.price * 0.5 * 100) / 100 : Number(booking.price.toFixed(2)))
             : Number(booking.balance.toFixed(2));
