@@ -11,6 +11,19 @@
  *  - 'Directo'       → azul
  *  - cualquier otro  → gris
  */
+/**
+ * OTAs que COBRAN al huésped por adelantado el total de la reserva (el pago llega anotado en Payments de Beds24 desde el principio):
+ * para recepción esas reservas están pagadas y no hay nada que cobrar.
+ * Expedia NO está aquí: por contrato el huésped puede reservar sin pagar y pagar después (en el portal o en el check-in), así que una
+ * reserva de Expedia se trata como cualquier otra: debe lo que no figure pagado en Payments.
+ */
+export const CHANNEL_COLLECT_OTAS = ['airbnb', 'booking'] as const;
+
+export function isChannelCollectOta(channel?: string | null): boolean {
+  const c = String(channel || '').toLowerCase();
+  return CHANNEL_COLLECT_OTAS.some(ota => c.includes(ota));
+}
+
 export function getChannelBadge(channel: string | null | undefined): {
   label: string;
   className: string;

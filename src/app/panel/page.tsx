@@ -12,7 +12,7 @@ import { format, addDays, formatDistanceToNow, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createDbClient } from '@/lib/db-client';
 import { getSeason } from '@/lib/beds24';
-import { getChannelBadge } from '@/lib/channels';
+import { getChannelBadge, CHANNEL_COLLECT_OTAS } from '@/lib/channels';
 import { copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
@@ -530,7 +530,7 @@ export default function AdminDashboard() {
         const room = getUnitDisplay(r.room_name || r.room || '');
         const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
         
-        const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
+        const isOTA = CHANNEL_COLLECT_OTAS.some(c => (r.channel || '').toLowerCase().includes(c));
         const rawBalance = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
         const balanceVal = isOTA ? 0 : rawBalance;
         const balanceStr = isOTA ? `(Pagado ✓)` : (balanceVal > 0 ? `(Adeuda: $${balanceVal.toLocaleString('es-MX')})` : `(Pagado ✓)`);
@@ -980,7 +980,7 @@ export default function AdminDashboard() {
                     const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
                     const unit = getUnitDisplay(r.room || r.room_name || '');
                     const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
-                    const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
+                    const isOTA = CHANNEL_COLLECT_OTAS.some(c => (r.channel || '').toLowerCase().includes(c));
                     const rawBalance = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
                     const balanceVal = isOTA ? 0 : rawBalance;
                     return (

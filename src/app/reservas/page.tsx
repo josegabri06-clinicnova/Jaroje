@@ -9,7 +9,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createDbClient } from '@/lib/db-client';
 import { computeOtaSplit, getCapacityRules, getGroupExtraGuestFee, detectAndAdjustGroupGuests, areBookingsInSameGroup, isDummyOrInvalidPhone } from '@/lib/beds24';
-import { getChannelBadge } from '@/lib/channels';
+import { getChannelBadge, CHANNEL_COLLECT_OTAS } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 import { normalizePhone } from '@/lib/phone';
@@ -722,7 +722,7 @@ function ReservasListInner() {
 
   useEffect(() => {
     if (showPaymentFlow && selectedRes) {
-      const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => (selectedRes.channel || '').toLowerCase().includes(c));
+      const isOta = selectedRes.channel && CHANNEL_COLLECT_OTAS.some(c => (selectedRes.channel || '').toLowerCase().includes(c));
       const balanceVal = isOta ? 0 : Math.max(0, (selectedRes.price_estimate || selectedRes.price || 0) - (selectedRes.deposit || 0));
       
       if (balanceVal > 0) {
@@ -2090,7 +2090,7 @@ function ReservasListInner() {
           const isSettled = isChIn || isChOut;
 
           const priceVal = Number(r.price_estimate || r.price || 0);
-          const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => r.channel.toLowerCase().includes(c));
+          const isOta = r.channel && CHANNEL_COLLECT_OTAS.some((c: string) => r.channel.toLowerCase().includes(c));
           const depositVal = isSettled 
             ? priceVal 
             : (isOta ? 0 : Number(r.deposit || 0));
@@ -4178,7 +4178,7 @@ function ReservasListInner() {
                   <div>
                     <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Adeudo</span>
                     {(() => {
-                      const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some(c => r.channel.toLowerCase().includes(c));
+                      const isOta = r.channel && CHANNEL_COLLECT_OTAS.some(c => r.channel.toLowerCase().includes(c));
                       const balanceVal = isOta ? 0 : Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
                       return (
                         <span className={`font-black ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
@@ -4724,7 +4724,7 @@ function ReservasListInner() {
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
-                        const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                        const isOta = selectedRes.channel && CHANNEL_COLLECT_OTAS.some(c => selectedRes.channel.toLowerCase().includes(c));
                         const isCheckedIn = selectedRes.checked_in === true;
                         let balanceVal = 0;
                         if (editGroupMembers.length > 1) {
@@ -4968,7 +4968,7 @@ function ReservasListInner() {
 
                   {/* ADEUDO POR PAGAR DESGLOSADO */}
                   {(() => {
-                    const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                    const isOta = selectedRes.channel && CHANNEL_COLLECT_OTAS.some(c => selectedRes.channel.toLowerCase().includes(c));
                     const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedRes.channel || '');
                     
                     const pendingBalance = isOta ? 0 : selectedCheckInTotalBalance;
@@ -5709,7 +5709,7 @@ function ReservasListInner() {
                     <div>
                       {(() => {
                         const isGroup = siblingBookings.length > 0;
-                        const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                        const isOta = selectedRes.channel && CHANNEL_COLLECT_OTAS.some(c => selectedRes.channel.toLowerCase().includes(c));
                         const isCheckedIn = selectedRes.checked_in === true || selectedRes.is_checked_in === true;
                         let balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, Number(selectedRes.price_estimate || selectedRes.price || 0) - Number(selectedRes.deposit || 0));
 
@@ -6764,7 +6764,7 @@ function ReservasListInner() {
                               return true;
                             }
                             
-                            const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                            const isOta = selectedRes.channel && CHANNEL_COLLECT_OTAS.some(c => selectedRes.channel.toLowerCase().includes(c));
                             const pendingBalance = isOta ? 0 : selectedCheckInTotalBalance;
 
                             const currentPayment = Number(paymentAmount || 0);

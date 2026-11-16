@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
+import { CHANNEL_COLLECT_OTAS } from '@/lib/channels';
+import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap, clearBeds24Cache, areBookingsInSameGroup, syncBeds24BookingLocal } from '@/lib/beds24';
+import { beds24FetchTracked } from '@/lib/beds24-credits';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
 import { 
@@ -45,11 +47,46 @@ async function loadCapacitySettings(): Promise<any> {
   return null;
 }
 
+/**
+ * Lo que de verdad ha pagado el huésped de una reserva de Expedia está en Payments de Beds24, y puede cambiar sin que la aplicación se
+ * entere al instante (paga en el portal, en el check-in, o recepción anota un pago en Beds24). Para el check-in se pide a Beds24 ESA
+ * reserva y se guarda en Supabase antes de calcular el saldo. Solo Expedia (una llamada por reserva); Airbnb y Booking vienen pagadas y las
+ * reservas directas anotan sus pagos a través de la aplicación. Si Beds24 no responde, se sigue con lo que hay en Supabase.
+ */
+async function refreshExpediaFromBeds24(ids: string[]): Promise<void> {
+  try {
+    const real = ids.filter(id => /^\d{7,}$/.test(id)); // las locales (500 y 600) tienen ids cortos y no están en Beds24
+    if (real.length === 0) return;
+    const { data: rows } = await supabase.from('beds24_reservations').select('id, channel').in('id', real);
+    const expediaIds = (rows || []).filter((r: any) => String(r.channel || '').toLowerCase().includes('expedia')).map((r: any) => String(r.id));
+    if (expediaIds.length === 0) return;
+    const token = await getBeds24Token();
+    for (const id of expediaIds) {
+      const res = await beds24FetchTracked('checkin:expedia', 'reserva-id', `https://api.beds24.com/v2/bookings?id=${id}&includeInvoiceItems=true`, {
+        headers: { token },
+        cache: 'no-store'
+      });
+      if (!res.ok) { console.warn(`[Reservas GET live] Beds24 respondió ${res.status} para la reserva ${id}; se usa lo guardado.`); continue; }
+      const json = await res.json().catch(() => null);
+      const b = json?.data?.[0];
+      // Una cancelada no se sincroniza aquí (la cancelación y sus avisos los gestiona el webhook)
+      if (!b || String(b.status) === '0' || b.status === 'cancelled') continue;
+      await syncBeds24BookingLocal(b);
+    }
+  } catch (e) {
+    console.warn('[Reservas GET live] No se pudo refrescar desde Beds24; se usa lo guardado:', e);
+  }
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const includeCancelled = searchParams.get('includeCancelled') === 'true';
     const bypassCache = searchParams.get('bypassCache') === 'true';
+    // ?ids=...&live=true (check-in): antes de calcular, se refrescan desde Beds24 las reservas de Expedia pedidas (máx. 5)
+    if (searchParams.get('ids') && searchParams.get('live') === 'true') {
+      await refreshExpediaFromBeds24(searchParams.get('ids')!.split(',').map(x => x.trim()).filter(Boolean).slice(0, 5));
+    }
 
     if (bypassCache) {
       console.log("[Reservas GET] bypassCache detectado. Forzando recarga de Beds24 y sincronización con Supabase...");
@@ -392,7 +429,7 @@ export async function GET(req: Request) {
       combined.forEach((b: any) => {
         const isCheckedIn = b.is_checked_in || b.status === 'checked_in' || String(b.status).toLowerCase() === 'checked_in';
         const isCheckedOut = b.is_checked_out || b.status === 'checked_out' || String(b.status).toLowerCase() === 'checked_out';
-        const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
+        const isOta = b.channel && CHANNEL_COLLECT_OTAS.some((c: string) => b.channel.toLowerCase().includes(c));
         if (isCheckedIn || isCheckedOut) {
           const bPrice = Number(b.price_estimate || b.price || 0);
           b.deposit = bPrice;
