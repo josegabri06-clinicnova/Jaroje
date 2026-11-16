@@ -435,10 +435,13 @@ export async function GET(req: Request) {
           b.deposit = bPrice;
           b.balance = 0;
         } else if (isOta) {
-          // Airbnb/Booking cobran online: el anticipo es lo pagado en Beds24 (Payments), sin pasar del precio. Saldo en hotel = 0.
+          // Airbnb/Booking cobran el 100% online por adelantado; saldo en hotel = 0.
+          // Airbnb: Payments trae solo el payout (comisión e ISH los retiene Airbnb), así que con un pago registrado el huésped ya pagó todo: anticipo = total.
+          // Booking: Payments ya trae el pago completo, se usa tal cual (con tope en el precio).
           const bPrice = Number(b.price_estimate || b.price || 0);
           const paid = Number(b.actualPaid || 0) > 0 ? Number(b.actualPaid) : Number(b.deposit || 0);
-          b.deposit = bPrice > 0 ? Math.min(bPrice, paid) : paid;
+          const isAirbnb = String(b.channel || '').toLowerCase().includes('airbnb');
+          b.deposit = (isAirbnb && Number(b.actualPaid || 0) > 0 && bPrice > 0) ? bPrice : (bPrice > 0 ? Math.min(bPrice, paid) : paid);
           b.balance = 0;
         }
       });
