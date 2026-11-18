@@ -1,4 +1,4 @@
-export const RECEPTION_WA_GROUP_URL = 'https://chat.whatsapp.com/CaqLF4tScJRJ1BeUx7ANUy?s=cl&p=i&ilr=4&iam=0';
+export const RECEPTION_WA_GROUP_URL = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=cl&p=i&iam=2';
 export const MAINTENANCE_WA_GROUP_URL = 'https://chat.whatsapp.com/K2u4HU8kxVmGREYaZSkuZ6?s=cl&p=i&ilr=4&iam=0';
 
 // Los enlaces de archivos del servidor son relativos (/api/files/...): en un mensaje de WhatsApp deben ir completos
