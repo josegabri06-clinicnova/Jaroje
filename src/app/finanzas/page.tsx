@@ -15,6 +15,7 @@ import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync, getActiveEmployee } from '@/lib/auth';
 import { computeOtaSplit } from '@/lib/beds24';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
  
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
 const supabase = createDbClient();
@@ -380,7 +381,8 @@ export default function FinanzasPage() {
     try {
       const [accRes, recRes, apiRes] = await Promise.all([
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
-        supabase.from('finances').select('*, accounts(name)').order('date', { ascending: false }).order('created_at', { ascending: false }),
+        // Por páginas: una sola consulta devuelve como máximo 1.000 filas y dejaba fuera los movimientos más antiguos
+        fetchAllRows((from, to) => supabase.from('finances').select('*, accounts(name)').order('date', { ascending: false }).order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, to)),
         fetch('/api/reservas?includeCancelled=true&t=' + Date.now()).then(r => r.json()).catch(err => {
           console.error("Error fetching /api/reservas in Finanzas:", err);
           return null;

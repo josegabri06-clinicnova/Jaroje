@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { format } from 'date-fns';
 import { authorizeExportRequest } from '@/lib/session';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,13 +25,14 @@ export async function GET(req: Request) {
     const accountFilter = searchParams.get('account') || 'todo';
 
     // 1. Obtener los movimientos del libro contable (finances)
-    let query = supabase
+    // Por páginas: una sola consulta devuelve como máximo 1.000 filas y dejaría fuera los movimientos más antiguos
+    const { data: records, error } = await fetchAllRows((from, to) => supabase
       .from('finances')
       .select('*, accounts(name)')
       .order('date', { ascending: false })
-      .order('created_at', { ascending: false });
-
-    const { data: records, error } = await query;
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to));
     if (error) throw error;
 
     // 2. Filtrar los movimientos por rango de tiempo, por rango de fechas y por búsqueda de texto
