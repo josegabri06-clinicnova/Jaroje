@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { getBeds24Bookings, getBeds24BookingsForArrival, isWithinFullListingWindow, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24BookingsForArrival, isWithinFullListingWindow, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
@@ -412,7 +412,7 @@ export async function GET(req: Request) {
 
     if (booking) {
       // Las tres consultas son independientes: se lanzan a la vez (antes iban una tras otra)
-      const [{ data: checkinData }, { data: transferData }, { data: portalSettings, error: portalSettingsError }] = await Promise.all([
+      const [{ data: checkinData }, { data: transferData }, { data: portalSettings, error: portalSettingsError }, { data: mirrorContact }] = await Promise.all([
         supabase
           .from('checkins')
           .select('status, document_url, receipt_url')
@@ -429,7 +429,19 @@ export async function GET(req: Request) {
           .select('show_card_payment, transfer_account, language')
           .eq('booking_id', String(bookingId))
           .maybeSingle(),
+        // Teléfono guardado (puede ser más reciente que el de la caché de Beds24, p. ej. si el huésped lo acaba de escribir en el portal)
+        supabase
+          .from('beds24_reservations')
+          .select('guest_phone')
+          .eq('id', String(bookingId))
+          .maybeSingle(),
       ]);
+
+      // Reserva de Airbnb / Expedia / Booking.com sin teléfono válido: el portal le ofrece al huésped dejarlo (opcional)
+      const needsPhone = /airbnb|expedia|booking\.com/i.test(String(booking.channel || ''))
+        && !['cancelled', '0'].includes(String(booking.status || '').toLowerCase())
+        && isDummyOrInvalidPhone(mirrorContact?.guest_phone)
+        && isDummyOrInvalidPhone(booking.guest_phone || booking.phone || booking.mobile);
 
       const finalReceiptUrl = checkinData?.receipt_url || (transferData && transferData.length > 0 ? transferData[0].receipt_url : null);
 
@@ -533,6 +545,7 @@ export async function GET(req: Request) {
             transfer_receipts: publicTransferReceipts(groupTransferReceipts, guestId, guestAuthorized),
           needs_verification: Boolean((checkinData?.document_url || finalReceiptUrl || (groupTransferReceipts || []).some((r: any) => r.receipt_url)) && !guestAuthorized),
           verify_available: hasUsablePhone(booking.guest_phone || booking.phone || booking.mobile),
+            needs_phone: needsPhone,
             portal_settings: {
               show_card_payment: portalSettings?.show_card_payment !== false,
               transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),

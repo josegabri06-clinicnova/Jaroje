@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import PhoneRequestCard from './PhoneRequestCard';
 import {
   Calendar,
   User,
@@ -1615,6 +1616,11 @@ export default function PublicReservaPage() {
               {statusMessage}
             </p>
           </div>
+        )}
+
+        {/* Reserva de OTA sin teléfono: se le ofrece dejar su WhatsApp (opcional) */}
+        {booking.needs_phone && currentState !== 'liberada' && !booking.is_checked_out && (
+          <PhoneRequestCard bookingId={String(booking.id)} lang={lang} />
         )}
 
         {/* ALERTA DE PAGO PARCIAL / SALDO PENDIENTE (Solo para reservas directas) */}
