@@ -93,7 +93,7 @@ export async function GET(req: Request) {
         if (sendRes.success) {
           sentCount++;
           reports.push(`📩 Mensaje OTA solicitando WhatsApp enviado a ${res.guest_name} (${res.channel}, ID: ${res.id})`);
-        } else {
+        } else if (sendRes.error !== 'cooldown') {
           reports.push(`⚠️ Falló envío de mensaje OTA a ID ${res.id}: ${sendRes.error}`);
         }
       }

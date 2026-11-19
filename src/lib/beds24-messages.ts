@@ -430,6 +430,39 @@ export async function hasOtaMessageBeenSent(
   return false;
 }
 
+/** Tras un envío fallido a la bandeja de una OTA se espera esto antes de reintentar (igual que el cron de WhatsApp) */
+export const OTA_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
+/** Máximo de envíos fallidos de un mismo mensaje a una misma reserva en 24 h; pasado el tope no se insiste hasta el día siguiente */
+export const OTA_MAX_FAILURES_PER_DAY = 6;
+
+/**
+ * ¿Se debe esperar antes de reintentar este mensaje a esta reserva? true si el último fallo fue hace menos de 30 minutos
+ * o ya hubo OTA_MAX_FAILURES_PER_DAY fallos en las últimas 24 h. Ante un error al consultar el registro, no bloquea.
+ */
+export async function shouldBackOffOtaRetry(
+  bookingId: string | number,
+  templateType: string
+): Promise<boolean> {
+  try {
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('ota_messages_log')
+      .select('created_at')
+      .eq('booking_id', String(bookingId).trim())
+      .eq('template_type', templateType)
+      .eq('status', 'failed')
+      .gte('created_at', dayAgo)
+      .order('created_at', { ascending: false })
+      .limit(OTA_MAX_FAILURES_PER_DAY);
+    if (error || !data || data.length === 0) return false;
+    if (data.length >= OTA_MAX_FAILURES_PER_DAY) return true;
+    const last = Date.parse(String(data[0].created_at));
+    return !isNaN(last) && Date.now() - last < OTA_RETRY_COOLDOWN_MS;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Registra el resultado del mensaje OTA en Supabase
  */
@@ -629,6 +662,11 @@ export async function sendOtaWelcomeMessage({
   // Pausa global: no enviar y tampoco registrar un "failed" (se reintenta solo al reanudar)
   if (await isWhatsAppAutomationsPaused()) {
     return { success: false, error: 'paused' };
+  }
+
+  // Un envío que falló no se reintenta en cada ejecución del cron (cada intento gasta créditos de Beds24): se espera 30 min y hay tope diario
+  if (!force && await shouldBackOffOtaRetry(cleanId, 'ota_welcome_request_phone')) {
+    return { success: false, error: 'cooldown' };
   }
 
   const messageText = generateOtaWelcomeMessage(guestName, country);
