@@ -327,8 +327,10 @@ export default function InventarioPage() {
     setStockDialog({ item, direction });
   };
 
-  const stockQtyNumber = Math.floor(Number(stockQty));
-  const stockQtyValid = Number.isFinite(stockQtyNumber) && stockQtyNumber >= 1
+  // Solo piezas enteras, de 1 a 1.000.000 por movimiento (así un error de tecleo no desborda la columna de la base); una salida no puede superar el stock
+  const MAX_MOVEMENT = 1_000_000;
+  const stockQtyNumber = Number(stockQty);
+  const stockQtyValid = stockQty.trim() !== '' && Number.isInteger(stockQtyNumber) && stockQtyNumber >= 1 && stockQtyNumber <= MAX_MOVEMENT
     && (stockDialog?.direction !== 'remove' || stockQtyNumber <= (stockDialog?.item.stock ?? 0));
 
   const confirmStockMovement = async () => {
@@ -980,7 +982,7 @@ export default function InventarioPage() {
               <p className="text-[12px] text-rose-600 mt-2">
                 {stockDialog.direction === 'remove' && stockQtyNumber > stockDialog.item.stock
                   ? `No hay tantas piezas: solo hay ${stockDialog.item.stock}.`
-                  : 'Escribe una cantidad de 1 o más.'}
+                  : 'Escribe un número entero de piezas, de 1 a 1.000.000.'}
               </p>
             )}
 
