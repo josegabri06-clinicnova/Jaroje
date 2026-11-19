@@ -211,6 +211,16 @@ function isReservationNew(r: any): boolean {
   return true;
 }
 
+// El calendario recuerda su primer día visible en sessionStorage: se deja ahí la fecha de llegada y se abre el calendario
+const CALENDAR_START_KEY = 'jaroje_calendar_start_date';
+function calendarStartFor(checkIn: unknown): string | null {
+  if (!checkIn) return null;
+  const d = parseISO(String(checkIn));
+  if (isNaN(d.getTime())) return null;
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
 export default function ReservasList() {
   return (
     <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin" /></div>}>
@@ -4217,15 +4227,31 @@ function ReservasListInner() {
                 <StatusBadge status={r.status} isCheckedIn={r.is_checked_in} isCheckedOut={r.is_checked_out} />
 
                 {userRole === 'admin' && activeTab === 'Nuevas' && isReservationNew(r) && (
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      await handleAcknowledgeReserva(r);
-                    }}
-                    className="w-full mt-2.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer"
-                  >
-                    ✓ REVISADO (Quitar de Nuevas)
-                  </button>
+                  <div className="flex gap-2 mt-2.5">
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await handleAcknowledgeReserva(r);
+                      }}
+                      title="Revisado (quitar de Nuevas)"
+                      className="flex-[1.3] py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer"
+                    >
+                      ✓ REVISADO
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const start = calendarStartFor(r.check_in);
+                        if (start) {
+                          try { sessionStorage.setItem(CALENDAR_START_KEY, start); } catch {}
+                        }
+                        router.push('/calendario');
+                      }}
+                      className="flex-1 py-2.5 bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-300 font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer"
+                    >
+                      📅 CALENDARIO
+                    </button>
+                  </div>
                 )}
 
                 {userRole === 'admin' && activeTab === 'Sin Anticipo' && (
