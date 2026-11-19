@@ -430,13 +430,22 @@ export async function hasOtaMessageBeenSent(
   return false;
 }
 
-/** Tras un envío fallido a la bandeja de una OTA se espera esto antes de reintentar (igual que el cron de WhatsApp) */
-export const OTA_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
+/**
+ * Espera antes de reintentar un envío fallido a la bandeja de una OTA, según los fallos de las últimas 24 h: el primero se reintenta en
+ * la siguiente ejecución del cron (Expedia rechaza un mensaje enviado unos segundos después de crearse la reserva), el segundo a los
+ * 15 min y a partir del tercero cada 30 min.
+ */
+export function otaRetryCooldownMs(failuresLast24h: number): number {
+  if (failuresLast24h <= 1) return 4 * 60 * 1000;
+  if (failuresLast24h === 2) return 15 * 60 * 1000;
+  return 30 * 60 * 1000;
+}
+
 /** Máximo de envíos fallidos de un mismo mensaje a una misma reserva en 24 h; pasado el tope no se insiste hasta el día siguiente */
 export const OTA_MAX_FAILURES_PER_DAY = 6;
 
 /**
- * ¿Se debe esperar antes de reintentar este mensaje a esta reserva? true si el último fallo fue hace menos de 30 minutos
+ * ¿Se debe esperar antes de reintentar este mensaje a esta reserva? true si el último fallo es más reciente que la espera (otaRetryCooldownMs)
  * o ya hubo OTA_MAX_FAILURES_PER_DAY fallos en las últimas 24 h. Ante un error al consultar el registro, no bloquea.
  */
 export async function shouldBackOffOtaRetry(
@@ -457,7 +466,7 @@ export async function shouldBackOffOtaRetry(
     if (error || !data || data.length === 0) return false;
     if (data.length >= OTA_MAX_FAILURES_PER_DAY) return true;
     const last = Date.parse(String(data[0].created_at));
-    return !isNaN(last) && Date.now() - last < OTA_RETRY_COOLDOWN_MS;
+    return !isNaN(last) && Date.now() - last < otaRetryCooldownMs(data.length);
   } catch {
     return false;
   }
