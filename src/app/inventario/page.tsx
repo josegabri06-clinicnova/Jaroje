@@ -317,10 +317,27 @@ export default function InventarioPage() {
     setIsSubmitting(false);
   };
 
-  // Los botones − y + suman o restan UNA unidad por toque. Antes abrían un cuadro de texto ("¿qué cantidad deseas sumar?") y lo que
-  // se escribía se SUMABA al stock (3 + 10 = 13), en vez de fijar el valor. Para poner una cantidad exacta se edita el artículo.
-  const handleAdjustStock = async (item: InventoryItem, direction: 'add' | 'remove') => {
-    await updateStock(item.id, item.stock, direction === 'add' ? 1 : -1);
+  // Los botones − y + abren un cuadro que pregunta la CANTIDAD de piezas y registran UNA sola entrada (+) o salida (−) con ese número.
+  // El stock ya no se modifica a mano desde la edición del artículo: todo movimiento queda como entrada o salida en el historial.
+  const [stockDialog, setStockDialog] = useState<{ item: InventoryItem; direction: 'add' | 'remove' } | null>(null);
+  const [stockQty, setStockQty] = useState('1');
+
+  const handleAdjustStock = (item: InventoryItem, direction: 'add' | 'remove') => {
+    setStockQty('1');
+    setStockDialog({ item, direction });
+  };
+
+  // Solo piezas enteras, de 1 a 1.000.000 por movimiento (así un error de tecleo no desborda la columna de la base); una salida no puede superar el stock
+  const MAX_MOVEMENT = 1_000_000;
+  const stockQtyNumber = Number(stockQty);
+  const stockQtyValid = stockQty.trim() !== '' && Number.isInteger(stockQtyNumber) && stockQtyNumber >= 1 && stockQtyNumber <= MAX_MOVEMENT
+    && (stockDialog?.direction !== 'remove' || stockQtyNumber <= (stockDialog?.item.stock ?? 0));
+
+  const confirmStockMovement = async () => {
+    if (!stockDialog || !stockQtyValid) return;
+    const { item, direction } = stockDialog;
+    setStockDialog(null);
+    await updateStock(item.id, item.stock, direction === 'add' ? stockQtyNumber : -stockQtyNumber);
   };
 
   const isMobileOrPWA = () => {
@@ -441,8 +458,8 @@ export default function InventarioPage() {
               employee_name: empName,
               department: empDept,
               module: 'inventario',
-              action: 'ajuste_stock',
-              details: `Ajustó stock de ${targetItem.item_name} (${targetItem.category}): ${currentStock} ➔ ${currentStock + change} (Cambio: ${change > 0 ? '+' : ''}${change})`
+              action: change > 0 ? 'entrada_stock' : 'salida_stock',
+              details: `${change > 0 ? 'Entrada' : 'Salida'} de ${Math.abs(change)} ${Math.abs(change) === 1 ? 'pieza' : 'piezas'} de ${targetItem.item_name} (${targetItem.category}): ${currentStock} ➔ ${currentStock + change}`
             })
           });
         } catch (logErr) {
@@ -460,7 +477,7 @@ export default function InventarioPage() {
   // "Blancos" sin avisar. Ahora, si la categoría no está permitida, se devuelve un error que la nombra y no se guarda nada.
   const executeInventoryDbAction = async (
     action: 'insert' | 'update',
-    payload: { item_name: string; category: string; stock: number; min_stock: number },
+    payload: { item_name: string; category: string; stock?: number; min_stock: number },
     empName: string,
     itemId?: string
   ) => {
@@ -474,7 +491,9 @@ export default function InventarioPage() {
     const forms = [...new Set([category, category.toLowerCase(), categoryKey(category) === 'otros' ? 'otro' : ''].filter(Boolean))];
     let lastError: any = null;
     for (const form of forms) {
-      const itemData = { item_name: payload.item_name, category: form, stock: payload.stock, min_stock: payload.min_stock };
+      // Al editar un artículo no se envía el stock (solo cambia con entradas y salidas); al crearlo va el stock inicial
+      const itemData: Record<string, unknown> = { item_name: payload.item_name, category: form, min_stock: payload.min_stock };
+      if (payload.stock !== undefined) itemData.stock = payload.stock;
       let res = await run({ ...itemData, last_updated_by: empName });
       // Si el esquema no tiene la columna last_updated_by, se reintenta sin ella (la categoría no cambia)
       if (res.error && !isCategoryCheckViolation(res.error)) res = await run(itemData);
@@ -571,7 +590,6 @@ export default function InventarioPage() {
     const updated = {
       item_name: formName.trim(),
       category: formCategory || editingItem.category || 'Blancos',
-      stock: Math.max(0, parseInt(formStock) || 0),
       min_stock: Math.max(0, parseInt(formMinStock) || 0)
     };
 
@@ -595,7 +613,7 @@ export default function InventarioPage() {
             department: empDept,
             module: 'inventario',
             action: 'actualizacion_articulo',
-            details: `Modificó parámetros de ${editingItem.item_name} ➔ ${updated.item_name} | Stock: ${updated.stock} | Categoría: ${updated.category}`
+            details: `Modificó parámetros de ${editingItem.item_name} ➔ ${updated.item_name} | Mínimo: ${updated.min_stock} | Categoría: ${updated.category}`
           })
         });
       } catch (logErr) {
@@ -878,14 +896,22 @@ export default function InventarioPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 block">Stock Actual</label>
-                  <input 
-                    type="number" 
-                    value={formStock} onChange={e => setFormStock(e.target.value)}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-base font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/20"
-                  />
-                </div>
+                {isAdding ? (
+                  <div>
+                    <label className="text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 block">Stock Inicial</label>
+                    <input
+                      type="number"
+                      value={formStock} onChange={e => setFormStock(e.target.value)}
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-base font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/20"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 block">Stock Actual</label>
+                    <div className="w-full bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-3 text-base font-semibold text-zinc-900">{editingItem?.stock ?? 0}</div>
+                    <p className="text-[11px] text-zinc-400 mt-1 leading-snug">Para cambiarlo usa + o − en la lista: queda registrado como entrada o salida.</p>
+                  </div>
+                )}
                 <div>
                   <label className="text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 block">Mínimo Alerta</label>
                   <input 
@@ -915,6 +941,58 @@ export default function InventarioPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de entrada / salida de piezas (botones + y −) */}
+      {stockDialog && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 fade-in-20 duration-300">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-zinc-900">
+                {stockDialog.direction === 'add' ? 'Entrada de piezas' : 'Salida de piezas'}
+              </h3>
+              <button onClick={() => setStockDialog(null)} className="p-2 bg-zinc-100 rounded-full text-zinc-500">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-[14px] font-bold text-zinc-900">{stockDialog.item.item_name}</p>
+            <p className="text-[12px] text-zinc-500 mb-4">Stock actual: {stockDialog.item.stock}</p>
+
+            <label className="text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 block">
+              {stockDialog.direction === 'add' ? '¿Cuántas piezas entran?' : '¿Cuántas piezas salen?'}
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={stockDialog.direction === 'remove' ? stockDialog.item.stock : undefined}
+              autoFocus
+              value={stockQty}
+              onChange={e => setStockQty(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmStockMovement(); }}
+              className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-base font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/20"
+            />
+            {stockQtyValid ? (
+              <p className="text-[12px] text-zinc-500 mt-2">
+                Quedará en <strong className="text-zinc-900">{stockDialog.item.stock + (stockDialog.direction === 'add' ? stockQtyNumber : -stockQtyNumber)}</strong>
+              </p>
+            ) : (
+              <p className="text-[12px] text-rose-600 mt-2">
+                {stockDialog.direction === 'remove' && stockQtyNumber > stockDialog.item.stock
+                  ? `No hay tantas piezas: solo hay ${stockDialog.item.stock}.`
+                  : 'Escribe un número entero de piezas, de 1 a 1.000.000.'}
+              </p>
+            )}
+
+            <button
+              disabled={!stockQtyValid}
+              onClick={confirmStockMovement}
+              className={`mt-5 w-full rounded-xl h-[52px] font-bold text-[15px] shadow-lg transition-colors disabled:opacity-50 text-white ${stockDialog.direction === 'add' ? 'bg-zinc-900 hover:bg-black' : 'bg-rose-600 hover:bg-rose-700'}`}
+            >
+              {stockDialog.direction === 'add' ? 'Registrar entrada' : 'Registrar salida'}
+            </button>
           </div>
         </div>
       )}

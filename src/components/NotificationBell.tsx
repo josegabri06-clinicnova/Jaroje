@@ -251,6 +251,8 @@ const mapLogsToEvents = (logsData: any[]): HistoryEvent[] => {
       'eliminacion_tarea': 'Tarea Eliminada ✕',
       // Inventario
       'ajuste_stock': 'Ajuste de Almacén 📦',
+      'entrada_stock': 'Entrada de Almacén 📦',
+      'salida_stock': 'Salida de Almacén 📦',
       'nuevo_articulo': 'Artículo Creado 📦',
       'actualizacion_articulo': 'Parámetros Actualizados 📦',
       'eliminar_articulo': 'Artículo Eliminado ✕',
