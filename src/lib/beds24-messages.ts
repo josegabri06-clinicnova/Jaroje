@@ -73,6 +73,9 @@ function getSiteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app').replace(/\/+$/, '');
 }
 
+/** Ventana de reseñas de Google de Condominios Jaroje: a donde llevan los mensajes de "escribir reseña" / "calificar alojamiento" */
+const GOOGLE_REVIEW_URL = 'https://search.google.com/local/writereview?placeid=ChIJtR2f_RQhv4URUvrE9TP3xBo';
+
 /**
  * Genera el texto EXACTO oficial de las plantillas de Meta para su envío en centros de mensajes de OTAs
  */
@@ -339,7 +342,7 @@ export function getOfficialOtaTemplateText(
           `If anything did not meet your expectations, please let us know so we can help.\n\n` +
           `If you consider that your experience was ⭐⭐⭐⭐⭐, we would love for you to share your review.`;
         if (allowLinks) {
-          msg += `\n\n👇 Write a review\n${portalUrl}`;
+          msg += `\n\n👇 Write a review\n${GOOGLE_REVIEW_URL}`;
         }
         return msg;
       } else {
@@ -350,7 +353,7 @@ export function getOfficialOtaTemplateText(
           `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
           `Si consideras que tu experiencia fue de ⭐⭐⭐⭐⭐, nos encantará que compartas tu opinión.`;
         if (allowLinks) {
-          msg += `\n\n👇 Escribir reseña\n${portalUrl}`;
+          msg += `\n\n👇 Escribir reseña\n${GOOGLE_REVIEW_URL}`;
         }
         return msg;
       }
@@ -363,7 +366,7 @@ export function getOfficialOtaTemplateText(
           `If anything did not meet your expectations, please let us know so we can help.\n\n` +
           `If your experience was ⭐⭐⭐⭐⭐, we would be delighted if you could share your review. Your review helps other travelers choose us with greater confidence and motivates us to keep improving.`;
         if (allowLinks) {
-          msg += `\n\n👇 Rate accommodation\n${portalUrl}`;
+          msg += `\n\n👇 Rate accommodation\n${GOOGLE_REVIEW_URL}`;
         }
         return msg;
       } else {
@@ -373,7 +376,7 @@ export function getOfficialOtaTemplateText(
           `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
           `Si tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.`;
         if (allowLinks) {
-          msg += `\n\n👇 Calificar alojamiento\n${portalUrl}`;
+          msg += `\n\n👇 Calificar alojamiento\n${GOOGLE_REVIEW_URL}`;
         }
         return msg;
       }
