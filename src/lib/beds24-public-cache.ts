@@ -22,6 +22,7 @@
 import { fetchAllRawBeds24Bookings, fetchBeds24RatesMap } from '@/lib/beds24';
 import { knownRemainingCredits } from '@/lib/beds24-credits';
 import { readOccupancyFromMirror } from '@/lib/availability-mirror';
+import { readRatesFromMirror } from '@/lib/rates-mirror';
 
 export const PUBLIC_TTL_MS = 90_000;
 export const PUBLIC_STALE_MAX_MS = 10 * 60_000;
@@ -131,11 +132,16 @@ export async function publicBookings(checkIn: string, checkOut: string): Promise
   return memo(bookingsStore, `${from}|${to}`, () => fetchAllRawBeds24Bookings(from, to, false, false, 'publico:disponibilidad', true), (v) => Array.isArray(v), EST_COST_BOOKINGS);
 }
 
-/** Tarifas del calendario de Beds24 para la estancia (un resultado sin ninguna habitación se considera fallo y no se guarda) */
-export function publicRates(token: string, checkIn: string, checkOut: string): Promise<Record<string, Record<string, number>>> {
+/**
+ * Tarifas para la estancia: primero de la copia de Supabase (sin créditos ni límite de consultas) y, si no es fiable, del calendario de
+ * Beds24 (un resultado sin ninguna habitación se considera fallo y no se guarda). El token se pide solo si hace falta consultar Beds24.
+ */
+export async function publicRates(token: string | (() => Promise<string>), checkIn: string, checkOut: string): Promise<Record<string, Record<string, number>>> {
+  const fromMirror = await readRatesFromMirror(checkIn, checkOut);
+  if (fromMirror) return fromMirror;
   const from = startOfMonth(checkIn);
   const to = endOfMonth(checkOut);
-  return memo(ratesStore, `${from}|${to}`, () => fetchBeds24RatesMap(token, from, to, 'publico:tarifas'), (v) => Object.keys(v).length > 0, EST_COST_RATES, PUBLIC_RATES_TTL_MS, PUBLIC_RATES_STALE_MAX_MS);
+  return memo(ratesStore, `${from}|${to}`, async () => fetchBeds24RatesMap(typeof token === 'function' ? await token() : token, from, to, 'publico:tarifas'), (v) => Object.keys(v).length > 0, EST_COST_RATES, PUBLIC_RATES_TTL_MS, PUBLIC_RATES_STALE_MAX_MS);
 }
 
 // ── Portal del huésped: consulta a Beds24 por número de reserva cuando no está en nuestras tablas ──

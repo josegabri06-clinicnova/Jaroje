@@ -858,14 +858,15 @@ export async function fetchBeds24RatesMap(
         roomItem.calendar.forEach((range: any) => {
           const dailyPrice = range.price1 || range.price || 0;
           if (dailyPrice > 0 && range.from && range.to) {
-            const start = new Date(range.from + 'T00:00:00');
-            const end = new Date(range.to + 'T00:00:00');
+            // En UTC (no en la hora local del servidor): con la hora local las fechas se corrían un día en servidores fuera de UTC
+            const start = new Date(range.from + 'T00:00:00Z');
+            const end = new Date(range.to + 'T00:00:00Z');
             if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
               const current = new Date(start);
               while (current <= end) {
                 const dateStr = current.toISOString().split('T')[0];
                 ratesMap[roomId][dateStr] = Number(dailyPrice);
-                current.setDate(current.getDate() + 1);
+                current.setUTCDate(current.getUTCDate() + 1);
               }
             }
           }

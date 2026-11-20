@@ -170,13 +170,11 @@ export async function POST(req: Request) {
     const effectiveGuests = totalGuests;
     const extraGuestsFee = extraGuests * 500 * nights;
 
-    // Obtener token y mapa oficial de tarifas de Beds24 junto con pricing_unit_settings en paralelo
-    const token = await getBeds24Token();
-
+    // Mapa de tarifas (copia de Supabase; Beds24 solo si hace falta, y entonces pide su token) junto con pricing_unit_settings en paralelo
     const [beds24RatesMap, dynamicSettings] = await Promise.all([
       (async () => {
         try {
-          return await publicRates(token, cleanCheckIn, cleanCheckOut);
+          return await publicRates(getBeds24Token, cleanCheckIn, cleanCheckOut);
         } catch (tokenErr) {
           console.warn("[Cotizacion API] Failed to fetch Beds24 calendar rates:", tokenErr);
           return {} as Record<string, Record<string, number>>;

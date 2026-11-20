@@ -15,6 +15,7 @@ import {
 import { RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
 import { changePin, logout } from '@/lib/auth';
 import { createDbClient } from '@/lib/db-client';
+import RatesSyncCard from './RatesSyncCard';
 
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
 const supabase = createDbClient();
@@ -2048,6 +2049,7 @@ export default function AjustesPage() {
         onToggle={() => toggleSection('portal_pagos')}
       >
         <div className="space-y-4 py-1">
+          <RatesSyncCard />
           <div className="flex flex-col gap-1">
             <span className="text-[13px] font-bold text-zinc-900">Cuenta de Transferencia por Defecto</span>
             <p className="text-[11.5px] text-zinc-500 font-sans leading-normal">

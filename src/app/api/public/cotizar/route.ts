@@ -320,19 +320,11 @@ export async function GET(req: Request) {
     // pricing_unit_settings y reservas locales de Supabase (antes se pedían una tras otra de forma secuencial).
     // Solo hacen falta las reservas que puedan solaparse con la estancia: llegada hasta 180 días antes del check-in
     // y antes del check-out (sin detalle de facturación `includeInvoiceItems: false`, que reduce el payload un 80%).
-    let beds24Token: string | null = null;
-    try {
-      beds24Token = await getBeds24Token();
-    } catch (tokenErr) {
-      console.warn("[Cotizar API] Failed to get Beds24 token:", tokenErr);
-    }
-
     const [bookingsRaw, ratesResult, dynamicSettings, localBookings] = await Promise.all([
       publicBookings(cleanCheckIn, cleanCheckOut),
       (async () => {
-        if (!beds24Token) return {} as Record<string, Record<string, number>>;
         try {
-          return await publicRates(beds24Token, cleanCheckIn, cleanCheckOut);
+          return await publicRates(getBeds24Token, cleanCheckIn, cleanCheckOut);
         } catch (ratesErr) {
           console.warn("[Cotizar API] Failed to fetch Beds24 calendar rates:", ratesErr);
           return {} as Record<string, Record<string, number>>;
