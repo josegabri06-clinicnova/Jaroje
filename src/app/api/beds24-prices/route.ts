@@ -1,4 +1,4 @@
-import { syncRatesFromBeds24 } from '@/lib/rates-mirror';
+import { writeRatesToMirror } from '@/lib/rates-mirror';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Token, getSeason, getAllChildRoomIds } from '@/lib/beds24';
@@ -376,8 +376,8 @@ export async function PUT(req: Request) {
       );
     }
 
-    // La copia de tarifas del portal de venta se refresca al momento (si falla, la actualiza el cron en unas horas)
-    await syncRatesFromBeds24().catch((e) => console.warn('[beds24-prices] No se pudo refrescar la copia de tarifas:', e?.message));
+    // La copia de tarifas del portal de venta refleja al momento lo que acaba de aceptar Beds24 (sin consultas ni créditos)
+    await writeRatesToMirror(payload);
 
     return NextResponse.json({ success: true, roomId, priceRaw, ranges: calendarEntries });
 

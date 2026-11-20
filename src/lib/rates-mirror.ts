@@ -12,8 +12,11 @@ import { fetchBeds24RatesMap, getBeds24Token } from '@/lib/beds24';
 import { fetchAllRows } from '@/lib/fetch-all-rows';
 import type { RatesMap } from '@/lib/rates-guard';
 
-// Si la copia lleva más de esto sin actualizarse (cron parado, Beds24 caído mucho rato) no se fía de ella y se vuelve a Beds24.
+// La copia solo se usa si se completó una sincronización COMPLETA (todas las habitaciones y fechas) en las últimas 24 h. Los cambios
+// sueltos de precio (writeRatesToMirror) no cuentan: una copia con solo algunas habitaciones mostraría solo esas en el portal.
+// Si el cron se para o Beds24 falla mucho rato, pasadas 24 h no se fía de ella y se vuelve a Beds24.
 export const RATES_MIRROR_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const SYNCED_AT_KEY = 'rates_mirror_synced_at';
 
 // Beds24 solo permite reservar hasta 365 días vista (booking-window.ts): se copia un poco más para cubrir la última noche reservable.
 const SYNC_DAYS_BACK = 1;
@@ -27,7 +30,7 @@ const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) 
 
 /**
  * Tarifas de la copia para la estancia (mismo formato que fetchBeds24RatesMap: { habitación: { 'AAAA-MM-DD': precio } }),
- * o null si no se puede fiar de la copia: error de lectura, más de 24 h sin actualizar, o alguna noche de la estancia sin ninguna
+ * o null si no se puede fiar de la copia: error de lectura, sin una sincronización completa en las últimas 24 h, o alguna noche de la estancia sin ninguna
  * tarifa (p. ej. fuera de lo copiado). Entonces el que llama debe consultar Beds24, como antes.
  */
 export async function readRatesFromMirror(checkInRaw: string, checkOutRaw: string): Promise<RatesMap | null> {
@@ -36,7 +39,7 @@ export async function readRatesFromMirror(checkInRaw: string, checkOutRaw: strin
   if (!isoDay.test(checkIn) || !isoDay.test(checkOut) || checkIn >= checkOut) return null;
 
   try {
-    const [rows, newest] = await Promise.all([
+    const [rows, synced] = await Promise.all([
       fetchAllRows<{ room_id: string; date: string; price: number }>((a, b) => supabase
         .from('beds24_rates')
         .select('room_id, date, price')
@@ -45,15 +48,15 @@ export async function readRatesFromMirror(checkInRaw: string, checkOutRaw: strin
         .order('room_id', { ascending: true })
         .order('date', { ascending: true })
         .range(a, b)),
-      supabase.from('beds24_rates').select('updated_at').order('updated_at', { ascending: false }).limit(1),
+      supabase.from('settings').select('value').eq('key', SYNCED_AT_KEY).maybeSingle(),
     ]);
 
-    if (rows.error || newest.error || !rows.data) {
+    if (rows.error || synced.error || !rows.data) {
       console.warn('[Rates Mirror] No se pudo leer la copia de tarifas.');
       return null;
     }
-    const newestAt = Date.parse(String(newest.data?.[0]?.updated_at ?? ''));
-    if (!Number.isFinite(newestAt) || Date.now() - newestAt > RATES_MIRROR_MAX_AGE_MS) {
+    const syncedAt = Date.parse(String(synced.data?.value ?? '').replace(/^"|"$/g, ''));
+    if (!Number.isFinite(syncedAt) || Date.now() - syncedAt > RATES_MIRROR_MAX_AGE_MS) {
       console.warn('[Rates Mirror] La copia de tarifas está vacía o desactualizada; se consulta Beds24.');
       return null;
     }
@@ -74,6 +77,44 @@ export async function readRatesFromMirror(checkInRaw: string, checkOutRaw: strin
   } catch (err) {
     console.warn('[Rates Mirror] Error leyendo la copia de tarifas:', (err as Error)?.message);
     return null;
+  }
+}
+
+/**
+ * Refleja en la copia las tarifas que la app acaba de ESCRIBIR en el calendario de Beds24 (mismo formato que se envía a Beds24:
+ * [{ roomId, calendar: [{ from, to, price1 }] }]). Sin consultar a Beds24 (no gasta créditos) y al momento, aunque se cambien
+ * precios de varias habitaciones seguidas. Llamar SOLO después de que Beds24 aceptó el cambio. Nunca lanza error: si falla, la copia
+ * se corrige sola en la siguiente sincronización (cron cada 6 horas). Solo toca las noches que la copia cubre (hoy -> ~1 año).
+ */
+export async function writeRatesToMirror(payload: { roomId: number | string; calendar?: { from?: string; to?: string; price1?: number }[] }[]): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    const today = now.slice(0, 10);
+    const first = addDays(today, -SYNC_DAYS_BACK);
+    const last = addDays(today, SYNC_DAYS_AHEAD);
+    const byKey = new Map<string, { room_id: string; date: string; price: number; updated_at: string }>();
+
+    for (const room of payload || []) {
+      const roomId = String(room?.roomId ?? '');
+      if (!roomId) continue;
+      for (const entry of room.calendar || []) {
+        const price = Number(entry?.price1);
+        const from = String(entry?.from ?? '');
+        const to = String(entry?.to ?? entry?.from ?? '');
+        if (!(price > 0) || !isoDay.test(from) || !isoDay.test(to)) continue;
+        const start = from < first ? first : from;
+        const end = to > last ? last : to;
+        for (let d = start; d <= end; d = addDays(d, 1)) byKey.set(`${roomId}|${d}`, { room_id: roomId, date: d, price, updated_at: now });
+      }
+    }
+
+    const rows = [...byKey.values()];
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await supabase.from('beds24_rates').upsert(rows.slice(i, i + 500), { onConflict: 'room_id,date' });
+      if (error) { console.warn('[Rates Mirror] No se pudo reflejar el cambio de tarifas en la copia:', error.message); return; }
+    }
+  } catch (err) {
+    console.warn('[Rates Mirror] Error reflejando el cambio de tarifas en la copia:', (err as Error)?.message);
   }
 }
 
@@ -125,5 +166,10 @@ export async function syncRatesFromBeds24(): Promise<RatesSyncResult> {
   await supabase.from('beds24_rates').delete().lt('date', addDays(today, -7));
 
   result.ok = result.failedChunks === 0;
+  // Solo una sincronización completa y sin fallos da por buena la copia
+  if (result.ok) {
+    const { error } = await supabase.from('settings').upsert({ key: SYNCED_AT_KEY, value: startedAt }, { onConflict: 'key' });
+    if (error) { console.error('[Rates Sync] No se pudo registrar la sincronización:', error.message); result.ok = false; }
+  }
   return result;
 }

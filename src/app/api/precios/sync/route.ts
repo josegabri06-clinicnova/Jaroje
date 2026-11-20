@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getSeason, pushRatesToBeds24, JAROJE_PRICES } from '@/lib/beds24';
-import { syncRatesFromBeds24 } from '@/lib/rates-mirror';
+import { writeRatesToMirror } from '@/lib/rates-mirror';
 
 export const dynamic = 'force-dynamic';
 
@@ -186,8 +186,8 @@ async function handleSync(req: Request, checkAuth: boolean) {
     // 4. Empujar todas las tarifas a Beds24 en una sola petición para evitar el límite de créditos/peticiones (Rate Limit)
     console.log(`[Sync API] Sincronizando ${ratesPayload.length} habitaciones a Beds24 en una sola petición...`);
     await pushRatesToBeds24(ratesPayload);
-    // La copia de tarifas del portal de venta se refresca al momento (si falla, la actualiza el cron en unas horas)
-    await syncRatesFromBeds24().catch((e) => console.warn('[Sync API] No se pudo refrescar la copia de tarifas:', e?.message));
+    // La copia de tarifas del portal de venta refleja al momento lo que acaba de aceptar Beds24 (sin consultas ni créditos)
+    await writeRatesToMirror(ratesPayload);
 
     return NextResponse.json({ 
       success: true, 
