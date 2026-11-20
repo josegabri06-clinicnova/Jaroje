@@ -1,5 +1,5 @@
 export const RECEPTION_WA_GROUP_URL = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=cl&p=i&iam=2';
-export const MAINTENANCE_WA_GROUP_URL = 'https://chat.whatsapp.com/K2u4HU8kxVmGREYaZSkuZ6?s=cl&p=i&ilr=4&iam=0';
+export const MAINTENANCE_WA_GROUP_URL = 'https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq?s=cl&p=i&iam=2';
 
 // Los enlaces de archivos del servidor son relativos (/api/files/...): en un mensaje de WhatsApp deben ir completos
 function absoluteFileUrl(url: string): string {
@@ -144,7 +144,7 @@ export function getActiveReceptionWaGroupUrl(): string {
 
 export function getActiveMaintenanceWaGroupUrl(): string {
   if (typeof window !== 'undefined') {
-    const cached = localStorage.getItem('jaroje_maintenance_wa_group_url');
+    const cached = localStorage.getItem('jaroje_maintenance_wa_group_url_v2');
     if (cached && cached.startsWith('http')) return cached;
   }
   return MAINTENANCE_WA_GROUP_URL;
