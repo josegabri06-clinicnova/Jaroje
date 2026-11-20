@@ -21,6 +21,7 @@
  */
 import { fetchAllRawBeds24Bookings, fetchBeds24RatesMap } from '@/lib/beds24';
 import { knownRemainingCredits } from '@/lib/beds24-credits';
+import { readOccupancyFromMirror } from '@/lib/availability-mirror';
 
 export const PUBLIC_TTL_MS = 90_000;
 export const PUBLIC_STALE_MAX_MS = 10 * 60_000;
@@ -120,8 +121,11 @@ const shiftDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`
 const bookingsStore = newStore<any[]>();
 const ratesStore = newStore<Record<string, Record<string, number>>>();
 
-/** Reservas de Beds24 que pueden solaparse con la estancia (llegadas desde 180 días antes del check-in hasta el check-out) */
-export function publicBookings(checkIn: string, checkOut: string): Promise<any[]> {
+/** Reservas que pueden solaparse con la estancia: de la copia de Supabase y, si no es fiable, de Beds24 (llegadas desde 180 días antes del check-in hasta el check-out) */
+export async function publicBookings(checkIn: string, checkOut: string): Promise<any[]> {
+  // Primero la copia de Supabase (no gasta créditos). Solo si no es fiable (error o muy antigua) se consulta Beds24, con su caché y presupuesto.
+  const fromMirror = await readOccupancyFromMirror(checkIn, checkOut);
+  if (fromMirror) return fromMirror;
   const from = startOfMonth(shiftDays(checkIn, -180));
   const to = endOfMonth(checkOut);
   return memo(bookingsStore, `${from}|${to}`, () => fetchAllRawBeds24Bookings(from, to, false, false, 'publico:disponibilidad', true), (v) => Array.isArray(v), EST_COST_BOOKINGS);

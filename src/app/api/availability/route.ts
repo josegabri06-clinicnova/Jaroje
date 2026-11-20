@@ -8,6 +8,7 @@ import {
   getAverageRatesForDates,
   getChildRoomId
 } from '@/lib/beds24';
+import { readOccupancyFromMirror } from '@/lib/availability-mirror';
 
 export const dynamic = 'force-dynamic';
 
@@ -116,7 +117,9 @@ export async function GET(req: Request) {
     toDate.setDate(today.getDate() + 1000);
     const arrivalTo = toDate.toISOString().split('T')[0];
 
-    const bookingsRaw = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo, false, true, 'personal:availability');
+    // Copia de Supabase (sin créditos); si no es fiable, el listado completo de Beds24 como antes
+    const bookingsRaw = (await readOccupancyFromMirror(checkIn, checkOut))
+      ?? await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo, false, true, 'personal:availability');
     const bookingsData = { data: bookingsRaw };
 
     // Obtener las tarifas del calendario de Beds24 para el rango solicitado
