@@ -9,6 +9,7 @@ import {
   getChildRoomId
 } from '@/lib/beds24';
 import { readOccupancyFromMirror } from '@/lib/availability-mirror';
+import { readRatesFromMirror } from '@/lib/rates-mirror';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,8 +126,9 @@ export async function GET(req: Request) {
     // Obtener las tarifas del calendario de Beds24 para el rango solicitado
     let beds24RatesMap: Record<string, Record<string, number>> = {};
     try {
-      const BEDS24_TOKEN = await getBeds24Token();
-      beds24RatesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, checkIn, checkOut, 'personal:availability');
+      // Copia de Supabase (sin créditos); si no es fiable, el calendario de Beds24 como antes
+      beds24RatesMap = (await readRatesFromMirror(checkIn, checkOut))
+        ?? await fetchBeds24RatesMap(await getBeds24Token(), checkIn, checkOut, 'personal:availability');
     } catch (tokenErr) {
       console.warn("[Availability API] Failed to fetch Beds24 token or calendar rates:", tokenErr);
     }
