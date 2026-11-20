@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { getBeds24Bookings, getBeds24Token, clearBeds24Cache, areBookingsInSameGroup, extractPhoneFromBookingData, updateBeds24BookingPhone } from '@/lib/beds24';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
+import { readBeds24BookingsFromMirror } from '@/lib/beds24-mirror';
 import {
   normalizePhone,
   sendTemplate1_SolicitudRecibida,
@@ -24,6 +25,11 @@ import { expediaNeedsArrivalReminder } from '@/lib/expedia-payable';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // Hasta 5 minutos de ejecución continua en Vercel Pro
+
+// El cron corre cada 5 minutos, pero el listado COMPLETO de Beds24 (que gasta créditos de toda la cuenta) solo se pide cada tantos minutos.
+// El resto de ejecuciones leen la copia de reservas de Supabase, que el webhook de Beds24 mantiene al día reserva a reserva.
+// El listado completo sigue siendo la red de seguridad: corrige lo que el webhook no haya traído y limpia las canceladas.
+const LIVE_SYNC_EVERY_MIN = 15;
 
 // Limpia y normaliza el número de habitación (por ejemplo, extrae "401" de "Casa Vacacional de 3 dormitorios (401)")
 function getCleanRoom(roomName: string, roomField: string): string {
@@ -100,8 +106,23 @@ export async function GET(req: Request) {
 
     // 1. (La tabla whatsapp_logs ya existe y se gestiona solo desde Supabase: el cron no ejecuta SQL.)
 
-    // 2. Obtener reservaciones de Beds24
-    const beds24Reservas = await getBeds24Bookings(true, false, false, 'cron:whatsapp');
+    // 2. Obtener reservaciones de Beds24: listado completo en vivo cada LIVE_SYNC_EVERY_MIN minutos; el resto de veces, la copia de Supabase.
+    // Si Beds24 falla (p. ej. sin créditos), el cron sigue con la copia en vez de pararse.
+    let beds24Reservas: Awaited<ReturnType<typeof getBeds24Bookings>> | null = null;
+    let beds24DataIsLive = false;
+    if (new Date().getUTCMinutes() % LIVE_SYNC_EVERY_MIN < 5) {
+      try {
+        beds24Reservas = await getBeds24Bookings(true, false, false, 'cron:whatsapp');
+        beds24DataIsLive = true;
+      } catch (liveErr) {
+        console.warn('[Cron WhatsApp] Beds24 no respondió; se usa la copia de reservas de Supabase:', (liveErr as Error)?.message);
+      }
+    }
+    if (!beds24Reservas) beds24Reservas = await readBeds24BookingsFromMirror();
+    if (!beds24Reservas) {
+      beds24Reservas = await getBeds24Bookings(true, false, false, 'cron:whatsapp');
+      beds24DataIsLive = true;
+    }
 
     // 3. Obtener reservaciones locales de Supabase
     const { data: localRes } = await supabase
@@ -494,7 +515,8 @@ export async function GET(req: Request) {
         const channelLower = String(booking.channel || '').toLowerCase();
         const isPrepaidOtaBooking = ['airbnb', 'booking', 'vrbo', 'expedia'].some(ota => channelLower.includes(ota));
 
-        if (!isCancelled && !hasDeposit && sentAtStr && !isPrepaidOtaBooking) {
+        // Solo con datos EN VIVO de Beds24: cancelar es irreversible y no debe decidirse con una copia que pueda ir unos minutos atrasada (el límite es de 3 h, un retraso de minutos no importa)
+        if (beds24DataIsLive && !isCancelled && !hasDeposit && sentAtStr && !isPrepaidOtaBooking) {
           const sentAt = new Date(sentAtStr);
           // Margen de 3 horas desde que recepción envió el último aviso desde la app
           const limitTime = new Date(sentAt.getTime() + 3 * 60 * 60 * 1000); 
@@ -857,6 +879,7 @@ export async function GET(req: Request) {
       mexicoTime: new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
       hourChecked: currentHour,
       bookingsProcessed: allBookings.length,
+      dataSource: beds24DataIsLive ? 'beds24-live' : 'supabase',
       actionsTaken: reports
     });
 
