@@ -145,6 +145,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/ajustes') ||
     pathname.startsWith('/panel') ||
     pathname.startsWith('/api/beds24-auth') ||
+    pathname === '/api/admin/rates-sync' ||
     pathname === '/api/settings/pins' ||
     pathname === '/api/settings/recovery-key'
   ) {
