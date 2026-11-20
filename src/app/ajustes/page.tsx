@@ -682,7 +682,7 @@ export default function AjustesPage() {
       if (!error && data && data.value) {
         setMaintenanceWaGroupUrl(String(data.value));
         if (typeof window !== 'undefined') {
-          localStorage.setItem('jaroje_maintenance_wa_group_url', String(data.value));
+          localStorage.setItem('jaroje_maintenance_wa_group_url_v2', String(data.value));
         }
       }
     } catch (e) {
@@ -699,7 +699,7 @@ export default function AjustesPage() {
         .upsert({ key: 'maintenance_wa_group_url', value: url }, { onConflict: 'key' });
       if (error) throw error;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('jaroje_maintenance_wa_group_url', url);
+        localStorage.setItem('jaroje_maintenance_wa_group_url_v2', url);
       }
       setToastMessage("✅ Enlace del Grupo de Mantenimiento actualizado.");
       setTimeout(() => setToastMessage(''), 3000);
