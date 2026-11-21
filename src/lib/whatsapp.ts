@@ -1852,6 +1852,13 @@ export function computeDepositPercent(amount: unknown, total: unknown): number |
   return Math.min(100, Math.max(1, Math.round((a / t) * 100)));
 }
 
+// Si Meta responde que la plantilla nueva no existe / no está aprobada / tiene otro formato, no se vuelve a intentar durante unos minutos:
+// cada intento fallido son varias llamadas a Meta (reintentos por idioma y sin botón) que retrasan la respuesta al huésped.
+// Vive en la memoria de cada instancia del servidor; se limpia sola al pasar el tiempo (así, al aprobarse en Meta, se empieza a usar).
+const ANTICIPO_V2_RETRY_MS = 5 * 60_000;
+const anticipoV2UnavailableUntil = new Map<string, number>();
+const isTemplateProblem = (err?: string) => /template|#?1320\d{2}/i.test(String(err || ''));
+
 export async function sendTemplate_ComprobantePagoRecibido(input: {
   phone: string;
   bookingId: string | number;
@@ -1891,20 +1898,24 @@ export async function sendTemplate_ComprobantePagoRecibido(input: {
   if (!input.isFullPayment) {
     const pct = input.percent != null && input.percent >= 1 && input.percent <= 100 ? Math.round(input.percent) : null;
     const percentLabel = pct != null ? `${pct}%` : (targetLang === 'en' ? 'partial' : 'parcial');
-    const v2 = await sendWhatsAppTemplate(
-      input.phone,
-      'comprobante_anticipo_recibido_v2',
-      [percentLabel, ...params],
-      undefined,
-      input.bookingId,
-      'url',
-      Boolean(input.bypassPause),
-      targetLang
-    );
-    if (v2.success) return v2;
+    if ((anticipoV2UnavailableUntil.get(targetLang) ?? 0) <= Date.now()) {
+      const v2 = await sendWhatsAppTemplate(
+        input.phone,
+        'comprobante_anticipo_recibido_v2',
+        [percentLabel, ...params],
+        undefined,
+        input.bookingId,
+        'url',
+        Boolean(input.bypassPause),
+        targetLang
+      );
+      if (v2.success) return v2;
 
-    // Bloqueos intencionados (persona excluida, pausa, silencio): no se reintenta con otra plantilla
-    if (v2.error === 'excluded_person' || v2.error === 'paused' || v2.error === 'muted') return v2;
+      // Bloqueos intencionados (persona excluida, pausa, silencio): no se reintenta con otra plantilla
+      if (v2.error === 'excluded_person' || v2.error === 'paused' || v2.error === 'muted') return v2;
+
+      if (isTemplateProblem(v2.error)) anticipoV2UnavailableUntil.set(targetLang, Date.now() + ANTICIPO_V2_RETRY_MS);
+    }
 
     // La plantilla nueva aún no está disponible en Meta (p. ej. en revisión): se envía la anterior, sea cual sea el porcentaje.
     // OJO: su título dice siempre "(50%)" aunque el monto que muestra es el real. Se prefiere eso a un texto libre, que solo llega si el
