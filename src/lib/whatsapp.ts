@@ -869,6 +869,7 @@ export async function sendWhatsAppTemplate(
       'comprobante_anticipo_recibido',
       'comprobante_anticipo_recibido_v2',
       'anticipo_aprobado',
+      'pago_total_aprobado',
       'comprobante_pago_total_recibido',
       'portal_huesped_link',
       'portal_huesped_link_en',
@@ -1243,6 +1244,8 @@ export async function sendWhatsAppTemplate(
               return `Hello ${name}!\n\nWe have successfully registered your payment in the amount of *${abonadoEn}*.\n\nYour current outstanding balance is *${saldoEn}*.\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
             case 'comprobante_anticipo_recibido':
               return `🧾 *Deposit Receipt Received (50%)*\n\nHello, ${name}!\n\nWe have received your ${params[1] || 'payment'} receipt for *${params[2] || '$0.00'}* as a deposit for ${params[3] || 'your reservation'}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm your reservation. Thank you!\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
+            case 'pago_total_aprobado':
+              return `🎉 *Payment approved!*\n\nHello, ${name}!\n\nWe confirm the approval of your payment of *${params[1] || '$0.00'}* for ${params[2] || 'your reservation'}.\n\nYour stay is now *100% paid in full* (balance due: $0.00).\n\n📅 Check-in: *${params[3] || ''}*\n\nEverything is ready for your arrival! You can check the amenities, the WiFi and the details in your Guest Portal. See you soon! 🌴\n\n👇 *GUEST PORTAL*\n\n[Button: GUEST PORTAL]`;
             case 'anticipo_aprobado':
               return `✅ *Deposit approved*\n\nHello, ${name}!\n\nWe confirm that your deposit of *${params[1] || '$0.00'}* has been successfully approved for ${params[2] || 'your reservation'}.\n\nYour remaining balance due at check-in is *${params[3] || '$0.00'}*.\n\nYour stay is booked and secured! You can see the details in your Guest Portal. 🌴\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
             case 'comprobante_anticipo_recibido_v2':
@@ -1312,6 +1315,8 @@ Our team is reviewing it (this process may take up to 24 hours). We will notify 
             return `¡Hola ${name}!\n\nHemos registrado con éxito tu pago por la cantidad de *${abonado}*.\n\nTu saldo pendiente actual es de *${saldo}*.\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
           case 'comprobante_anticipo_recibido':
             return `🧾 *Comprobante de anticipo recibido (50%)*\n\n¡Hola, ${name}!\n\nHemos recibido tu comprobante de ${params[1] || 'pago'} por *${params[2] || '$0.00'}* como anticipo para ${params[3] || 'tu reserva'}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
+          case 'pago_total_aprobado':
+            return `🎉 *¡Pago aprobado!*\n\n¡Hola, ${name}!\n\nConfirmamos la aprobación de tu pago por *${params[1] || '$0.00'}* para ${params[2] || 'tu reserva'}.\n\nTu estancia queda *100% pagada y liquidada* (saldo pendiente: $0.00).\n\n📅 Check-in: *${params[3] || ''}*\n\n¡Todo está listo para tu llegada! Puedes consultar las amenidades, el WiFi y los detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴\n\n👇 *PORTAL DEL HUÉSPED*\n\n[Botón: PORTAL DEL HUÉSPED]`;
           case 'anticipo_aprobado':
             return `✅ *Anticipo aprobado*\n\n¡Hola, ${name}!\n\nConfirmamos que tu anticipo por *${params[1] || '$0.00'}* ha sido aprobado con éxito para ${params[2] || 'tu reserva'}.\n\nTu saldo restante a pagar al momento del check-in es de *${params[3] || '$0.00'}*.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
           case 'comprobante_anticipo_recibido_v2':
@@ -1956,21 +1961,9 @@ export async function sendTemplate_AnticipoAprobado(input: {
   groupCount?: number;
   bypassPause?: boolean;
 }): Promise<{ success: boolean; error?: string; data?: unknown; lang: 'es' | 'en' }> {
-  let lang: 'es' | 'en' = isSpanishOrLatamPhone(input.phone) ? 'es' : 'en';
-  if (!input.phone) return { success: false, error: 'Sin teléfono', lang };
-
-  try {
-    const { data: portal } = await supabase
-      .from('booking_portal_settings')
-      .select('language, mute_notifications')
-      .eq('booking_id', String(input.bookingId))
-      .maybeSingle();
-    if (portal?.mute_notifications === true) return { success: false, error: 'muted', lang };
-    const portalLang = String(portal?.language || '').toLowerCase().trim();
-    if (portalLang === 'es' || portalLang === 'en') lang = portalLang;
-  } catch (err) {
-    console.warn('[Anticipo Aprobado] No se pudo leer booking_portal_settings:', (err as Error)?.message);
-  }
+  if (!input.phone) return { success: false, error: 'Sin teléfono', lang: 'es' };
+  const { lang, muted } = await resolveGuestLangAndMute(input.phone, input.bookingId);
+  if (muted) return { success: false, error: 'muted', lang };
 
   const en = lang === 'en';
   const rawName = String(input.guestName || '').replace(/\(US DOLLARS\)/gi, '').trim();
@@ -1999,28 +1992,74 @@ export async function sendTemplate_AnticipoAprobado(input: {
 }
 
 /**
- * Idioma en que hay que escribirle al huésped de una reserva: el del portal de la reserva y, si no hay, el de su teléfono
- * (extranjero = inglés). Misma regla que usan las plantillas.
+ * Idioma en que hay que escribirle al huésped de una reserva (el del portal de la reserva y, si no hay, el de su teléfono:
+ * extranjero = inglés; misma regla que usan las plantillas) y si tiene las notificaciones silenciadas en el portal.
  */
-export async function resolveGuestLanguage(phone: string, bookingId: string | number): Promise<'es' | 'en'> {
+async function resolveGuestLangAndMute(phone: string, bookingId: string | number): Promise<{ lang: 'es' | 'en'; muted: boolean }> {
   let lang: 'es' | 'en' = isSpanishOrLatamPhone(phone) ? 'es' : 'en';
+  let muted = false;
   try {
     const { data: portal } = await supabase
       .from('booking_portal_settings')
-      .select('language')
+      .select('language, mute_notifications')
       .eq('booking_id', String(bookingId))
       .maybeSingle();
+    muted = portal?.mute_notifications === true;
     const portalLang = String(portal?.language || '').toLowerCase().trim();
     if (portalLang === 'es' || portalLang === 'en') lang = portalLang;
   } catch (err) {
     console.warn('[Idioma del huésped] No se pudo leer booking_portal_settings:', (err as Error)?.message);
   }
-  return lang;
+  return { lang, muted };
 }
 
 /**
- * Texto libre del aviso de que un pago dejó la reserva 100 % liquidada (no hay plantilla de Meta para este caso: solo llega si el
- * huésped escribió en las últimas 24 h). Español (el de siempre) e inglés.
+ * Aviso de que un pago dejó la reserva 100 % liquidada (plantilla pago_total_aprobado, es/en), con el botón "Portal del Huésped".
+ * Mismo criterio que anticipo_aprobado: plantilla de Meta en UN SOLO intento y, si falla, quien llama envía el texto de respaldo
+ * (buildFullPaymentApprovedText) en el idioma que se devuelve en `lang`.
+ * Variables: {{1}} nombre, {{2}} monto aprobado, {{3}} referencia (reserva o grupo), {{4}} fecha de check-in.
+ */
+export async function sendTemplate_PagoTotalAprobado(input: {
+  phone: string;
+  bookingId: string | number;
+  guestName?: string;
+  amount: number;
+  currency?: 'MXN' | 'USD';
+  groupCount?: number;
+  checkIn?: string;
+  bypassPause?: boolean;
+}): Promise<{ success: boolean; error?: string; data?: unknown; lang: 'es' | 'en' }> {
+  if (!input.phone) return { success: false, error: 'Sin teléfono', lang: 'es' };
+  const { lang, muted } = await resolveGuestLangAndMute(input.phone, input.bookingId);
+  if (muted) return { success: false, error: 'muted', lang };
+
+  const en = lang === 'en';
+  const rawName = String(input.guestName || '').replace(/\(US DOLLARS\)/gi, '').trim();
+  let firstName = getFirstName(rawName);
+  if (isGenericGuestName(firstName) || firstName === 'Huésped') firstName = en ? 'Guest' : 'Huésped';
+
+  const curr = input.currency === 'USD' ? 'USD' : 'MXN';
+  const amountLabel = `$${Number(input.amount || 0).toLocaleString(en ? 'en-US' : 'es-MX', { minimumFractionDigits: 2 })} ${curr}`;
+  const groupCount = Number(input.groupCount || 1);
+  const id = String(input.bookingId);
+  const referenceText = groupCount > 1
+    ? (en ? `your group booking (${groupCount} condos, ref: #${id})` : `tu grupo de reservaciones (${groupCount} condominios, ref: #${id})`)
+    : (en ? `reservation #${id}` : `la reserva #${id}`);
+
+  const params = [
+    sanitizeTemplateParam(firstName, en ? 'Guest' : 'Huésped'),
+    sanitizeTemplateParam(amountLabel, '$0.00'),
+    sanitizeTemplateParam(referenceText, en ? 'your reservation' : 'tu reserva'),
+    sanitizeTemplateParam(String(input.checkIn || ''), en ? 'to be confirmed' : 'por confirmar'),
+  ];
+
+  const res = await sendWhatsAppTemplate(input.phone, 'pago_total_aprobado', params, undefined, input.bookingId, 'url', Boolean(input.bypassPause), lang, false, undefined, true);
+  return { ...res, lang };
+}
+
+/**
+ * Texto libre de RESPALDO del aviso de pago liquidado al 100 %, solo para cuando la plantilla pago_total_aprobado no se pudo enviar
+ * (un texto libre solo llega si el huésped escribió en las últimas 24 h). Español (el de siempre) e inglés.
  */
 export function buildFullPaymentApprovedText(input: {
   lang: 'es' | 'en';

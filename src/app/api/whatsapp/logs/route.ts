@@ -55,6 +55,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
   comprobante_anticipo_recibido: 'Comprobante recibido (50%)',
   comprobante_anticipo_recibido_v2: 'Comprobante de anticipo recibido',
   anticipo_aprobado: 'Anticipo aprobado',
+  pago_total_aprobado: 'Pago total aprobado',
   comprobante_pago_total_recibido: 'Comprobante recibido (100%)',
   portal_huesped_link: 'Enlace al Portal del Huésped',
   portal_huesped_link_en: 'Enlace al Portal del Huésped',

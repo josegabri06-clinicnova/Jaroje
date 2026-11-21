@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token, isOtaBeds24Booking } from '@/lib/beds24';
-import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage, sendTemplate_AnticipoAprobado, buildAnticipoAprobadoFallbackText, buildFullPaymentApprovedText, resolveGuestLanguage } from '@/lib/whatsapp';
+import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage, sendTemplate_AnticipoAprobado, buildAnticipoAprobadoFallbackText, buildFullPaymentApprovedText, sendTemplate_PagoTotalAprobado } from '@/lib/whatsapp';
 import { maskPhone } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
@@ -506,18 +506,32 @@ export async function POST(req: Request) {
           const currLabel = String(guestName).toUpperCase().includes('(US DOLLARS)') ? 'USD' : 'MXN';
 
           if (balance <= 0 || effectiveDeposit >= effectivePrice) {
-            // Pago 100% Completado y Liquidado (texto libre en el idioma del huésped: español o inglés)
-            const fullPaymentMsg = buildFullPaymentApprovedText({
-              lang: await resolveGuestLanguage(phone, bookingId),
-              firstName,
+            // Pago 100% Completado y Liquidado: por PLANTILLA de Meta (pago_total_aprobado, es/en), en un solo intento
+            console.log(`[Approve Transfer] Sending 100% full payment approval template (pago_total_aprobado) to ${maskPhone(phone)}`);
+            const paidRes = await sendTemplate_PagoTotalAprobado({
+              phone,
+              bookingId,
+              guestName,
               amount: Number(amount),
               currency: currLabel === 'USD' ? 'USD' : 'MXN',
               groupCount: isGroupBooking ? groupTotalCount : 1,
-              bookingId,
               checkIn,
+              bypassPause: true,
             });
-            console.log(`[Approve Transfer] Sending 100% full payment confirmation message to ${maskPhone(phone)}`);
-            await sendWhatsAppTextMessage(phone, fullPaymentMsg);
+            // Respaldo: el texto de antes (español o inglés), solo si la plantilla falla y no fue un bloqueo intencionado
+            const paidBlocked = paidRes.error === 'excluded_person' || paidRes.error === 'paused' || paidRes.error === 'muted';
+            if (!paidRes.success && !paidBlocked) {
+              console.warn(`[Approve Transfer] Plantilla pago_total_aprobado no disponible (${paidRes.error}); se envía el texto de respaldo.`);
+              await sendWhatsAppTextMessage(phone, buildFullPaymentApprovedText({
+                lang: paidRes.lang,
+                firstName,
+                amount: Number(amount),
+                currency: currLabel === 'USD' ? 'USD' : 'MXN',
+                groupCount: isGroupBooking ? groupTotalCount : 1,
+                bookingId,
+                checkIn,
+              }));
+            }
           } else {
             // Anticipo Aprobado (50% u otro abono)
             // Por PLANTILLA de Meta (anticipo_aprobado, es/en): un texto libre solo llega si el huésped escribió en las últimas 24 h.
