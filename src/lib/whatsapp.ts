@@ -1677,7 +1677,63 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPa
     console.warn(`[WhatsApp] Plantilla ${EXPEDIA_CONFIRMED_META_TEMPLATE} no disponible (${expRes.error}); se envía reservacion_confirmada a la reserva ${booking.id}.`);
   }
 
-  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause, lang, forceResend);
+  const res = await sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause, lang, forceResend);
+  if (res.success || !isMetaTemplateUnavailableError(res.error)) return res;
+
+  // Respaldo: Meta no tiene la plantilla disponible (p. ej. en revisión). Se envía el mismo mensaje como texto, en el idioma del huésped.
+  // Un texto libre solo llega si el huésped escribió en las últimas 24 h; si no llega, se devuelve el fallo original de la plantilla
+  // (todo queda igual que antes). Los bloqueos intencionados (excluido, pausa, silencio) y los demás errores no pasan por aquí.
+  const { lang: guestLang, muted } = await resolveGuestLangAndMute(phone, booking.id);
+  if (muted) return res;
+  const textRes = await sendWhatsAppTextMessage(phone, buildReservacionConfirmadaFallbackText({ lang: guestLang, name, bookingId: booking.id }));
+  if (!textRes.success) return res;
+
+  // Se deja registrado como enviado para que el anti-duplicados no vuelva a mandar la confirmación cuando la plantilla ya esté aprobada.
+  try {
+    await supabase.from('whatsapp_logs').insert([{
+      reservation_id: String(booking.id),
+      template_name: 'reservacion_confirmada',
+      phone: normalizePhone(phone),
+      sent_at: new Date().toISOString(),
+      status: 'sent'
+    }]);
+  } catch (logErr) {
+    console.warn('[WhatsApp] No se pudo registrar el texto de respaldo de reservacion_confirmada:', (logErr as Error)?.message);
+  }
+  console.log(`[WhatsApp] reservacion_confirmada enviada como texto de respaldo a la reserva ${booking.id} (plantilla no disponible).`);
+  return { success: true, data: { ...(textRes.data || {}), fallbackText: true } };
+}
+
+/** Texto de respaldo de reservacion_confirmada (mismo mensaje que la plantilla, es/en); el botón del portal va como enlace. */
+export function buildReservacionConfirmadaFallbackText(input: { lang: 'es' | 'en'; name: string; bookingId: string | number }): string {
+  const link = `${getPublicReservaLink(input.bookingId)}?lang=${input.lang}`;
+  const name = input.name && input.name !== 'Huésped' ? input.name : (input.lang === 'en' ? 'Guest' : 'Huésped');
+  if (input.lang === 'en') {
+    return `🎉 Your reservation is confirmed!
+
+Excellent, ${name}!
+
+We are very pleased to confirm that your reservation is ready. We are ready to welcome you.
+
+In your Guest Portal you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.
+
+👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.
+
+👇 Guest Portal
+${link}`;
+  }
+  return `🎉 ¡Tu reservación está confirmada!
+
+¡Excelente, ${name}!
+
+Nos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.
+
+En tu Portal del Huésped podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.
+
+👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.
+
+👇 Portal del Huésped
+${link}`;
 }
 
 // 4. Mensaje 4 - Disponibilidad liberada (disponibilidad_liberada)
