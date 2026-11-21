@@ -866,6 +866,7 @@ export async function sendWhatsAppTemplate(
       'seguimiento_satisfaccion_v2',
       'pago_anticipo_recibido',
       'comprobante_anticipo_recibido',
+      'comprobante_anticipo_recibido_v2',
       'comprobante_pago_total_recibido',
       'portal_huesped_link',
       'portal_huesped_link_en',
@@ -1240,6 +1241,18 @@ export async function sendWhatsAppTemplate(
               return `Hello ${name}!\n\nWe have successfully registered your payment in the amount of *${abonadoEn}*.\n\nYour current outstanding balance is *${saldoEn}*.\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
             case 'comprobante_anticipo_recibido':
               return `🧾 *Deposit Receipt Received (50%)*\n\nHello, ${name}!\n\nWe have received your ${params[1] || 'payment'} receipt for *${params[2] || '$0.00'}* as a deposit for ${params[3] || 'your reservation'}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm your reservation. Thank you!\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
+            case 'comprobante_anticipo_recibido_v2':
+              return `🧾 *Deposit Receipt Received (${params[0] || 'partial'})*
+
+Hello, ${params[1] || 'Guest'}!
+
+We have received your ${params[2] || 'payment'} receipt for *${params[3] || '$0.00'}* as a deposit for ${params[4] || 'your reservation'}.
+
+Our team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm your reservation. Thank you!
+
+👇 *Guest Portal*
+
+[Button: Guest Portal]`;
             case 'comprobante_pago_total_recibido':
               return `🧾 *Full Payment Receipt Received (100%)*\n\nHello, ${name}!\n\nWe have received your ${params[1] || 'payment'} receipt for *${params[2] || '$0.00'}* for the full payment (100%) of ${params[3] || 'your reservation'}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm that your stay is fully paid. Thank you!\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
             case 'cotizacion_reserva':
@@ -1295,6 +1308,18 @@ export async function sendWhatsAppTemplate(
             return `¡Hola ${name}!\n\nHemos registrado con éxito tu pago por la cantidad de *${abonado}*.\n\nTu saldo pendiente actual es de *${saldo}*.\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
           case 'comprobante_anticipo_recibido':
             return `🧾 *Comprobante de anticipo recibido (50%)*\n\n¡Hola, ${name}!\n\nHemos recibido tu comprobante de ${params[1] || 'pago'} por *${params[2] || '$0.00'}* como anticipo para ${params[3] || 'tu reserva'}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
+          case 'comprobante_anticipo_recibido_v2':
+            return `🧾 *Comprobante de anticipo recibido (${params[0] || 'parcial'})*
+
+¡Hola, ${params[1] || 'Huésped'}!
+
+Hemos recibido tu comprobante de ${params[2] || 'pago'} por *${params[3] || '$0.00'}* como anticipo para ${params[4] || 'tu reserva'}.
+
+Nuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!
+
+👇 *Portal del Huésped*
+
+[Botón: Portal del Huésped]`;
           case 'comprobante_pago_total_recibido':
             return `🧾 *Comprobante de pago total recibido (100%)*\n\n¡Hola, ${name}!\n\nHemos recibido tu comprobante de ${params[1] || 'pago'} por *${params[2] || '$0.00'}* para el pago total (100%) de ${params[3] || 'tu reserva'}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmarte que tu estancia ha quedado totalmente liquidada. ¡Muchas gracias!\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
           case 'portal_huesped_link':
@@ -1341,7 +1366,9 @@ export async function sendWhatsAppTemplate(
         ...(bIdStr ? { reservation_id: bIdStr } : {})
       };
 
-      const guestNameCandidate = (parameters && parameters.length > 0) ? parameters[0] : 'Huésped';
+      // En comprobante_anticipo_recibido_v2 el parámetro 1 es el porcentaje y el nombre del huésped es el 2
+      const nameIdx = templateName === 'comprobante_anticipo_recibido_v2' ? 1 : 0;
+      const guestNameCandidate = (parameters && parameters.length > nameIdx) ? parameters[nameIdx] : 'Huésped';
       await upsertConversationMessage({
         phone: cleanedPhone,
         guestName: guestNameCandidate,
@@ -1813,6 +1840,18 @@ function sanitizeTemplateParam(value: string, fallback: string): string {
   return clean || fallback;
 }
 
+/**
+ * Porcentaje del total de la reserva (o del grupo) que cubre un comprobante, en enteros de 1 a 100.
+ * null si no se puede calcular (sin monto o sin total). Solo se usa en anticipos: el pago total va por su propia plantilla,
+ * pero un huésped que elige "Anticipo" en el portal y sube todo el monto debe ver 100 %, no 99 %.
+ */
+export function computeDepositPercent(amount: unknown, total: unknown): number | null {
+  const a = Number(amount);
+  const t = Number(total);
+  if (!Number.isFinite(a) || !Number.isFinite(t) || !(a > 0) || !(t > 0)) return null;
+  return Math.min(100, Math.max(1, Math.round((a / t) * 100)));
+}
+
 export async function sendTemplate_ComprobantePagoRecibido(input: {
   phone: string;
   bookingId: string | number;
@@ -1821,6 +1860,8 @@ export async function sendTemplate_ComprobantePagoRecibido(input: {
   amountLabel: string;
   referenceText: string;
   isFullPayment: boolean;
+  /** % del total que cubre este comprobante (solo anticipos). Sin él, la plantilla nueva dice "parcial". */
+  percent?: number | null;
   lang?: 'es' | 'en';
   bypassPause?: boolean;
 }): Promise<{ success: boolean; error?: string; data?: unknown }> {
@@ -1844,6 +1885,31 @@ export async function sendTemplate_ComprobantePagoRecibido(input: {
     sanitizeTemplateParam(input.amountLabel, '$0.00'),
     sanitizeTemplateParam(input.referenceText, targetLang === 'en' ? 'your reservation' : 'tu reserva'),
   ];
+
+  // Anticipo: plantilla nueva con el porcentaje real del comprobante (comprobante_anticipo_recibido_v2).
+  // Variables en este orden: {{1}} porcentaje, {{2}} nombre, {{3}} método, {{4}} monto, {{5}} referencia.
+  if (!input.isFullPayment) {
+    const pct = input.percent != null && input.percent >= 1 && input.percent <= 100 ? Math.round(input.percent) : null;
+    const percentLabel = pct != null ? `${pct}%` : (targetLang === 'en' ? 'partial' : 'parcial');
+    const v2 = await sendWhatsAppTemplate(
+      input.phone,
+      'comprobante_anticipo_recibido_v2',
+      [percentLabel, ...params],
+      undefined,
+      input.bookingId,
+      'url',
+      Boolean(input.bypassPause),
+      targetLang
+    );
+    if (v2.success) return v2;
+
+    // Bloqueos intencionados (persona excluida, pausa, silencio): no se reintenta con otra plantilla
+    if (v2.error === 'excluded_person' || v2.error === 'paused' || v2.error === 'muted') return v2;
+
+    // La plantilla nueva aún no está disponible en Meta (p. ej. en revisión): se envía la anterior, sea cual sea el porcentaje.
+    // OJO: su título dice siempre "(50%)" aunque el monto que muestra es el real. Se prefiere eso a un texto libre, que solo llega si el
+    // huésped ha escrito por WhatsApp en las últimas 24 h. Desaparece solo en cuanto Meta apruebe la plantilla nueva.
+  }
 
   return sendWhatsAppTemplate(
     input.phone,

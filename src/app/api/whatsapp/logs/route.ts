@@ -53,6 +53,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
   recibimiento_nuevamente_10m: 'Seguimiento post-estancia',
   pago_anticipo_recibido: 'Confirmación de anticipo / pago',
   comprobante_anticipo_recibido: 'Comprobante recibido (50%)',
+  comprobante_anticipo_recibido_v2: 'Comprobante de anticipo recibido',
   comprobante_pago_total_recibido: 'Comprobante recibido (100%)',
   portal_huesped_link: 'Enlace al Portal del Huésped',
   portal_huesped_link_en: 'Enlace al Portal del Huésped',
