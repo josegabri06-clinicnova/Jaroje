@@ -18,6 +18,9 @@ import {
   sendTemplate_BienvenidoConmutador,
   sendTemplate_BienvenidoWhatsApp,
   sendTemplate_PortalHuespedLink,
+  sendTemplate_AnticipoAprobado,
+  sendTemplate_PagoTotalAprobado,
+  sendTemplate_ComprobantePagoRecibido,
   detectLanguageFromPhone,
   getWhatsAppToken,
   getWhatsAppPhoneId
@@ -160,6 +163,71 @@ export async function POST(req: Request) {
           const userLang = activeBooking.lang || activeBooking.language || detectLanguageFromPhone(ph);
           res = await sendTemplate_PortalHuespedLink(ph, 'general', activeBooking.guest_name, userLang as 'es' | 'en');
         }
+        break;
+      }
+      case 'anticipo_aprobado': {
+        const amt = Number(activeBooking.last_payment_amount || activeBooking.deposit || 0);
+        const tot = Number(activeBooking.price || activeBooking.price_estimate || 0);
+        const dep = Number(activeBooking.deposit || 0);
+        const bal = Math.max(0, tot - dep);
+        res = await sendTemplate_AnticipoAprobado({
+          phone: activeBooking.phone,
+          bookingId: activeBooking.id,
+          guestName: activeBooking.guest_name,
+          amount: amt,
+          balance: bal,
+          currency: activeBooking.currency === 'USD' ? 'USD' : 'MXN',
+          bypassPause: true
+        });
+        break;
+      }
+      case 'pago_total_aprobado': {
+        const amt = Number(activeBooking.last_payment_amount || activeBooking.price || activeBooking.price_estimate || 0);
+        res = await sendTemplate_PagoTotalAprobado({
+          phone: activeBooking.phone,
+          bookingId: activeBooking.id,
+          guestName: activeBooking.guest_name,
+          amount: amt,
+          currency: activeBooking.currency === 'USD' ? 'USD' : 'MXN',
+          checkIn: activeBooking.first_night || activeBooking.checkin || '',
+          bypassPause: true
+        });
+        break;
+      }
+      case 'comprobante_anticipo_recibido': {
+        const amt = Number(activeBooking.last_payment_amount || activeBooking.deposit || 0);
+        const curr = activeBooking.currency === 'USD' ? 'USD' : 'MXN';
+        const isEn = (activeBooking.lang === 'en' || activeBooking.language === 'en');
+        const formattedAmount = `$${amt.toLocaleString(isEn ? 'en-US' : 'es-MX', { minimumFractionDigits: 2 })} ${curr}`;
+        res = await sendTemplate_ComprobantePagoRecibido({
+          phone: activeBooking.phone,
+          guestName: activeBooking.guest_name || 'Huésped',
+          amountLabel: formattedAmount,
+          methodLabel: isEn ? 'payment' : 'pago',
+          referenceText: isEn ? `reservation #${activeBooking.id}` : `tu reserva #${activeBooking.id}`,
+          bookingId: activeBooking.id,
+          isFullPayment: false,
+          lang: isEn ? 'en' : 'es',
+          bypassPause: true
+        });
+        break;
+      }
+      case 'comprobante_pago_total_recibido': {
+        const amt = Number(activeBooking.last_payment_amount || activeBooking.price || activeBooking.price_estimate || 0);
+        const curr = activeBooking.currency === 'USD' ? 'USD' : 'MXN';
+        const isEn = (activeBooking.lang === 'en' || activeBooking.language === 'en');
+        const formattedAmount = `$${amt.toLocaleString(isEn ? 'en-US' : 'es-MX', { minimumFractionDigits: 2 })} ${curr}`;
+        res = await sendTemplate_ComprobantePagoRecibido({
+          phone: activeBooking.phone,
+          guestName: activeBooking.guest_name || 'Huésped',
+          amountLabel: formattedAmount,
+          methodLabel: isEn ? 'payment' : 'pago',
+          referenceText: isEn ? `reservation #${activeBooking.id}` : `tu reserva #${activeBooking.id}`,
+          bookingId: activeBooking.id,
+          isFullPayment: true,
+          lang: isEn ? 'en' : 'es',
+          bypassPause: true
+        });
         break;
       }
       default:

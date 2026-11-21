@@ -7008,7 +7008,7 @@ function ReservasListInner() {
                         </div>
                       </div>
 
-                      {/* Selector de Plantilla (14 plantillas oficiales, sin duplicación de idiomas) */}
+                      {/* Selector de Plantilla (Plantillas oficiales de Meta WhatsApp) */}
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">
                           {portalLanguage === 'en' ? 'Select Template' : 'Seleccionar Plantilla Oficial'}
@@ -7019,19 +7019,24 @@ function ReservasListInner() {
                           className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-[12px] font-bold text-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer shadow-xs"
                         >
                           <option value={1}>{portalLanguage === 'en' ? '1. Reservation Request Received (24h)' : '1. Solicitud de Reservación Recibida (24h)'}</option>
-                          <option value={2}>{portalLanguage === 'en' ? '2. Last Reminder (3h to confirm)' : '2. Último Aviso (3h para confirmar)'}</option>
+                          <option value={2}>{portalLanguage === 'en' ? '2. Last Reminder (1h to confirm)' : '2. Último Aviso (1h para confirmar)'}</option>
                           <option value={3}>{portalLanguage === 'en' ? '3. Payment & Reservation Confirmed' : '3. Confirmación de Pago y Reservación'}</option>
                           <option value={4}>{portalLanguage === 'en' ? '4. Availability Released' : '4. Disponibilidad Liberada'}</option>
                           <option value={5}>{portalLanguage === 'en' ? '5. Everything ready for your arrival' : '5. Todo listo para tu llegada'}</option>
                           <option value={6}>{portalLanguage === 'en' ? '6. Welcome to Condominios Jaroje' : '6. Bienvenido a Condominios Jaroje'}</option>
                           <option value={7}>{portalLanguage === 'en' ? '7. How is your stay going?' : '7. ¿Cómo va tu estancia?'}</option>
                           <option value={8}>{portalLanguage === 'en' ? '8. Check-out 12:00 p.m.' : '8. Salida / Check-out 12:00 p.m.'}</option>
-                          <option value={9}>{portalLanguage === 'en' ? '9. How was your experience?' : '9. ¿Cómo estuvo tu experiencia?'}</option>
+                          <option value={9}>{portalLanguage === 'en' ? '9. Rate your stay (Feedback)' : '9. Califica tu alojamiento (Opinión)'}</option>
                           <option value={10}>{portalLanguage === 'en' ? "10. We'd love to welcome you again!" : '10. ¡Nos encantará recibirte nuevamente!'}</option>
                           <option value={11}>{portalLanguage === 'en' ? '11. Deposit Payment Received' : '11. Confirmación de Anticipo Recibido'}</option>
                           <option value={12}>{portalLanguage === 'en' ? '12. 📶 WiFi, Access Codes & Stay Info' : '12. 📶 WiFi, Claves e Información Importante'}</option>
                           <option value={13}>{portalLanguage === 'en' ? '13. ✨ Accommodation Ready / Cleaned' : '13. ✨ Alojamiento Listo / Limpieza Terminada'}</option>
                           <option value={14}>{portalLanguage === 'en' ? '14. ❌ Payment Receipt Rejected' : '14. ❌ Comprobante de Pago Rechazado'}</option>
+                          <option value={15}>{portalLanguage === 'en' ? '15. ✅ Deposit Approved (Booking Secured)' : '15. ✅ Anticipo Aprobado (Reserva Asegurada)'}</option>
+                          <option value={16}>{portalLanguage === 'en' ? '16. 🎉 Full Payment Approved (100% Paid)' : '16. 🎉 Pago Total Aprobado (100% Liquidado)'}</option>
+                          <option value={17}>{portalLanguage === 'en' ? '17. 🧾 Deposit Receipt Received' : '17. 🧾 Comprobante de Anticipo Recibido'}</option>
+                          <option value={18}>{portalLanguage === 'en' ? '18. 🧾 Full Payment Receipt Received (100%)' : '18. 🧾 Comprobante de Pago Total (100%) Recibido'}</option>
+                          <option value={19}>{portalLanguage === 'en' ? '19. 🌐 Guest Portal Direct Link' : '19. 🌐 Enlace Directo al Portal del Huésped'}</option>
                         </select>
                       </div>
 
@@ -7081,16 +7086,16 @@ function ReservasListInner() {
 
                           // 2: Último Aviso
                           2: isEn ? (
-                            `⏳ *Last reminder (3 hours left to confirm your reservation)*\n\n` +
+                            `⏳ *Last reminder (1 hour left to confirm your reservation)*\n\n` +
                             `Hello, ${guestFirstName}.\n\n` +
-                            `We just need your deposit to confirm your reservation. Remember that the deadline to receive it expires in approximately 3 hours.\n\n` +
+                            `We just need your deposit to confirm your reservation. Remember that the deadline to receive it expires in approximately 1 hour.\n\n` +
                             `In "Make deposit" you will find the available payment options. If you have already made your deposit, please send us your receipt.\n\n` +
                             `💳 *Make deposit:*\n` +
                             `${portalLink}`
                           ) : (
-                            `⏳ *Último recordatorio (quedan 3 horas para confirmar tu reservación)*\n\n` +
+                            `⏳ *Último recordatorio (queda 1 hora para confirmar tu reservación)*\n\n` +
                             `Hola, ${guestFirstName}.\n\n` +
-                            `Solo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 3 horas.\n\n` +
+                            `Solo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 1 hora.\n\n` +
                             `En "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n` +
                             `💳 *Realizar depósito:*\n` +
                             `${portalLink}`
@@ -7247,7 +7252,7 @@ function ReservasListInner() {
                             `We hope you arrived home safely and keep an excellent memory of your stay with us.\n\n` +
                             `If there was anything that did not meet your expectations, please let us know so we can help you.\n\n` +
                             `If your experience was ⭐⭐⭐⭐⭐, it would make us very happy if you shared your review. Your review helps other travelers choose us with greater confidence and motivates us to keep improving.\n\n` +
-                            `⭐ *Rate accommodation:*\n` +
+                            `⭐ *Rate your accommodation:*\n` +
                             `${reviewLink}`
                           ) : (
                             `⭐ *¿Cómo estuvo tu experiencia?*\n\n` +
@@ -7255,7 +7260,7 @@ function ReservasListInner() {
                             `Esperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\n\n` +
                             `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
                             `Si tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.\n\n` +
-                            `⭐ *Calificar alojamiento:*\n` +
+                            `⭐ *Califica tu alojamiento:*\n` +
                             `${reviewLink}`
                           ),
 
@@ -7338,6 +7343,91 @@ function ReservasListInner() {
                             `Por favor ingresa a tu Portal del Huésped para verificar tus opciones de pago o subir un nuevo comprobante legible.\n\n` +
                             `🌐 *Portal del Huésped:*\n` +
                             `${portalLink}`
+                          ),
+
+                          // 15: Anticipo Aprobado
+                          15: isEn ? (
+                            `✅ *Deposit approved*\n\n` +
+                            `Hello, ${guestFirstName}!\n\n` +
+                            `We confirm that your deposit of *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}* has been successfully approved for your reservation #${selectedRes.id}.\n\n` +
+                            `Your remaining balance due at check-in is *${fmtCurrency(bal, selectedRes.guest_name)}${suffix}*.\n\n` +
+                            `Your stay is booked and secured! You can see the details in your Guest Portal. 🌴\n\n` +
+                            `🌐 *Guest Portal:*\n` +
+                            `${portalLink}`
+                          ) : (
+                            `✅ *Anticipo aprobado*\n\n` +
+                            `¡Hola, ${guestFirstName}!\n\n` +
+                            `Confirmamos que tu anticipo por *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}* ha sido aprobado con éxito para tu reservación #${selectedRes.id}.\n\n` +
+                            `Tu saldo restante a pagar al momento del check-in es de *${fmtCurrency(bal, selectedRes.guest_name)}${suffix}*.\n\n` +
+                            `¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴\n\n` +
+                            `🌐 *Portal del Huésped:*\n` +
+                            `${portalLink}`
+                          ),
+
+                          // 16: Pago Total Aprobado
+                          16: isEn ? (
+                            `🎉 *Payment approved!*\n\n` +
+                            `Hello, ${guestFirstName}!\n\n` +
+                            `We confirm the approval of your payment of *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}* for your reservation #${selectedRes.id}.\n\n` +
+                            `Your stay is now *100% paid in full* (balance due: ${fmtCurrency(0, selectedRes.guest_name)}${suffix}).\n\n` +
+                            `📅 Check-in: *${selectedRes.first_night || selectedRes.checkin || ''}*\n\n` +
+                            `Everything is ready for your arrival! You can check the amenities, the WiFi and the details in your Guest Portal. See you soon! 🌴\n\n` +
+                            `🌐 *GUEST PORTAL:*\n` +
+                            `${portalLink}`
+                          ) : (
+                            `🎉 *¡Pago aprobado!*\n\n` +
+                            `¡Hola, ${guestFirstName}!\n\n` +
+                            `Confirmamos la aprobación de tu pago por *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}* para tu reservación #${selectedRes.id}.\n\n` +
+                            `Tu estancia queda *100% pagada y liquidada* (saldo pendiente: ${fmtCurrency(0, selectedRes.guest_name)}${suffix}).\n\n` +
+                            `📅 Check-in: *${selectedRes.first_night || selectedRes.checkin || ''}*\n\n` +
+                            `¡Todo está listo para tu llegada! Puedes consultar las amenidades, el WiFi y los detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴\n\n` +
+                            `🌐 *PORTAL DEL HUÉSPED:*\n` +
+                            `${portalLink}`
+                          ),
+
+                          // 17: Comprobante de Anticipo Recibido
+                          17: isEn ? (
+                            `🧾 *Deposit Receipt Received*\n\n` +
+                            `Hello, ${guestFirstName}!\n\n` +
+                            `We have received your payment receipt for *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}* as a deposit for your reservation #${selectedRes.id}.\n\n` +
+                            `Our team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm your reservation. Thank you!\n\n` +
+                            `🌐 *Guest Portal:*\n` +
+                            `${portalLink}`
+                          ) : (
+                            `🧾 *Comprobante de anticipo recibido*\n\n` +
+                            `¡Hola, ${guestFirstName}!\n\n` +
+                            `Hemos recibido tu comprobante de pago por *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}* como anticipo para tu reservación #${selectedRes.id}.\n\n` +
+                            `Nuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!\n\n` +
+                            `🌐 *Portal del Huésped:*\n` +
+                            `${portalLink}`
+                          ),
+
+                          // 18: Comprobante de Pago Total Recibido
+                          18: isEn ? (
+                            `🧾 *Full Payment Receipt Received (100%)*\n\n` +
+                            `Hello, ${guestFirstName}!\n\n` +
+                            `We have received your payment receipt for *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}* for the full payment (100%) of your reservation #${selectedRes.id}.\n\n` +
+                            `Our team is reviewing it (this process may take up to 24 hours). We will notify you here as soon as it is approved to confirm that your stay is fully paid. Thank you!\n\n` +
+                            `🌐 *Guest Portal:*\n` +
+                            `${portalLink}`
+                          ) : (
+                            `🧾 *Comprobante de pago total recibido (100%)*\n\n` +
+                            `¡Hola, ${guestFirstName}!\n\n` +
+                            `Hemos recibido tu comprobante de pago por *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}* para el pago total (100%) de tu reservación #${selectedRes.id}.\n\n` +
+                            `Nuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmarte que tu estancia ha quedado totalmente liquidada. ¡Muchas gracias!\n\n` +
+                            `🌐 *Portal del Huésped:*\n` +
+                            `${portalLink}`
+                          ),
+
+                          // 19: Enlace Directo al Portal del Huésped
+                          19: isEn ? (
+                            `Hello, ${guestFirstName}, here is your access to your real-time booking details. From your portal you can view your room status, guidelines, WiFi info, and record additional payments. ✅\n\n` +
+                            `🌐 *Guest Portal:*\n` +
+                            `${portalLink}`
+                          ) : (
+                            `Hola, ${guestFirstName}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales. ✅\n\n` +
+                            `🌐 *Portal del Huésped:*\n` +
+                            `${portalLink}`
                           )
                         };
 
@@ -7358,7 +7448,12 @@ function ReservasListInner() {
                           11: 'pago_anticipo_recibido',
                           12: 'wifi_informacion',
                           13: 'alojamiento_listo',
-                          14: 'rechazo_solicitud'
+                          14: 'rechazo_solicitud',
+                          15: 'anticipo_aprobado',
+                          16: 'pago_total_aprobado',
+                          17: 'comprobante_anticipo_recibido',
+                          18: 'comprobante_pago_total_recibido',
+                          19: 'portal_huesped_link'
                         };
 
                         const apiTemplateKey = apiTemplates[selectedMessageIndex];
@@ -7370,7 +7465,7 @@ function ReservasListInner() {
                             const guestName = selectedRes.guest_name || 'el huésped';
                             const hasConfirmed = window.confirm(
                               `⚠️ ¿Estás seguro de que deseas enviar el ÚLTIMO AVISO a ${guestName}?\n\n` +
-                              `Esto notificará al cliente por WhatsApp y activará la cuenta regresiva de 3 horas para la cancelación automática de su reservación.`
+                              `Esto notificará al cliente por WhatsApp y activará la cuenta regresiva de 1 hora para la cancelación automática de su reservación.`
                             );
                             if (!hasConfirmed) return;
                           }
