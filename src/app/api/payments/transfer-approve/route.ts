@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token, isOtaBeds24Booking } from '@/lib/beds24';
-import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage } from '@/lib/whatsapp';
+import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage, sendTemplate_AnticipoAprobado, buildAnticipoAprobadoFallbackText, buildFullPaymentApprovedText, resolveGuestLanguage } from '@/lib/whatsapp';
 import { maskPhone } from '@/lib/log-mask';
 
 export const dynamic = 'force-dynamic';
@@ -504,23 +504,48 @@ export async function POST(req: Request) {
         try {
           const firstName = getFirstName(guestName);
           const currLabel = String(guestName).toUpperCase().includes('(US DOLLARS)') ? 'USD' : 'MXN';
-          const formattedAmount = Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 });
-          const formattedBalance = balance.toLocaleString('es-MX', { minimumFractionDigits: 2 });
 
           if (balance <= 0 || effectiveDeposit >= effectivePrice) {
-            // Pago 100% Completado y Liquidado
-            const fullPaymentMsg = isGroupBooking
-              ? `🎉 ¡Excelente noticia, ${firstName}! Confirmamos la aprobación de tu pago por $${formattedAmount} ${currLabel}.\n\nTu grupo de reservaciones (${groupTotalCount} condominios, ref: #${bookingId}) en Condominios Jaroje se encuentra **100% PAGADO Y LIQUIDADO** (Saldo restante: $0.00).\n\n¡Todo está listo para tu llegada${checkIn ? ` el ${checkIn}` : ''}! Puedes consultar las amenidades, WiFi y detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴`
-              : `🎉 ¡Excelente noticia, ${firstName}! Confirmamos la aprobación de tu pago por $${formattedAmount} ${currLabel}.\n\nTu reservación #${bookingId} en Condominios Jaroje se encuentra **100% PAGADA Y LIQUIDADA** (Saldo restante: $0.00).\n\n¡Todo está listo para tu llegada${checkIn ? ` el ${checkIn}` : ''}! Puedes consultar las amenidades, WiFi y detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴`;
+            // Pago 100% Completado y Liquidado (texto libre en el idioma del huésped: español o inglés)
+            const fullPaymentMsg = buildFullPaymentApprovedText({
+              lang: await resolveGuestLanguage(phone, bookingId),
+              firstName,
+              amount: Number(amount),
+              currency: currLabel === 'USD' ? 'USD' : 'MXN',
+              groupCount: isGroupBooking ? groupTotalCount : 1,
+              bookingId,
+              checkIn,
+            });
             console.log(`[Approve Transfer] Sending 100% full payment confirmation message to ${maskPhone(phone)}`);
             await sendWhatsAppTextMessage(phone, fullPaymentMsg);
           } else {
             // Anticipo Aprobado (50% u otro abono)
-            const partialPaymentMsg = isGroupBooking
-              ? `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para tu grupo de reservaciones (${groupTotalCount} condominios, ref: #${bookingId}).\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`
-              : `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para la reserva #${bookingId}.\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`;
-            console.log(`[Approve Transfer] Sending partial payment approval confirmation message to ${maskPhone(phone)}`);
-            await sendWhatsAppTextMessage(phone, partialPaymentMsg);
+            // Por PLANTILLA de Meta (anticipo_aprobado, es/en): un texto libre solo llega si el huésped escribió en las últimas 24 h.
+            console.log(`[Approve Transfer] Sending partial payment approval template (anticipo_aprobado) to ${maskPhone(phone)}`);
+            const approvedRes = await sendTemplate_AnticipoAprobado({
+              phone,
+              bookingId,
+              guestName,
+              amount: Number(amount),
+              balance,
+              currency: currLabel === 'USD' ? 'USD' : 'MXN',
+              groupCount: isGroupBooking ? groupTotalCount : 1,
+              bypassPause: true,
+            });
+            // Respaldo: el texto de antes, solo si la plantilla falla y no fue un bloqueo intencionado (persona excluida, pausa o silencio)
+            const blockedByRule = approvedRes.error === 'excluded_person' || approvedRes.error === 'paused' || approvedRes.error === 'muted';
+            if (!approvedRes.success && !blockedByRule) {
+              console.warn(`[Approve Transfer] Plantilla anticipo_aprobado no disponible (${approvedRes.error}); se envía el texto de respaldo.`);
+              await sendWhatsAppTextMessage(phone, buildAnticipoAprobadoFallbackText({
+                lang: approvedRes.lang,
+                firstName,
+                amount: Number(amount),
+                balance,
+                currency: currLabel === 'USD' ? 'USD' : 'MXN',
+                groupCount: isGroupBooking ? groupTotalCount : 1,
+                bookingId,
+              }));
+            }
           }
         } catch (msgErr) {
           console.error("[Approve Transfer] Error enviando mensaje de estado de pago:", msgErr);
