@@ -3,7 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { grantGuestAccess, normalizeBookingId, guestFileUrl, isGuestAuthorized } from '@/lib/guest-auth';
 import { resolveB24Alias } from '@/lib/guest-phone';
 import { filesProxyUrl } from '@/lib/storage-files';
-import { sendTemplate_ComprobantePagoRecibido, sendWhatsAppTextMessage, isSpanishOrLatamPhone } from '@/lib/whatsapp';
+import { sendTemplate_ComprobantePagoRecibido, sendWhatsAppTextMessage, isSpanishOrLatamPhone, computeDepositPercent } from '@/lib/whatsapp';
 import { checkGuestAccess, verificationRequiredResponse } from '@/lib/guest-access';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
 import { maskPhone } from '@/lib/log-mask';
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
           department: 'recepcion',
           module: 'reservas',
           action: 'transfer_receipt_submitted',
-          details: `Comprobante de ${isExplicitTotal ? 'pago total (100%)' : (isExplicitAnticipo ? 'anticipo (50%)' : 'abono')} subido por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN para Reserva #${guestId}. Pendiente en pestaña Por Aprobar.`,
+          details: `Comprobante de ${isExplicitTotal ? 'pago total (100%)' : (isExplicitAnticipo ? 'anticipo' : 'abono')} subido por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN para Reserva #${guestId}. Pendiente en pestaña Por Aprobar.`,
           created_at: new Date().toISOString()
         }]);
     } catch (logErr) {
@@ -318,6 +318,10 @@ export async function POST(req: Request) {
           isFullPayment = (remainingBalance > 0 && numAmount >= remainingBalance - 0.01) || numAmount >= reservationTotal * 0.95;
         }
 
+        // % del total que cubre este comprobante (para anticipos que no son el 50 %: 10 %, 30 %, 80 %...)
+        const depositPercent = isFullPayment ? null : computeDepositPercent(numAmount, reservationTotal);
+        const percentText = depositPercent != null ? ` (${depositPercent}%)` : '';
+
         const amountLabel = isEnglish
           ? `$${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${currLabel}`
           : `$${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel}`;
@@ -340,6 +344,7 @@ export async function POST(req: Request) {
           amountLabel,
           referenceText: isEnglish ? refTextEn : refText,
           isFullPayment,
+          percent: depositPercent,
           lang: targetLang,
           bypassPause: false,
         });
@@ -356,10 +361,10 @@ export async function POST(req: Request) {
           const guestNotificationBody = isEnglish
             ? (isFullPayment
               ? `Hello, ${dbGuestName}! We have received your ${methodLabelEn} receipt for ${amountLabel} for the full payment (100%) of ${refTextEn}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here once it is approved to confirm that your stay is fully paid. Thank you!`
-              : `Hello, ${dbGuestName}! We have received your ${methodLabelEn} receipt for ${amountLabel} as a deposit for ${refTextEn}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here once it is approved to confirm your reservation. Thank you!`)
+              : `Hello, ${dbGuestName}! We have received your ${methodLabelEn} receipt for ${amountLabel}${percentText} as a deposit for ${refTextEn}.\n\nOur team is reviewing it (this process may take up to 24 hours). We will notify you here once it is approved to confirm your reservation. Thank you!`)
             : (isFullPayment
               ? `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por ${amountLabel} para el pago total (100%) de ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmarte que tu estancia ha quedado totalmente liquidada. ¡Muchas gracias!`
-              : `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por ${amountLabel} como anticipo para ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!`);
+              : `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por ${amountLabel}${percentText} como anticipo para ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmar tu reservación. ¡Muchas gracias!`);
 
           await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
         }

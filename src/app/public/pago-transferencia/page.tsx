@@ -266,7 +266,7 @@ export default function PagoTransferenciaPage() {
         formData.append('email', String(email));
 
         const typeTag = paymentType === 'anticipo'
-          ? '[Tipo: Anticipo (50%)]'
+          ? '[Tipo: Anticipo]'
           : (paymentType === 'total'
             ? '[Tipo: Pago Total (100%)]'
             : (paymentType === 'saldo' ? '[Tipo: Saldo Restante]' : ''));
@@ -391,7 +391,7 @@ export default function PagoTransferenciaPage() {
                           : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       }`}>
                         {paymentType === 'anticipo'
-                          ? (lang === 'en' ? 'Deposit (50%)' : 'Anticipo (50%)')
+                          ? (lang === 'en' ? 'Deposit' : 'Anticipo')
                           : (paymentType === 'total'
                             ? (lang === 'en' ? 'Total (100%)' : 'Pago Total (100%)')
                             : (lang === 'en' ? 'Balance Settlement' : 'Liquidación de Saldo'))}
