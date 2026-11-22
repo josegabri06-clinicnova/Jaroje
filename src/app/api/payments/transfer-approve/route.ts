@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token, isOtaBeds24Booking } from '@/lib/beds24';
+import { findWiseAccount, isWiseMxnNote } from '@/lib/wise-accounts';
 import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage, sendTemplate_AnticipoAprobado, buildAnticipoAprobadoFallbackText, buildFullPaymentApprovedText, sendTemplate_PagoTotalAprobado } from '@/lib/whatsapp';
 import { maskPhone } from '@/lib/log-mask';
 
@@ -298,7 +299,7 @@ export async function POST(req: Request) {
             const mpAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
             if (mpAcc) accountId = mpAcc.id;
           } else if (isWise) {
-            const wiseAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
+            const wiseAcc = findWiseAccount(accounts, isWiseMxnNote(receiptNotes));
             if (wiseAcc) accountId = wiseAcc.id;
           } else if (isPaypal) {
             const ppAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
@@ -334,7 +335,7 @@ export async function POST(req: Request) {
               const mpAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
               if (mpAcc) accountId = mpAcc.id;
             } else if (portalTransferAcc.includes('WISE')) {
-              const wiseAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
+              const wiseAcc = findWiseAccount(accounts, portalTransferAcc.includes('WISE_MXN'));
               if (wiseAcc) accountId = wiseAcc.id;
             } else if (portalTransferAcc.includes('PAYPAL')) {
               const ppAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
@@ -375,7 +376,7 @@ export async function POST(req: Request) {
             desc = `${guestName} (ID: ${bookingId}) - Abono con Tarjeta / Mercado Pago (Ref: ${receiptId.substring(0, 8)})`;
           } else if (isWise || accountName.toUpperCase().includes('WISE')) {
             paymentMethodType = 'transferencia';
-            desc = `${guestName} (ID: ${bookingId}) - Abono vía Wise USD (Ref: ${receiptId.substring(0, 8)})`;
+            desc = `${guestName} (ID: ${bookingId}) - Abono vía ${accountName.toUpperCase().includes('MXN') ? 'Wise MXN' : 'Wise USD'} (Ref: ${receiptId.substring(0, 8)})`;
           } else if (isPaypal || accountName.toUpperCase().includes('PAYPAL')) {
             paymentMethodType = 'tarjeta';
             desc = `${guestName} (ID: ${bookingId}) - Abono vía PayPal (Ref: ${receiptId.substring(0, 8)})`;

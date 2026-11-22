@@ -6877,6 +6877,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                           <option value="santander">SANTANDER (Laura Isabel Corral)</option>
                           <option value="banamex">BANAMEX (Rolando Diaz)</option>
                           <option value="hsbc">HSBC (Rolando Diaz)</option>
+                          <option value="wise_mxn">WISE MXN (Rolando Diaz)</option>
                           <option value="wise">WISE USD (Rolando Diaz)</option>
                           <option value="paypal">PAYPAL USD (Live Huatulco)</option>
                         </select>

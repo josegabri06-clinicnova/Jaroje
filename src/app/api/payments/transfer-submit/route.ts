@@ -288,6 +288,7 @@ export async function POST(req: Request) {
         const isCard = notesStr.includes('TARJETA') || notesStr.includes('MERCADO PAGO') || notesStr.includes('MERPAGO');
         const isWise = notesStr.includes('WISE');
         const isPayPal = notesStr.includes('PAYPAL');
+        const isWiseMxn = notesStr.includes('WISE MXN'); // Wise en pesos: el monto va en MXN, no en USD
         const hasFormLang = formData.has('lang') && String(formData.get('lang') || '').trim() !== '';
         const isEnglish =
           formLang === 'en' ||
@@ -303,7 +304,7 @@ export async function POST(req: Request) {
           ? 'card / Mercado Pago payment'
           : (isWise ? 'Wise payment' : (isPayPal ? 'PayPal payment' : 'bank transfer'));
 
-        const currLabel = (isWise || isPayPal || String(dbGuestName).toUpperCase().includes('(US DOLLARS)')) ? 'USD' : 'MXN';
+        const currLabel = ((isWise && !isWiseMxn) || isPayPal || String(dbGuestName).toUpperCase().includes('(US DOLLARS)')) ? 'USD' : 'MXN';
         const numAmount = Number(amount || 0);
         const remainingBalance = Math.max(0, reservationTotal - reservationDeposit);
 
