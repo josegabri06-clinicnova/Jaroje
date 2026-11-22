@@ -233,6 +233,16 @@ export default function PagoTransferenciaPage() {
         ? 'Please make your payment in US Dollars (USD) via the Wise secure platform.'
         : 'Por favor, realiza tu pago en dólares americanos (USD) a través de la plataforma segura de Wise.'
     },
+    // Misma cuenta/enlace de Wise, pero en pesos: sin la advertencia de pagar en dólares
+    wise_mxn: {
+      banco: 'WISE MXN',
+      titular: 'Rolando Diaz Ceballos',
+      url: 'https://wise.com/pay/me/rolandod148',
+      isLink: true,
+      description: lang === 'en'
+        ? 'Please make your payment via the Wise secure platform.'
+        : 'Por favor, realiza tu pago a través de la plataforma segura de Wise.'
+    },
     paypal: {
       banco: 'PAYPAL USD',
       titular: 'Live Huatulco',

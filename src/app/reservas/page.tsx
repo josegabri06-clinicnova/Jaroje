@@ -13,6 +13,7 @@ import { getChannelBadge, CHANNEL_COLLECT_OTAS } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 import { normalizePhone } from '@/lib/phone';
+import { findWiseAccount, isWiseMxnNote } from '@/lib/wise-accounts';
 
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
 const supabase = createDbClient();
@@ -1899,7 +1900,7 @@ function ReservasListInner() {
         if (isMercadoPago) {
           matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
         } else if (isWise) {
-          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
+          matchedAcc = findWiseAccount(accounts, isWiseMxnNote(receiptNotes));
         } else if (isPaypal) {
           matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
         } else if (isBanamex) {
@@ -1913,8 +1914,8 @@ function ReservasListInner() {
         if (!matchedAcc) {
           if (portalTransferAccount === 'mercadopago') {
             matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
-          } else if (portalTransferAccount === 'wise') {
-            matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
+          } else if (portalTransferAccount === 'wise' || portalTransferAccount === 'wise_mxn') {
+            matchedAcc = findWiseAccount(accounts, portalTransferAccount === 'wise_mxn');
           } else if (portalTransferAccount === 'paypal') {
             matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
           } else if (portalTransferAccount === 'banamex') {
@@ -6056,6 +6057,7 @@ function ReservasListInner() {
                           <option value="santander">SANTANDER (Laura Isabel Corral)</option>
                           <option value="banamex">BANAMEX (Rolando Diaz)</option>
                           <option value="hsbc">HSBC (Rolando Diaz)</option>
+                          <option value="wise_mxn">WISE MXN (Rolando Diaz)</option>
                           <option value="wise">WISE USD (Rolando Diaz)</option>
                           <option value="paypal">PAYPAL USD (Live Huatulco)</option>
                         </select>
