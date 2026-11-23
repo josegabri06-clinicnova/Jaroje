@@ -24,7 +24,6 @@ import {
   Home,
   Info,
   MessageSquare,
-  Edit,
   LogOut,
   ReceiptText,
   Lock
