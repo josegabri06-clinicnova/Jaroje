@@ -17,7 +17,18 @@ function sanitizeRooms(rooms: any[], allowedIds: Set<string>) {
 const validGuestCount = (r: { numAdult: number; numChild: number }) =>
   Number.isInteger(r.numAdult) && Number.isInteger(r.numChild) && r.numAdult >= 0 && r.numChild >= 0 && r.numAdult + r.numChild <= 50;
 
+const GUEST_EDIT_ENABLED = false as boolean;
+
 export async function POST(req: Request) {
+  // DESACTIVADO: el huésped ya no puede cambiar el número de personas desde el portal (modificarlo bajaba la tarifa por error).
+  // Se bloquea también aquí para que no se pueda llamar directamente. Los cambios de huéspedes los hace recepción.
+  if (!GUEST_EDIT_ENABLED) {
+    return NextResponse.json(
+      { success: false, error: 'El número de huéspedes ya no se puede modificar desde el portal. Contacta con recepción.' },
+      { status: 403 }
+    );
+  }
+
   try {
     clearBeds24Cache();
     const body = await req.json().catch(() => null);

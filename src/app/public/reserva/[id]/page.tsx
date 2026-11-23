@@ -1750,41 +1750,8 @@ export default function PublicReservaPage() {
                   </span>
                 )}
               </div>
-              {booking.status !== 'cancelled' && (
-                <button
-                  onClick={() => {
-                    if (isOta) {
-                      setShowOtaWarningModal(true);
-                    } else {
-                      if (booking.rooms_detail && booking.rooms_detail.length > 1) {
-                        setTempRooms(booking.rooms_detail.map((r: any) => ({
-                          bookingId: r.room_id || r.id,
-                          room_name: r.room_name,
-                          numAdult: r.individual_num_adult !== undefined ? r.individual_num_adult : (r.num_adult || 1),
-                          numChild: r.individual_num_child !== undefined ? r.individual_num_child : (r.num_child || 0),
-                          max: getIndividualRoomCapacityRules(r).max,
-                          base: getIndividualRoomCapacityRules(r).base
-                        })));
-                      } else {
-                        setTempRooms([{
-                          bookingId: booking.id,
-                          room_name: booking.room_name,
-                          numAdult: booking.individual_num_adult !== undefined ? booking.individual_num_adult : (booking.num_adult || 1),
-                          numChild: booking.individual_num_child !== undefined ? booking.individual_num_child : (booking.num_child || 0),
-                          max: getIndividualRoomCapacityRules(booking).max,
-                          base: getIndividualRoomCapacityRules(booking).base
-                        }]);
-                      }
-                      setUpdateGuestsError('');
-                      setShowEditGuestsModal(true);
-                    }
-                  }}
-                  className="w-full mt-2.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] rounded-lg border border-indigo-200/50 transition-all cursor-pointer shadow-xs active:scale-95 flex items-center justify-center gap-1 uppercase tracking-wider"
-                >
-                  <Edit size={10} strokeWidth={2.5} className="shrink-0" />
-                  {t.editBtn}
-                </button>
-              )}
+              {/* Sin botón de editar huéspedes: el huésped ya no puede cambiar el número de personas desde el portal
+                  (cambiarlo bajaba la tarifa por error). Los cambios los hace recepción. */}
             </div>
 
             {booking.notes && booking.notes.trim() && (
