@@ -2433,6 +2433,7 @@ export default function FinanzasPage() {
                       <option>Comisiones</option>
                       <option>Personal</option>
                       <option>Tarjeta de Crédito</option>
+                      <option>Traspaso</option>
                       <option>Transferencia</option>
                       <option>Ajuste</option>
                       <option>Otros</option>
@@ -2447,6 +2448,7 @@ export default function FinanzasPage() {
                       <option>Airbnb</option>
                       <option>Ajuste</option>
                       <option>Transferencia</option>
+                      <option>Traspaso</option>
                       <option>Otros</option>
                     </>
                   )}
