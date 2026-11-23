@@ -373,6 +373,7 @@ export default function FinanzasPage() {
   // States for absolute resetting of finances
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetAccountId, setResetAccountId] = useState(''); // '' = sin elegir, 'ALL' = todas las cuentas, o el id de una cuenta
   const [isResetting, setIsResetting] = useState(false);
 
   const fetchData = async () => {
@@ -847,12 +848,13 @@ export default function FinanzasPage() {
     }
   };
 
-  const downloadBackupCSV = () => {
-    if (records.length === 0) return;
+  const downloadBackupCSV = (onlyAccountId?: string) => {
+    const rows = onlyAccountId ? records.filter(r => r.account_id === onlyAccountId) : records;
+    if (rows.length === 0) return;
     const headers = ["Fecha", "Tipo", "Categoría", "Monto", "Cuenta", "Descripción"];
     const csvContent = [
       headers.join(","),
-      ...records.map(r => [
+      ...rows.map(r => [
         format(new Date(r.date), 'dd/MM/yyyy'),
         r.type,
         `"${r.category}"`,
@@ -876,6 +878,11 @@ export default function FinanzasPage() {
       alert("Por favor, escribe RESET en mayúsculas para confirmar.");
       return;
     }
+    if (!resetAccountId) {
+      alert("Elige qué cuenta restablecer (o todas).");
+      return;
+    }
+    const singleAccountId = resetAccountId === 'ALL' ? '' : resetAccountId;
 
     let activePin = sessionStorage.getItem('jaroje_session_pin') || '';
     if (!activePin) {
@@ -895,6 +902,7 @@ export default function FinanzasPage() {
         },
         body: JSON.stringify({
           confirm_text: 'RESET',
+          ...(singleAccountId ? { account_id: singleAccountId } : {}),
           admin_pin: activePin,
           employee_num: '999',
           employee_name: 'Administrador Principal'
@@ -904,11 +912,12 @@ export default function FinanzasPage() {
       if (response.ok && data.success) {
         // 2. Descargar respaldo automático después de la respuesta exitosa
         if (records.length > 0) {
-          downloadBackupCSV();
+          downloadBackupCSV(singleAccountId || undefined);
         }
         alert("✅ " + data.message + "\n\nSe ha descargado automáticamente un archivo CSV con el respaldo del historial anterior en tu dispositivo para seguridad.");
         setShowResetModal(false);
         setResetConfirmText('');
+        setResetAccountId('');
         fetchData(); // Refresca los saldos y el historial a cero
       } else {
         alert("❌ Error: " + (data.error || "Ocurrió un error inesperado."));
@@ -1899,12 +1908,13 @@ export default function FinanzasPage() {
               <div className="flex-1 space-y-1">
                 <h4 className="text-[15px] font-bold text-zinc-900">Mantenimiento Contable</h4>
                 <p className="text-[12px] text-zinc-500 leading-relaxed">
-                  Limpia por completo el historial de movimientos y restablece el saldo de todas las cuentas a <span className="font-bold text-rose-600">MX$0</span>. Esta acción es definitiva y no afectará a las reservas ni al inventario físico.
+                  Limpia el historial de movimientos y restablece a <span className="font-bold text-rose-600">MX$0</span> el saldo de la cuenta que elijas, o de todas. Esta acción es definitiva y no afectará a las reservas ni al inventario físico.
                 </p>
                 <div className="pt-3">
                   <button
                     onClick={() => {
                       setResetConfirmText('');
+                      setResetAccountId('');
                       setShowResetModal(true);
                     }}
                     className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-[12px] uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
@@ -2583,10 +2593,11 @@ export default function FinanzasPage() {
                 <Lock size={22} className="text-red-600" />
               </div>
               <button 
-                onClick={() => { 
-                  setShowResetModal(false); 
-                  setResetConfirmText(''); 
-                }} 
+                onClick={() => {
+                  setShowResetModal(false);
+                  setResetConfirmText('');
+                  setResetAccountId('');
+                }}  
                 className="p-2 bg-zinc-100 hover:bg-zinc-200 hover:rotate-90 hover:scale-105 active:scale-95 rounded-full text-zinc-500 transition-all duration-300 cursor-pointer animate-none"
               >
                 <X size={16} />
@@ -2598,8 +2609,28 @@ export default function FinanzasPage() {
                 Confirmación de Borrado Permanente
               </h3>
               <p className="text-[12px] text-zinc-500 leading-relaxed">
-                Estás a punto de vaciar **todo el historial del Libro Contable** y restablecer el saldo de todas las cuentas contables a **$0 MXN**. 
+                {resetAccountId && resetAccountId !== 'ALL'
+                  ? <>Estás a punto de borrar <strong>todos los movimientos de la cuenta {accounts.find(a => a.id === resetAccountId)?.name}</strong> y restablecer su saldo a <strong>$0</strong>. Las demás cuentas no se tocan.</>
+                  : <>Estás a punto de vaciar <strong>todo el historial del Libro Contable</strong> y restablecer el saldo de <strong>todas</strong> las cuentas contables a <strong>$0 MXN</strong>.</>}
               </p>
+
+              <div>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2">
+                  Cuenta a restablecer
+                </label>
+                <select
+                  value={resetAccountId}
+                  onChange={e => setResetAccountId(e.target.value)}
+                  disabled={isResetting}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-bold text-zinc-900 cursor-pointer focus:ring-4 focus:ring-red-500/10 focus:border-red-500"
+                >
+                  <option value="">Elige una cuenta…</option>
+                  {[...accounts].sort((a, b) => String(a.name).localeCompare(String(b.name))).map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                  <option value="ALL">⚠️ TODAS las cuentas (libro completo)</option>
+                </select>
+              </div>
               
               <div className="bg-red-50/50 border border-red-150 rounded-2xl p-3 text-[11px] text-red-700 leading-relaxed font-medium">
                 ⚠️ **Esta acción es irreversible**. Se registrará un log de auditoría permanente de tu usuario. Las reservas de huéspedes y el inventario no serán alterados.
@@ -2632,7 +2663,7 @@ export default function FinanzasPage() {
                 </button>
                 <button 
                   onClick={handleResetFinances}
-                  disabled={isResetting || resetConfirmText !== 'RESET'}
+                  disabled={isResetting || resetConfirmText !== 'RESET' || !resetAccountId}
                   className="py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(220,38,38,0.25)] hover:shadow-[0_8px_20px_rgba(220,38,38,0.35)] active:scale-[0.96] cursor-pointer"
                 >
                   {isResetting ? (
@@ -2640,7 +2671,7 @@ export default function FinanzasPage() {
                   ) : (
                     <>
                       <Trash2 size={16} strokeWidth={2.5} />
-                      Borrar Todo
+                      {resetAccountId === 'ALL' || !resetAccountId ? 'Borrar Todo' : 'Borrar Cuenta'}
                     </>
                   )}
                 </button>
