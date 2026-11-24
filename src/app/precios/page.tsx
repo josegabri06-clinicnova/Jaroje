@@ -18,15 +18,16 @@ const fmtDate = (isoStr: string) => {
 };
 
 // Fórmulas que muestra esta pantalla para las OTA (solo para mostrar: no se envían a Beds24 ni se guardan).
-// Booking: base × 1.4433 MUL × 1.19 TAX − 10 % promoción · Google: base × 1.4407 · Expedia: base × 1.6336
+// Booking: base × 1.4433 MUL × 1.19 TAX − 10 % promoción · Google: base × 1.4407 · Expedia: base × 1.7175 − 10 % promoción
 const BOOKING_MUL = 1.4433;
 const BOOKING_TAX = 1.19;
 const BOOKING_PROMO = 0.90;
 const GOOGLE_MUL = 1.4407;
-const EXPEDIA_MUL = 1.6336;
+const EXPEDIA_MUL = 1.7175;
+const EXPEDIA_PROMO = 0.90;
 const priceBookingOf = (raw: number) => Math.round(raw * BOOKING_MUL * BOOKING_TAX * BOOKING_PROMO);
 const priceGoogleOf = (raw: number) => Math.round(raw * GOOGLE_MUL);
-const priceExpediaOf = (raw: number) => Math.round(raw * EXPEDIA_MUL);
+const priceExpediaOf = (raw: number) => Math.round(raw * EXPEDIA_MUL * EXPEDIA_PROMO);
 
 export default function PreciosPage() {
   // Beds24 direct pricing state
@@ -224,7 +225,7 @@ export default function PreciosPage() {
       `  · Airbnb:     $${precioAirbnb} (* 1.20 MUL * 1.21 TAX)\n` +
       `  · Booking:    $${precioBooking} (* 1.4433 MUL * 1.19 TAX - 10% Promoción)\n` +
       `  · Google Ads: $${precioGoogle} (* 1.4407 MUL)\n` +
-      `  · Expedia:    $${precioExpedia} (* 1.6336 MUL)\n\n` +
+      `  · Expedia:    $${precioExpedia} (* 1.7175 MUL - 10% Promoción)\n\n` +
       `Se modificarán los periodos no descontados de esta temporada en Beds24.\n` +
       `Las reservas ya confirmadas NO se ven afectadas.\n\n` +
       `¿Continuar?`
@@ -842,7 +843,7 @@ export default function PreciosPage() {
                     </div>
                   </div>
                   <p className="text-[9.5px] text-zinc-500 italic">
-                    Airbnb ×{beds24Multipliers.airbnb || 1.20} MUL (IVA 21%) · Booking (* 1.4433 MUL * 1.19 TAX - 10% Promoción) · Google (* 1.4407 MUL) · Expedia (* 1.6336 MUL) · impuestos incluidos
+                    Airbnb ×{beds24Multipliers.airbnb || 1.20} MUL (IVA 21%) · Booking (* 1.4433 MUL * 1.19 TAX - 10% Promoción) · Google (* 1.4407 MUL) · Expedia (* 1.7175 MUL - 10% Promoción) · impuestos incluidos
                   </p>
                 </div>
               )}
@@ -1141,7 +1142,7 @@ export default function PreciosPage() {
               <span className="px-2.5 py-1.5 bg-rose-950/80 border border-rose-800/40 text-rose-300 rounded-lg">Airbnb: Base × 1.20 MUL × 1.21 TAX</span>
               <span className="px-2.5 py-1.5 bg-sky-950/80 border border-sky-800/40 text-sky-300 rounded-lg">Booking: Base × 1.4433 MUL × 1.19 TAX - 10% Promoción</span>
               <span className="px-2.5 py-1.5 bg-emerald-950/80 border border-emerald-800/40 text-emerald-300 rounded-lg">Google Ads: Base × 1.4407 MUL</span>
-              <span className="px-2.5 py-1.5 bg-amber-950/80 border border-amber-800/40 text-amber-300 rounded-lg">Expedia: Base × 1.6336 MUL</span>
+              <span className="px-2.5 py-1.5 bg-amber-950/80 border border-amber-800/40 text-amber-300 rounded-lg">Expedia: Base × 1.7175 MUL - 10% Promoción</span>
             </div>
           </div>
 
@@ -1345,7 +1346,7 @@ export default function PreciosPage() {
 
                                     {/* Expedia */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Expedia (* 1.6336 MUL)</span>
+                                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Expedia (* 1.7175 MUL - 10% Promoción)</span>
                                       <span className="text-[12px] font-black text-amber-600 mt-1">${pExpedia > 0 ? pExpedia.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
