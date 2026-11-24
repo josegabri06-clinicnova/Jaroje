@@ -17,6 +17,17 @@ const fmtDate = (isoStr: string) => {
   return `${day} ${month} ${year}`;
 };
 
+// Fórmulas que muestra esta pantalla para las OTA (solo para mostrar: no se envían a Beds24 ni se guardan).
+// Booking: base × 1.4433 MUL × 1.19 TAX − 10 % promoción · Google: base × 1.4407 · Expedia: base × 1.6336
+const BOOKING_MUL = 1.4433;
+const BOOKING_TAX = 1.19;
+const BOOKING_PROMO = 0.90;
+const GOOGLE_MUL = 1.4407;
+const EXPEDIA_MUL = 1.6336;
+const priceBookingOf = (raw: number) => Math.round(raw * BOOKING_MUL * BOOKING_TAX * BOOKING_PROMO);
+const priceGoogleOf = (raw: number) => Math.round(raw * GOOGLE_MUL);
+const priceExpediaOf = (raw: number) => Math.round(raw * EXPEDIA_MUL);
+
 export default function PreciosPage() {
   // Beds24 direct pricing state
   const [beds24Rooms, setBeds24Rooms] = useState<any[]>([]);
@@ -198,9 +209,9 @@ export default function PreciosPage() {
 
     const precioDirecto = Math.round(newPriceRaw * 1.19).toLocaleString('es-MX');
     const precioAirbnb  = Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21).toLocaleString('es-MX');
-    const precioBooking = Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90).toLocaleString('es-MX');
-    const precioGoogle  = Math.round(newPriceRaw * (beds24Multipliers.google || 1.4024745)).toLocaleString('es-MX');
-    const precioExpedia = Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.446)).toLocaleString('es-MX');
+    const precioBooking = priceBookingOf(newPriceRaw).toLocaleString('es-MX');
+    const precioGoogle  = priceGoogleOf(newPriceRaw).toLocaleString('es-MX');
+    const precioExpedia = priceExpediaOf(newPriceRaw).toLocaleString('es-MX');
 
     const confirmed = window.confirm(
       `⚠️ CONFIRMAR CAMBIO MASIVO EN BEDS24\n\n` +
@@ -262,9 +273,9 @@ export default function PreciosPage() {
               priceRaw: newPriceRaw,
               priceDirecto: Math.round(newPriceRaw * 1.19),
               priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21),
-              priceBooking: Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90),
-              priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.4024745)),
-              priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.446)),
+              priceBooking: priceBookingOf(newPriceRaw),
+              priceGoogle: priceGoogleOf(newPriceRaw),
+              priceExpedia: priceExpediaOf(newPriceRaw),
             };
           })
         };
@@ -350,9 +361,9 @@ export default function PreciosPage() {
                 priceRaw: newPriceRaw,
                 priceDirecto: Math.round(newPriceRaw * 1.19),
                 priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21),
-                priceBooking: Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90),
-                priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.4024745)),
-                priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.446)),
+                priceBooking: priceBookingOf(newPriceRaw),
+                priceGoogle: priceGoogleOf(newPriceRaw),
+                priceExpedia: priceExpediaOf(newPriceRaw),
               };
             })
           };
@@ -568,9 +579,9 @@ export default function PreciosPage() {
   // El input ahora es Precio Base (sin impuestos)
   const tdPriceRaw = evaluatedPrice ? Math.round(evaluatedPrice * 100) / 100 : 0;
   const tdPriceAirbnb = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21) : 0;
-  const tdPriceBooking = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90) : 0;
-  const tdPriceGoogle = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.google || 1.4024745)) : 0;
-  const tdPriceExpedia = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.expedia || 1.446)) : 0;
+  const tdPriceBooking = tdPriceRaw > 0 ? priceBookingOf(tdPriceRaw) : 0;
+  const tdPriceGoogle = tdPriceRaw > 0 ? priceGoogleOf(tdPriceRaw) : 0;
+  const tdPriceExpedia = tdPriceRaw > 0 ? priceExpediaOf(tdPriceRaw) : 0;
 
   const loadTempDiscounts = async () => {
     try {
@@ -1270,9 +1281,9 @@ export default function PreciosPage() {
                               // Previews de precios calculados
                               const pDirecto = currentPriceNum > 0 ? Math.round(currentPriceNum * 1.19) : 0;
                               const pAirbnb  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.airbnb || 1.20) * 1.21) : 0;
-                              const pBooking = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90) : 0;
-                              const pGoogle  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.google || 1.4024745)) : 0;
-                              const pExpedia = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.expedia || 1.446)) : 0;
+                              const pBooking = currentPriceNum > 0 ? priceBookingOf(currentPriceNum) : 0;
+                              const pGoogle  = currentPriceNum > 0 ? priceGoogleOf(currentPriceNum) : 0;
+                              const pExpedia = currentPriceNum > 0 ? priceExpediaOf(currentPriceNum) : 0;
 
                               return (
                                 <div key={room.id} className={`pt-4 ${rIdx === 0 ? 'pt-0' : ''} flex flex-col xl:flex-row xl:items-center justify-between gap-4`}>
@@ -1437,7 +1448,7 @@ export default function PreciosPage() {
                               </div>
                               <span className="text-right">{tier.priceDirecto > 0 ? `$${tier.priceDirecto.toLocaleString('es-MX')}` : '—'}</span>
                               <span className={`text-right ${isBase ? 'text-rose-600 font-extrabold' : 'text-rose-450'}`}>{tier.priceAirbnb > 0 ? `$${tier.priceAirbnb.toLocaleString('es-MX')}` : '—'}</span>
-                              <span className={`text-right ${isBase ? 'text-sky-600 font-extrabold' : 'text-sky-450'}`}>{tier.priceBooking > 0 ? `$${tier.priceBooking.toLocaleString('es-MX')}` : '—'}</span>
+                              <span className={`text-right ${isBase ? 'text-sky-600 font-extrabold' : 'text-sky-450'}`}>{tier.priceRaw > 0 ? `$${priceBookingOf(tier.priceRaw).toLocaleString('es-MX')}` : '—'}</span>
                             </div>
                           );
                         })}
