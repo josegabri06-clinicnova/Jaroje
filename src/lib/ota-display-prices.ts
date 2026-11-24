@@ -5,8 +5,8 @@
  */
 
 export const DIRECT_TAX = 1.19;
-export const AIRBNB_TAX = 1.21;
-export const AIRBNB_MUL_DEFAULT = 1.20; // el multiplicador de Airbnb sale del ajuste guardado; este valor solo es el de respaldo
+export const AIRBNB_MUL = 1.2212;
+export const AIRBNB_TAX = 1.19;
 export const BOOKING_MUL = 1.4433;
 export const BOOKING_TAX = 1.19;
 export const GOOGLE_MUL = 1.5148;
@@ -15,7 +15,7 @@ export const PROMO_PCT = 10; // promoción de Booking y Expedia
 const PROMO_FACTOR = (100 - PROMO_PCT) / 100;
 
 export const priceDirectoOf = (raw: number) => Math.round(raw * DIRECT_TAX);
-export const priceAirbnbOf = (raw: number, airbnbMul: number) => Math.round(raw * airbnbMul * AIRBNB_TAX);
+export const priceAirbnbOf = (raw: number) => Math.round(raw * AIRBNB_MUL * AIRBNB_TAX);
 export const priceBookingOf = (raw: number) => Math.round(raw * BOOKING_MUL * BOOKING_TAX * PROMO_FACTOR);
 export const priceGoogleOf = (raw: number) => Math.round(raw * GOOGLE_MUL);
 export const priceExpediaOf = (raw: number) => Math.round(raw * EXPEDIA_MUL * PROMO_FACTOR);
@@ -27,7 +27,7 @@ const fmt = (n: number) => {
 };
 
 export const formulaDirecto = () => `* ${fmt(DIRECT_TAX)} TAX`;
-export const formulaAirbnb = (airbnbMul: number) => `* ${fmt(airbnbMul)} MUL * ${fmt(AIRBNB_TAX)} TAX`;
+export const formulaAirbnb = () => `* ${fmt(AIRBNB_MUL)} MUL * ${fmt(AIRBNB_TAX)} TAX`;
 export const formulaBooking = () => `* ${fmt(BOOKING_MUL)} MUL * ${fmt(BOOKING_TAX)} TAX - ${PROMO_PCT}% Promoción`;
 export const formulaGoogle = () => `* ${fmt(GOOGLE_MUL)} MUL`;
 export const formulaExpedia = () => `* ${fmt(EXPEDIA_MUL)} MUL - ${PROMO_PCT}% Promoción`;

@@ -8,7 +8,6 @@ import {
 import { JAROJE_PRICES } from '@/lib/beds24';
 import { createDbClient } from '@/lib/db-client';
 import {
-  AIRBNB_MUL_DEFAULT,
   priceDirectoOf, priceAirbnbOf, priceBookingOf, priceGoogleOf, priceExpediaOf,
   formulaDirecto, formulaAirbnb, formulaBooking, formulaGoogle, formulaExpedia, asBaseFormula,
 } from '@/lib/ota-display-prices';
@@ -26,9 +25,7 @@ export default function PreciosPage() {
   // Beds24 direct pricing state
   const [beds24Rooms, setBeds24Rooms] = useState<any[]>([]);
   const [beds24Loading, setBeds24Loading] = useState(false);
-  const [beds24Multipliers, setBeds24Multipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.446 });
   const [beds24Error, setBeds24Error] = useState<string | null>(null);
-  const airbnbMul = beds24Multipliers.airbnb || AIRBNB_MUL_DEFAULT;
 
   // Key format: `${roomId}_${seasonId}` — permite editar cada bloque de temporada por separado
   const [editedSeasonPrices, setEditedSeasonPrices] = useState<Record<string, string>>({});  
@@ -132,9 +129,6 @@ export default function PreciosPage() {
         return;
       }
       setBeds24Rooms(json.rooms || []);
-      if (json.multipliers) {
-        setBeds24Multipliers(json.multipliers);
-      }
       if (json.capacitySettings) {
         setCapacitySettings({
           'extra_guest_price': 500,
@@ -203,7 +197,7 @@ export default function PreciosPage() {
     }
 
     const precioDirecto = priceDirectoOf(newPriceRaw).toLocaleString('es-MX');
-    const precioAirbnb  = priceAirbnbOf(newPriceRaw, airbnbMul).toLocaleString('es-MX');
+    const precioAirbnb  = priceAirbnbOf(newPriceRaw).toLocaleString('es-MX');
     const precioBooking = priceBookingOf(newPriceRaw).toLocaleString('es-MX');
     const precioGoogle  = priceGoogleOf(newPriceRaw).toLocaleString('es-MX');
     const precioExpedia = priceExpediaOf(newPriceRaw).toLocaleString('es-MX');
@@ -216,7 +210,7 @@ export default function PreciosPage() {
       `Nuevo precio base para toda la temporada: $${newPriceRaw.toLocaleString('es-MX')} (sin impuestos)\n\n` +
       `Los huéspedes verán (1-6 noches):\n` +
       `  · Directo:    $${precioDirecto} (${formulaDirecto()})\n` +
-      `  · Airbnb:     $${precioAirbnb} (${formulaAirbnb(airbnbMul)})\n` +
+      `  · Airbnb:     $${precioAirbnb} (${formulaAirbnb()})\n` +
       `  · Booking:    $${precioBooking} (${formulaBooking()})\n` +
       `  · Google Ads: $${precioGoogle} (${formulaGoogle()})\n` +
       `  · Expedia:    $${precioExpedia} (${formulaExpedia()})\n\n` +
@@ -267,7 +261,7 @@ export default function PreciosPage() {
               ...b,
               priceRaw: newPriceRaw,
               priceDirecto: priceDirectoOf(newPriceRaw),
-              priceAirbnb: priceAirbnbOf(newPriceRaw, airbnbMul),
+              priceAirbnb: priceAirbnbOf(newPriceRaw),
               priceBooking: priceBookingOf(newPriceRaw),
               priceGoogle: priceGoogleOf(newPriceRaw),
               priceExpedia: priceExpediaOf(newPriceRaw),
@@ -355,7 +349,7 @@ export default function PreciosPage() {
                 ...b,
                 priceRaw: newPriceRaw,
                 priceDirecto: priceDirectoOf(newPriceRaw),
-                priceAirbnb: priceAirbnbOf(newPriceRaw, airbnbMul),
+                priceAirbnb: priceAirbnbOf(newPriceRaw),
                 priceBooking: priceBookingOf(newPriceRaw),
                 priceGoogle: priceGoogleOf(newPriceRaw),
                 priceExpedia: priceExpediaOf(newPriceRaw),
@@ -573,7 +567,7 @@ export default function PreciosPage() {
 
   // El input ahora es Precio Base (sin impuestos)
   const tdPriceRaw = evaluatedPrice ? Math.round(evaluatedPrice * 100) / 100 : 0;
-  const tdPriceAirbnb = tdPriceRaw > 0 ? priceAirbnbOf(tdPriceRaw, airbnbMul) : 0;
+  const tdPriceAirbnb = tdPriceRaw > 0 ? priceAirbnbOf(tdPriceRaw) : 0;
   const tdPriceBooking = tdPriceRaw > 0 ? priceBookingOf(tdPriceRaw) : 0;
   const tdPriceGoogle = tdPriceRaw > 0 ? priceGoogleOf(tdPriceRaw) : 0;
   const tdPriceExpedia = tdPriceRaw > 0 ? priceExpediaOf(tdPriceRaw) : 0;
@@ -837,7 +831,7 @@ export default function PreciosPage() {
                     </div>
                   </div>
                   <p className="text-[9.5px] text-zinc-500 italic">
-                    Airbnb ({formulaAirbnb(airbnbMul)}) · Booking ({formulaBooking()}) · Google ({formulaGoogle()}) · Expedia ({formulaExpedia()}) · impuestos incluidos
+                    Airbnb ({formulaAirbnb()}) · Booking ({formulaBooking()}) · Google ({formulaGoogle()}) · Expedia ({formulaExpedia()}) · impuestos incluidos
                   </p>
                 </div>
               )}
@@ -1133,7 +1127,7 @@ export default function PreciosPage() {
             <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Fórmulas de Cálculo:</span>
             <div className="flex items-center gap-2 flex-wrap text-[11px] font-bold">
               <span className="px-2.5 py-1.5 bg-blue-950/80 border border-blue-800/40 text-blue-300 rounded-lg">Directo: {asBaseFormula(formulaDirecto())}</span>
-              <span className="px-2.5 py-1.5 bg-rose-950/80 border border-rose-800/40 text-rose-300 rounded-lg">Airbnb: {asBaseFormula(formulaAirbnb(airbnbMul))}</span>
+              <span className="px-2.5 py-1.5 bg-rose-950/80 border border-rose-800/40 text-rose-300 rounded-lg">Airbnb: {asBaseFormula(formulaAirbnb())}</span>
               <span className="px-2.5 py-1.5 bg-sky-950/80 border border-sky-800/40 text-sky-300 rounded-lg">Booking: {asBaseFormula(formulaBooking())}</span>
               <span className="px-2.5 py-1.5 bg-emerald-950/80 border border-emerald-800/40 text-emerald-300 rounded-lg">Google Ads: {asBaseFormula(formulaGoogle())}</span>
               <span className="px-2.5 py-1.5 bg-amber-950/80 border border-amber-800/40 text-amber-300 rounded-lg">Expedia: {asBaseFormula(formulaExpedia())}</span>
@@ -1275,7 +1269,7 @@ export default function PreciosPage() {
 
                               // Previews de precios calculados
                               const pDirecto = currentPriceNum > 0 ? priceDirectoOf(currentPriceNum) : 0;
-                              const pAirbnb  = currentPriceNum > 0 ? priceAirbnbOf(currentPriceNum, airbnbMul) : 0;
+                              const pAirbnb  = currentPriceNum > 0 ? priceAirbnbOf(currentPriceNum) : 0;
                               const pBooking = currentPriceNum > 0 ? priceBookingOf(currentPriceNum) : 0;
                               const pGoogle  = currentPriceNum > 0 ? priceGoogleOf(currentPriceNum) : 0;
                               const pExpedia = currentPriceNum > 0 ? priceExpediaOf(currentPriceNum) : 0;
@@ -1322,7 +1316,7 @@ export default function PreciosPage() {
 
                                     {/* Airbnb */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Airbnb ({formulaAirbnb(airbnbMul)})</span>
+                                      <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Airbnb ({formulaAirbnb()})</span>
                                       <span className="text-[12px] font-black text-rose-600 mt-1">${pAirbnb > 0 ? pAirbnb.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
@@ -1441,8 +1435,8 @@ export default function PreciosPage() {
                                 {!isBase && <span className="text-[8px] text-emerald-600 font-black shrink-0">{tier.offsetPct}%</span>}
                                 <span className="truncate">{stayLabel}</span>
                               </div>
-                              <span className="text-right">{tier.priceDirecto > 0 ? `$${tier.priceDirecto.toLocaleString('es-MX')}` : '—'}</span>
-                              <span className={`text-right ${isBase ? 'text-rose-600 font-extrabold' : 'text-rose-450'}`}>{tier.priceAirbnb > 0 ? `$${tier.priceAirbnb.toLocaleString('es-MX')}` : '—'}</span>
+                              <span className="text-right">{tier.priceRaw > 0 ? `$${priceDirectoOf(tier.priceRaw).toLocaleString('es-MX')}` : '—'}</span>
+                              <span className={`text-right ${isBase ? 'text-rose-600 font-extrabold' : 'text-rose-450'}`}>{tier.priceRaw > 0 ? `$${priceAirbnbOf(tier.priceRaw).toLocaleString('es-MX')}` : '—'}</span>
                               <span className={`text-right ${isBase ? 'text-sky-600 font-extrabold' : 'text-sky-450'}`}>{tier.priceRaw > 0 ? `$${priceBookingOf(tier.priceRaw).toLocaleString('es-MX')}` : '—'}</span>
                             </div>
                           );
