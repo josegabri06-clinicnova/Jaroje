@@ -5,8 +5,8 @@
  */
 
 export const DIRECT_TAX = 1.19;
-export const AIRBNB_MUL = 1.201;
-export const AIRBNB_TAX = 1.21;
+export const AIRBNB_MUL = 1.2212;
+export const AIRBNB_TAX = 1.19;
 export const BOOKING_MUL = 1.4433;
 export const BOOKING_TAX = 1.19;
 export const GOOGLE_MUL = 1.5148;
