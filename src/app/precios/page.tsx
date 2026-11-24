@@ -1435,8 +1435,8 @@ export default function PreciosPage() {
                                 {!isBase && <span className="text-[8px] text-emerald-600 font-black shrink-0">{tier.offsetPct}%</span>}
                                 <span className="truncate">{stayLabel}</span>
                               </div>
-                              <span className="text-right">{tier.priceDirecto > 0 ? `$${tier.priceDirecto.toLocaleString('es-MX')}` : '—'}</span>
-                              <span className={`text-right ${isBase ? 'text-rose-600 font-extrabold' : 'text-rose-450'}`}>{tier.priceAirbnb > 0 ? `$${tier.priceAirbnb.toLocaleString('es-MX')}` : '—'}</span>
+                              <span className="text-right">{tier.priceRaw > 0 ? `$${priceDirectoOf(tier.priceRaw).toLocaleString('es-MX')}` : '—'}</span>
+                              <span className={`text-right ${isBase ? 'text-rose-600 font-extrabold' : 'text-rose-450'}`}>{tier.priceRaw > 0 ? `$${priceAirbnbOf(tier.priceRaw).toLocaleString('es-MX')}` : '—'}</span>
                               <span className={`text-right ${isBase ? 'text-sky-600 font-extrabold' : 'text-sky-450'}`}>{tier.priceRaw > 0 ? `$${priceBookingOf(tier.priceRaw).toLocaleString('es-MX')}` : '—'}</span>
                             </div>
                           );
