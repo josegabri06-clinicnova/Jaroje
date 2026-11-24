@@ -211,7 +211,7 @@ export default function PreciosPage() {
       `Los huéspedes verán (1-6 noches):\n` +
       `  · Directo:    $${precioDirecto} (* 1.19 TAX)\n` +
       `  · Airbnb:     $${precioAirbnb} (* 1.20 MUL * 1.21 TAX)\n` +
-      `  · Booking:    $${precioBooking} (* 1.35 MUL * 1.21 TAX - 10% Promoción)\n` +
+      `  · Booking:    $${precioBooking} (* 1.4433 MUL * 1.19 TAX - 10% Promoción)\n` +
       `  · Google Ads: $${precioGoogle} (* 1.4407 MUL)\n` +
       `  · Expedia:    $${precioExpedia} (* 1.6336 MUL)\n\n` +
       `Se modificarán los periodos no descontados de esta temporada en Beds24.\n` +
@@ -831,7 +831,7 @@ export default function PreciosPage() {
                     </div>
                   </div>
                   <p className="text-[9.5px] text-zinc-500 italic">
-                    Airbnb ×{beds24Multipliers.airbnb || 1.20} MUL (IVA 21%) · Booking (* 1.35 MUL * 1.21 TAX - 10% Promoción) · Google (* 1.4407 MUL) · Expedia (* 1.6336 MUL) · impuestos incluidos
+                    Airbnb ×{beds24Multipliers.airbnb || 1.20} MUL (IVA 21%) · Booking (* 1.4433 MUL * 1.19 TAX - 10% Promoción) · Google (* 1.4407 MUL) · Expedia (* 1.6336 MUL) · impuestos incluidos
                   </p>
                 </div>
               )}
@@ -1128,7 +1128,7 @@ export default function PreciosPage() {
             <div className="flex items-center gap-2 flex-wrap text-[11px] font-bold">
               <span className="px-2.5 py-1.5 bg-blue-950/80 border border-blue-800/40 text-blue-300 rounded-lg">Directo: Base × 1.19 TAX</span>
               <span className="px-2.5 py-1.5 bg-rose-950/80 border border-rose-800/40 text-rose-300 rounded-lg">Airbnb: Base × 1.20 MUL × 1.21 TAX</span>
-              <span className="px-2.5 py-1.5 bg-sky-950/80 border border-sky-800/40 text-sky-300 rounded-lg">Booking: Base × 1.35 MUL × 1.21 TAX - 10% Promoción</span>
+              <span className="px-2.5 py-1.5 bg-sky-950/80 border border-sky-800/40 text-sky-300 rounded-lg">Booking: Base × 1.4433 MUL × 1.19 TAX - 10% Promoción</span>
               <span className="px-2.5 py-1.5 bg-emerald-950/80 border border-emerald-800/40 text-emerald-300 rounded-lg">Google Ads: Base × 1.4407 MUL</span>
               <span className="px-2.5 py-1.5 bg-amber-950/80 border border-amber-800/40 text-amber-300 rounded-lg">Expedia: Base × 1.6336 MUL</span>
             </div>
@@ -1322,7 +1322,7 @@ export default function PreciosPage() {
 
                                     {/* Booking */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-sky-500 uppercase tracking-wider">Booking (* 1.35 MUL * 1.21 TAX - 10% Promoción)</span>
+                                      <span className="text-[9px] font-bold text-sky-500 uppercase tracking-wider">Booking (* 1.4433 MUL * 1.19 TAX - 10% Promoción)</span>
                                       <span className="text-[12px] font-black text-sky-600 mt-1">${pBooking > 0 ? pBooking.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
