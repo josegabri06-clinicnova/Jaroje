@@ -15,6 +15,7 @@ import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getActiveEmployee, clearActiveEmployee, Employee, verifyAdminPin, getRole, getOperatorForLog, syncEmployeesFromServer } from '@/lib/auth';
 import { uploadGuestFile } from '@/lib/files-client';
+import { VoucherPicker, methodRequiresVoucher } from '@/components/VoucherPicker';
 import EmployeeModal from '@/components/EmployeeModal';
 import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
@@ -1145,6 +1146,7 @@ export default function RecepcionPage() {
   const [extensionRegisterPayment, setExtensionRegisterPayment] = useState(true);
   const [extensionPaymentMethod, setExtensionPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [extensionAccountId, setExtensionAccountId] = useState('');
+  const [extensionVoucher, setExtensionVoucher] = useState<File | null>(null);
   const [extensionLoading, setExtensionLoading] = useState(false);
 
   // Inicializar estados editados al cambiar de reserva
@@ -1188,6 +1190,7 @@ export default function RecepcionPage() {
       setExtensionRegisterPayment(true);
       setExtensionPaymentMethod(null);
       setExtensionAccountId('');
+      setExtensionVoucher(null);
       setExtensionLoading(false);
 
       // Cargar ajustes de portal para la reserva seleccionada
@@ -1241,6 +1244,7 @@ export default function RecepcionPage() {
       setExtensionRegisterPayment(true);
       setExtensionPaymentMethod(null);
       setExtensionAccountId('');
+      setExtensionVoucher(null);
       setExtensionLoading(false);
 
       setPortalMuteNotifications(false);
@@ -1728,8 +1732,20 @@ export default function RecepcionPage() {
       return;
     }
     
+    // Cobro con tarjeta o transferencia: la foto del voucher es obligatoria
+    const needsVoucher = extensionRegisterPayment && methodRequiresVoucher(extensionPaymentMethod);
+    if (needsVoucher && !extensionVoucher) {
+      alert('⚠️ Adjunta la foto del voucher / comprobante para registrar el pago.');
+      return;
+    }
+    
     setExtensionLoading(true);
     try {
+      // Se sube antes de tocar la reserva: si la foto no se guarda, no se extiende ni se cobra nada
+      const voucherUrl = needsVoucher && extensionVoucher
+        ? await uploadGuestFile(extensionVoucher, `voucher_ext_${selectedReserva.id}`)
+        : null;
+      
       const originalPrice = Number(selectedReserva.price_estimate || 0);
       const originalNights = Number(selectedReserva.nights || 1);
       const dailyRate = Math.round(originalPrice / originalNights);
@@ -1764,7 +1780,7 @@ export default function RecepcionPage() {
           type: 'ingreso',
           amount: paymentAmountNum,
           category: 'Alojamiento',
-          description: finFields.description,
+          description: voucherUrl ? `${finFields.description} | Voucher: ${voucherUrl}` : finFields.description,
           payment_method: extensionPaymentMethod,
           account_id: finFields.accountId,
           date: todayStr
@@ -1816,7 +1832,8 @@ export default function RecepcionPage() {
                 newCheckOut: newCheckOut,
                 paymentRegistered: extensionRegisterPayment,
                 paymentMethod: extensionPaymentMethod,
-                accountId: extensionAccountId
+                accountId: extensionAccountId,
+                voucherUrl
               }
             })
           })
@@ -7510,6 +7527,10 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                             </div>
                           )}
 
+                          {extensionRegisterPayment && methodRequiresVoucher(extensionPaymentMethod) && (
+                            <VoucherPicker method={extensionPaymentMethod} file={extensionVoucher} onChange={setExtensionVoucher} />
+                          )}
+
                           {(() => {
                             const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
                             const collidingRes = reservas.find(r => {
@@ -7541,6 +7562,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                             disabled={
                               extensionLoading || 
                               (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId)) ||
+                              (extensionRegisterPayment && methodRequiresVoucher(extensionPaymentMethod) && !extensionVoucher) ||
                               (() => {
                                 const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
                                 const collidingRes = reservas.find(r => {
@@ -7753,6 +7775,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                                   setExtensionRegisterPayment(true);
                                   setExtensionPaymentMethod(null);
                                   setExtensionAccountId('');
+                                  setExtensionVoucher(null);
                                   setShowExtensionFlow(true);
                                   setShowAbonoFlow(false);
                                 }}
@@ -8997,6 +9020,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       setExtensionRegisterPayment(true);
                       setExtensionPaymentMethod(null);
                       setExtensionAccountId('');
+                      setExtensionVoucher(null);
                       setShowExtensionFlow(true);
                       setShowAbonoFlow(false);
                     }}

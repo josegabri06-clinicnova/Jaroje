@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check, CheckCheck, LogOut, CreditCard, Sparkles, MessageCircle, Copy, Phone } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { uploadGuestFile } from '@/lib/files-client';
+import { VoucherPicker, methodRequiresVoucher } from '@/components/VoucherPicker';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createDbClient } from '@/lib/db-client';
@@ -531,6 +532,7 @@ function ReservasListInner() {
   const [extensionRegisterPayment, setExtensionRegisterPayment] = useState(true);
   const [extensionPaymentMethod, setExtensionPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [extensionAccountId, setExtensionAccountId] = useState('');
+  const [extensionVoucher, setExtensionVoucher] = useState<File | null>(null);
   const [extensionLoading, setExtensionLoading] = useState(false);
 
   // Estados para abonar/editar anticipo rápido en detalles
@@ -577,6 +579,7 @@ function ReservasListInner() {
       setExtensionRegisterPayment(true);
       setExtensionPaymentMethod(null);
       setExtensionAccountId('');
+      setExtensionVoucher(null);
       setExtensionLoading(false);
 
       // Cargar ajustes de portal para la reserva seleccionada
@@ -633,6 +636,7 @@ function ReservasListInner() {
       setExtensionRegisterPayment(true);
       setExtensionPaymentMethod(null);
       setExtensionAccountId('');
+      setExtensionVoucher(null);
       setExtensionLoading(false);
       setCheckInSelectedIds([]);
 
@@ -2704,8 +2708,20 @@ function ReservasListInner() {
       return;
     }
     
+    // Cobro con tarjeta o transferencia: la foto del voucher es obligatoria
+    const needsVoucher = extensionRegisterPayment && methodRequiresVoucher(extensionPaymentMethod);
+    if (needsVoucher && !extensionVoucher) {
+      alert('⚠️ Adjunta la foto del voucher / comprobante para registrar el pago.');
+      return;
+    }
+    
     setExtensionLoading(true);
     try {
+      // Se sube antes de tocar la reserva: si la foto no se guarda, no se extiende ni se cobra nada
+      const voucherUrl = needsVoucher && extensionVoucher
+        ? await uploadGuestFile(extensionVoucher, `voucher_ext_${selectedRes.id}`)
+        : null;
+      
       const originalPrice = Number(selectedRes.price_estimate || 0);
       const originalNights = Number(selectedRes.nights || 1);
       const dailyRate = Math.round(originalPrice / originalNights);
@@ -2740,7 +2756,7 @@ function ReservasListInner() {
           type: 'ingreso',
           amount: paymentAmountNum,
           category: 'Alojamiento',
-          description: finFields.description,
+          description: voucherUrl ? `${finFields.description} | Voucher: ${voucherUrl}` : finFields.description,
           payment_method: extensionPaymentMethod,
           account_id: finFields.accountId,
           date: todayStr
@@ -2792,7 +2808,8 @@ function ReservasListInner() {
                 newCheckOut: newCheckOut,
                 paymentRegistered: extensionRegisterPayment,
                 paymentMethod: extensionPaymentMethod,
-                accountId: extensionAccountId
+                accountId: extensionAccountId,
+                voucherUrl
               }
             })
           })
@@ -6369,6 +6386,10 @@ function ReservasListInner() {
                             </div>
                           )}
 
+                          {extensionRegisterPayment && methodRequiresVoucher(extensionPaymentMethod) && (
+                            <VoucherPicker method={extensionPaymentMethod} file={extensionVoucher} onChange={setExtensionVoucher} />
+                          )}
+
                           {(() => {
                             const newCheckOut = addDaysToDateStr(selectedRes.check_out || selectedRes.departure || '', extensionNights);
                             const collidingRes = reservas.find(r => {
@@ -6400,6 +6421,7 @@ function ReservasListInner() {
                             disabled={
                               extensionLoading || 
                               (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId)) ||
+                              (extensionRegisterPayment && methodRequiresVoucher(extensionPaymentMethod) && !extensionVoucher) ||
                               (() => {
                                 const newCheckOut = addDaysToDateStr(selectedRes.check_out || selectedRes.departure || '', extensionNights);
                                 const collidingRes = reservas.find(r => {
@@ -6625,6 +6647,7 @@ function ReservasListInner() {
                                   setExtensionRegisterPayment(true);
                                   setExtensionPaymentMethod(null);
                                   setExtensionAccountId('');
+                                  setExtensionVoucher(null);
                                   setShowExtensionFlow(true);
                                   setShowAbonoFlow(false);
                                 }}
@@ -6678,6 +6701,7 @@ function ReservasListInner() {
                             setExtensionRegisterPayment(true);
                             setExtensionPaymentMethod(null);
                             setExtensionAccountId('');
+                            setExtensionVoucher(null);
                             setShowExtensionFlow(true);
                             setShowAbonoFlow(false);
                           }}
