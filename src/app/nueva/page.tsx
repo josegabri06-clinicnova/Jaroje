@@ -155,7 +155,6 @@ export default function VercelActionForm() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [capacitySettings, setCapacitySettings] = useState<any>(null);
-  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.446 });
   const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
   const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
@@ -306,12 +305,6 @@ export default function VercelActionForm() {
       ? form.groupRooms
       : (form.roomId && form.unitId ? [{ roomId: form.roomId, unitId: form.unitId, name: getUnitName(form.roomId, form.unitId) || form.unitId }] : []);
 
-    let multiplier = 1;
-    if (form.channel === 'Airbnb') multiplier = otaMultipliers.airbnb;
-    if (form.channel === 'Booking.com') multiplier = otaMultipliers.booking;
-    if (form.channel === 'Google Ads' || form.channel === 'Google') multiplier = otaMultipliers.google || 1.4024745;
-    if (form.channel === 'Expedia') multiplier = otaMultipliers.expedia || 1.446;
-
     let totalStay = 0;
     let sumSuggestedRates = 0;
 
@@ -374,25 +367,9 @@ export default function VercelActionForm() {
         surchargePerNight = activeSurchargeTotal / group.length;
       }
 
-      let suggestedDailyRate = 0;
-      if (form.channel === 'Google Ads' || form.channel === 'Google') {
-        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.google || 1.4024745) + surchargePerNight);
-      } else if (form.channel === 'Expedia') {
-        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.expedia || 1.446) + surchargePerNight);
-      } else if (form.channel === 'Airbnb') {
-        const priceWithChannel = basePrice * discountMult * (otaMultipliers.airbnb || 1.20);
-        const tax = priceWithChannel * 0.21; // 21% IVA Airbnb
-        suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
-      } else if (form.channel === 'Booking.com') {
-        const priceWithChannel = basePrice * discountMult * (otaMultipliers.booking || 1.35);
-        const tax = priceWithChannel * 0.19; // 16% IVA + 3% ISH
-        suggestedDailyRate = Math.round((priceWithChannel + tax) * 0.90 + surchargePerNight);
-      } else {
-        // Directo (* 1.19 TAX)
-        const priceWithChannel = basePrice * discountMult * multiplier;
-        const tax = priceWithChannel * 0.19; // 16% IVA + 3% ISH
-        suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
-      }
+      // Desde la app solo se vende directo (sin comisiones de OTA): base + impuestos (* 1.19 TAX: 16% IVA + 3% ISH)
+      const nightlyBase = basePrice * discountMult;
+      const suggestedDailyRate = Math.round(nightlyBase + nightlyBase * 0.19 + surchargePerNight);
 
       sumSuggestedRates += suggestedDailyRate;
 
@@ -479,7 +456,6 @@ export default function VercelActionForm() {
     form.extraGuestSurcharge,
     isDailyRateEdited,
     inventory,
-    otaMultipliers,
     groupRoomRates
   ]);
 
@@ -514,7 +490,7 @@ export default function VercelActionForm() {
     setGroupRoomRates({});
   }, [form.roomId, form.unitId, form.groupRooms]);
 
-  // Cargar cuentas (accounts) y multiplicadores de Supabase al montar
+  // Cargar cuentas (accounts) y ajustes de Supabase al montar
   useEffect(() => {
     const fetchAccounts = async () => {
       try {
@@ -528,26 +504,6 @@ export default function VercelActionForm() {
         }
       } catch (err) {
         console.error("Error fetching accounts:", err);
-      }
-    };
-    const fetchMultipliers = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('settings')
-          .select('value')
-          .eq('key', 'ota_multipliers')
-          .maybeSingle();
-        if (data && data.value) {
-          const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-          setOtaMultipliers({
-            airbnb: parsed.airbnb ?? 1.20,
-            booking: parsed.booking ?? 1.35,
-            google: parsed.google ?? 1.4024745,
-            expedia: parsed.expedia ?? 1.446
-          });
-        }
-      } catch (err) {
-        console.error("Error fetching multipliers:", err);
       }
     };
     const fetchCapacitySettings = async () => {
@@ -596,7 +552,6 @@ export default function VercelActionForm() {
       }
     };
     fetchAccounts();
-    fetchMultipliers();
     fetchCapacitySettings();
     fetchSeasonRanges();
     fetchTempDiscounts();
@@ -1395,10 +1350,6 @@ export default function VercelActionForm() {
                         <option value="Directo">Directo Web</option>
                         <option value="WhatsApp">WhatsApp</option>
                         <option value="Recepción">Walk-in Recepción</option>
-                        <option value="Airbnb">Airbnb</option>
-                        <option value="Booking.com">Booking.com</option>
-                        <option value="Google Ads">Google Ads</option>
-                        <option value="Expedia">Expedia</option>
                       </select>
                     </div>
                   </div>

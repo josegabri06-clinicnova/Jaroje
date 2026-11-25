@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { CHANNEL_COLLECT_OTAS } from '@/lib/channels';
+import { CHANNEL_COLLECT_OTAS, keepsOtaPrice } from '@/lib/channels';
 import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap, clearBeds24Cache, areBookingsInSameGroup, syncBeds24BookingLocal } from '@/lib/beds24';
 import { beds24FetchTracked } from '@/lib/beds24-credits';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
@@ -32,6 +32,12 @@ const OTA_ASSIGNABLE_UNITS = ['2', '3', '4', '5', '6', '7', '8'];
 const isOtaSource = (b: any) =>
   ['airbnb', 'booking', 'expedia', 'google', 'vrbo'].some(ch =>
     `${b?.referer || ''} ${b?.source || ''} ${b?.apiSource || ''} ${b?.apiReference || ''} ${b?.channel || ''}`.toLowerCase().includes(ch));
+// Reserva de Airbnb/Booking/Expedia sin cambio de fechas: conserva el precio vendido en la OTA, aunque la pantalla mande otro
+// (check-in, edición o cambio de habitación). Así no se reescriben ni el precio ni la factura en Beds24.
+const mustKeepOtaPrice = (b: Record<string, unknown> | null | undefined, checkIn?: string, checkOut?: string) =>
+  !!b
+  && keepsOtaPrice(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''} ${b.channel || ''}`)
+  && !(checkIn && checkIn !== b.arrival) && !(checkOut && checkOut !== b.departure);
 // Total de una línea de factura de Beds24
 const invoiceLineTotal = (item: any) =>
   item.lineTotal !== undefined ? Number(item.lineTotal) : Number(item.qty || 1) * Number(item.price !== undefined ? item.price : (item.amount || 0));
@@ -1237,7 +1243,8 @@ export async function DELETE(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, roomName, guestName, phone, numAdult, numChild, price, notes, deposit, checkIn, checkOut, portalSettings, preview } = body;
+    const { id, roomName, guestName, phone, numAdult, numChild, notes, deposit, checkIn, checkOut, portalSettings, preview } = body;
+    let { price } = body;
     const cleanPhoneInput = phone !== undefined ? (phone ? normalizePhone(phone) : '') : undefined;
 
     if (!id) {
@@ -1472,6 +1479,7 @@ export async function PUT(req: Request) {
       // Beds24 y directas, y las fechas no cambian; si no, se mantiene el comportamiento de siempre.
       const groupPlan = new Map<string, { price: number; extraAmount: number; extraPrice: number; nights: number }>();
       const prefetchedMembers: Record<string, any> = {};
+      const keptPriceIds = new Set<string>(); // habitaciones de OTA cuyo precio no se toca
       if (body.splitExtraGuestCharge === true) {
         try {
           const { getGroupExtraGuestFee, allocateGroupExtraFee, getCapacityRules, EXTRA_GUEST_CHARGE_LABEL } = await import('@/lib/beds24');
@@ -1601,7 +1609,9 @@ export async function PUT(req: Request) {
             }
           }
 
-          if (m.price !== undefined) {
+          if (mustKeepOtaPrice(currentMemBooking, checkIn, checkOut)) keptPriceIds.add(mIdStr);
+
+          if (m.price !== undefined && !keptPriceIds.has(mIdStr)) {
             const plan = groupPlan.get(mIdStr);
             const finalPrice = plan ? plan.price : Number(m.price);
             b24Item.price = finalPrice;
@@ -1752,7 +1762,8 @@ export async function PUT(req: Request) {
             const b24DirectUpdate: any = { updated_at: new Date().toISOString() };
             // Precio final de la habitación: el calculado con el reparto de extras del grupo, si lo hubo
             const plannedMem = groupPlan.get(String(bId));
-            const finalMemPrice = plannedMem ? plannedMem.price : (memberObj?.price !== undefined ? Number(memberObj.price) : undefined);
+            const finalMemPrice = keptPriceIds.has(String(bId)) ? undefined
+              : plannedMem ? plannedMem.price : (memberObj?.price !== undefined ? Number(memberObj.price) : undefined);
             if (memberObj?.deposit !== undefined) b24DirectUpdate.deposit = Number(memberObj.deposit);
             if (finalMemPrice !== undefined) b24DirectUpdate.price = finalMemPrice;
             if (memberObj?.deposit !== undefined || finalMemPrice !== undefined) {
@@ -2048,6 +2059,11 @@ export async function PUT(req: Request) {
       }
     }
 
+    if (price !== undefined && mustKeepOtaPrice(currentBooking, checkIn, checkOut)) {
+      console.log(`[Reservas PUT] Reserva OTA ${id} sin cambio de fechas: se mantiene su precio.`);
+      price = undefined;
+    }
+
     let roomTypeChanged = false;
 
     // Recalcular tarifa si hay cambios reales en las fechas o en el tipo de habitación (roomId)
@@ -2073,8 +2089,7 @@ export async function PUT(req: Request) {
         if ((arrivalChanged || departureChanged || roomTypeChanged) && arrival && departure && newRoomId) {
           console.log(`[Reservas PUT] Detectado cambio de fechas o categoría de habitación que requiere recálculo. Rango: ${arrival} al ${departure}`);
           
-          const rawSource = String(`${currentBooking.referer || ''} ${currentBooking.source || ''} ${currentBooking.apiSource || ''} ${currentBooking.apiReference || ''}`).toLowerCase();
-          const isOtaChannel = ['airbnb', 'booking', 'expedia'].some(ota => rawSource.includes(ota));
+          const isOtaChannel = keepsOtaPrice(`${currentBooking.referer || ''} ${currentBooking.source || ''} ${currentBooking.apiSource || ''} ${currentBooking.apiReference || ''} ${currentBooking.channel || ''}`);
           const oldPrice = currentBooking.price || 0;
 
           if (isOtaChannel) {
@@ -2253,7 +2268,7 @@ export async function PUT(req: Request) {
     // Si no hay recálculo automático y no viene un precio explícito, enviamos el precio actual de la reserva.
     // Esto previene que los servidores de Beds24 recalculen e impongan tarifas por defecto.
     const rawSource = String(`${currentBooking?.referer || ''} ${currentBooking?.source || ''} ${currentBooking?.apiSource || ''} ${currentBooking?.apiReference || ''} ${currentBooking?.channel || ''}`).toLowerCase();
-    const isOtaChannel = ['airbnb', 'booking', 'expedia'].some(ota => rawSource.includes(ota));
+    const isOtaChannel = keepsOtaPrice(rawSource);
 
     if (isOtaChannel && price === undefined) {
       console.log(`[Reservas PUT] Reserva OTA. Omitiendo actualizaciones de tarifas y facturas para proteger el precio del canal.`);
