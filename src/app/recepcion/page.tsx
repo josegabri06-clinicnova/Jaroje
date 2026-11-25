@@ -1379,6 +1379,8 @@ export default function RecepcionPage() {
 
   const suggestedPrice = useMemo(() => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return 0;
+    // Airbnb/Booking/Expedia: el precio lo fija el canal; cambiar huéspedes no lo ajusta (igual que Calendario)
+    if (isOtaRes) return Math.round(Number(selectedReserva.price_estimate || 0));
     const originalPax = (selectedReserva.num_adult || 1) + (selectedReserva.num_child || 0);
     const originalExtraGuests = Math.max(0, originalPax - getCapacityRules(selectedReserva.room, capacitySettings || undefined).base);
     const newExtraGuests = Math.max(0, (editedAdults + editedChildren) - getCapacityRules(selectedReserva.room, capacitySettings || undefined).base);
@@ -1386,7 +1388,7 @@ export default function RecepcionPage() {
     const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
     const priceAdjustment = Math.round(diffExtra * extraGuestPrice * (selectedReserva.nights || 1));
     return Math.round(Number(selectedReserva.price_estimate || 0) + priceAdjustment);
-  }, [selectedReserva, editedAdults, editedChildren, capacitySettings]);
+  }, [selectedReserva, editedAdults, editedChildren, capacitySettings, isOtaRes]);
 
   // Sincronizar el precio editado cuando cambia el precio sugerido
   useEffect(() => {
@@ -1424,7 +1426,8 @@ export default function RecepcionPage() {
   // Efecto para recargar tarifas y detectar cambio de categoría en reasignación
   useEffect(() => {
     if (isReassigning && selectedReserva && targetRoomName) {
-      const changed = !isSameRoomCategory(`${selectedReserva.room || ''} ${selectedReserva.room_name || ''}`, targetRoomName);
+      // Las reservas de Airbnb/Booking/Expedia mantienen su precio al cambiar de habitación
+      const changed = !isOtaRes && !isSameRoomCategory(`${selectedReserva.room || ''} ${selectedReserva.room_name || ''}`, targetRoomName);
       setIsCategoryChanged(changed);
       const resNights = Math.max(1, selectedReserva.nights || (selectedReserva.check_in && selectedReserva.check_out ? Math.round((new Date(selectedReserva.check_out + 'T12:00:00').getTime() - new Date(selectedReserva.check_in + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24)) : 1));
 
@@ -1475,7 +1478,7 @@ export default function RecepcionPage() {
       setReassignedPrice('');
       setPreviewBreakdown(null);
     }
-  }, [targetRoomName, selectedReserva, isReassigning]);
+  }, [targetRoomName, selectedReserva, isReassigning, isOtaRes]);
 
   const handleSaveChanges = async () => {
     if (!selectedReserva) return;
@@ -2009,7 +2012,7 @@ export default function RecepcionPage() {
         body: JSON.stringify({
           id: selectedReserva.id,
           roomName: targetRoomName,
-          price: finalPrice
+          ...(isOtaRes ? {} : { price: finalPrice })
         })
       });
       const data = await res.json();
@@ -7004,7 +7007,7 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                         </div>
 
                         {/* PREVIEW DE NUEVO PRECIO ANTES DE CONFIRMAR */}
-                        {!isCategoryChanged && targetRoomName && selectedReserva && (() => {
+                        {!isOtaRes && !isCategoryChanged && targetRoomName && selectedReserva && (() => {
                           const nights = selectedReserva.nights || 1;
                           const checkIn = selectedReserva.check_in;
                           const checkOut = selectedReserva.check_out;

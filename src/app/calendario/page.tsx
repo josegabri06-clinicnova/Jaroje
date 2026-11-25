@@ -14,7 +14,7 @@ import { createDbClient } from '@/lib/db-client';
 import { getActiveEmployee, verifyAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
 import { uploadGuestFile } from '@/lib/files-client';
 import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules, areBookingsInSameGroup } from '@/lib/beds24';
-import { getChannelBadge, CHANNEL_COLLECT_OTAS } from '@/lib/channels';
+import { getChannelBadge, CHANNEL_COLLECT_OTAS, keepsOtaPrice } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 
@@ -589,7 +589,8 @@ export default function CalendarPage() {
   // Efecto para recargar tarifas y detectar cambio de categoría en reasignación
   useEffect(() => {
     if (isReassigning && selectedReserva && targetRoomName) {
-      const changed = !isSameRoomCategory(`${selectedReserva.room || ''} ${selectedReserva.room_name || ''}`, targetRoomName);
+      // Las reservas de Airbnb/Booking/Expedia mantienen su precio al cambiar de habitación
+      const changed = !keepsOtaPrice(selectedReserva.channel) && !isSameRoomCategory(`${selectedReserva.room || ''} ${selectedReserva.room_name || ''}`, targetRoomName);
       setIsCategoryChanged(changed);
       const resNights = Math.max(1, selectedReserva.nights || (selectedReserva.check_in && selectedReserva.check_out ? Math.round((new Date(selectedReserva.check_out + 'T12:00:00').getTime() - new Date(selectedReserva.check_in + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24)) : 1));
 
@@ -1301,7 +1302,7 @@ export default function CalendarPage() {
         body: JSON.stringify({
           id: selectedReserva.id,
           roomName: targetRoomName,
-          price: finalPrice
+          ...(keepsOtaPrice(selectedReserva.channel) ? {} : { price: finalPrice })
         })
       });
       const data = await res.json();
@@ -2680,6 +2681,7 @@ export default function CalendarPage() {
                       <input
                         type="number"
                         value={editedDailyRate}
+                        readOnly={keepsOtaPrice(selectedReserva.channel)}
                         onChange={e => {
                           const val = e.target.value;
                           setEditedDailyRate(val);
@@ -2687,7 +2689,7 @@ export default function CalendarPage() {
                             setEditedPrice(String(Math.round(Number(val) * (selectedReserva.nights || 1))));
                           }
                         }}
-                        className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 shadow-sm"
+                        className={`w-full border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none shadow-sm ${keepsOtaPrice(selectedReserva.channel) ? 'bg-zinc-100 text-zinc-500 cursor-not-allowed' : 'bg-white text-zinc-900 focus:ring-2 focus:ring-zinc-900/10'}`}
                       />
                     </div>
                   </div>

@@ -24,6 +24,15 @@ export function isChannelCollectOta(channel?: string | null): boolean {
   return CHANNEL_COLLECT_OTAS.some(ota => c.includes(ota));
 }
 
+/**
+ * OTAs cuyo precio es el que se vendió en la OTA (Expedia incluida): la app no lo cambia salvo que cambien las fechas de la estancia.
+ * Acepta el canal o el texto de origen de Beds24 (referer, apiSource…).
+ */
+export function keepsOtaPrice(source?: string | null): boolean {
+  const s = String(source || '').toLowerCase();
+  return ['airbnb', 'booking', 'expedia'].some(ota => s.includes(ota));
+}
+
 export function getChannelBadge(channel: string | null | undefined): {
   label: string;
   className: string;
