@@ -2547,7 +2547,9 @@ export default function RecepcionPage() {
   };
 
   const calculateWalkinPrices = (res: Reserva) => {
-    if (!res.check_in || !res.check_out) {
+    // Sin habitación elegida no hay nada que cotizar (si no, se calculaba una habitación vacía con el precio de relleno)
+    const hasRoomSelected = (res.groupRooms && res.groupRooms.length > 0) || !!res.unit_id;
+    if (!res.check_in || !res.check_out || !hasRoomSelected) {
       return { totalStay: 0, roomDetails: [], suggestedDailyRate: 0 };
     }
     const diffTime = Math.abs(new Date(res.check_out).getTime() - new Date(res.check_in).getTime());
@@ -8210,10 +8212,12 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                     const totalVal = selectedReserva.id === 'walkin'
                       ? (selectedReserva.price_estimate || 0)
                       : Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0));
+                    // Walk-in: todavía no se ha cobrado nada (paymentAmount es lo que se VA a cobrar y se rellena solo con el total),
+                    // así que el recuadro muestra el total por cobrar
                     const depositVal = selectedReserva.id === 'walkin'
-                      ? Number(paymentAmount || 0)
+                      ? 0
                       : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
-                    
+
                     const isOta = !!(selectedReserva?.channel && CHANNEL_COLLECT_OTAS.some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
                     const isGroupReservation = siblingBookings.length > 0;
                     const isConsolidatedActive = isGroupReservation && payGroupConsolidated;
@@ -8222,7 +8226,8 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       ? directGroupTotalBalance
                       : Math.max(0, totalVal - depositVal));
 
-                    if (balanceVal <= 0) {
+                    // Un Walk-in nunca está "liquidado" antes del check-in (con total 0, sin habitación elegida, tampoco)
+                    if (balanceVal <= 0 && selectedReserva.id !== 'walkin') {
                       return (
                         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
                           <div className="space-y-0.5">
@@ -8260,7 +8265,9 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                             </p>
                           ) : (
                             <p className="text-[11px] text-rose-600 font-medium">
-                              Monto total a cobrar por la estancia.
+                              {(selectedReserva.groupRooms?.length || selectedReserva.unit_id)
+                                ? 'Monto total a cobrar por la estancia.'
+                                : 'Elige una habitación para calcular el total.'}
                             </p>
                           )}
                         </div>
