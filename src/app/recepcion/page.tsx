@@ -8224,7 +8224,8 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                       ? directGroupTotalBalance
                       : Math.max(0, totalVal - depositVal));
 
-                    if (balanceVal <= 0) {
+                    // Un Walk-in nunca está "liquidado" antes del check-in (con total 0, sin habitación elegida, tampoco)
+                    if (balanceVal <= 0 && selectedReserva.id !== 'walkin') {
                       return (
                         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
                           <div className="space-y-0.5">
