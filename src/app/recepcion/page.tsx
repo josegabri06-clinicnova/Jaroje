@@ -2547,7 +2547,9 @@ export default function RecepcionPage() {
   };
 
   const calculateWalkinPrices = (res: Reserva) => {
-    if (!res.check_in || !res.check_out) {
+    // Sin habitación elegida no hay nada que cotizar (si no, se calculaba una habitación vacía con el precio de relleno)
+    const hasRoomSelected = (res.groupRooms && res.groupRooms.length > 0) || !!res.unit_id;
+    if (!res.check_in || !res.check_out || !hasRoomSelected) {
       return { totalStay: 0, roomDetails: [], suggestedDailyRate: 0 };
     }
     const diffTime = Math.abs(new Date(res.check_out).getTime() - new Date(res.check_in).getTime());
@@ -8263,7 +8265,9 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                             </p>
                           ) : (
                             <p className="text-[11px] text-rose-600 font-medium">
-                              Monto total a cobrar por la estancia.
+                              {(selectedReserva.groupRooms?.length || selectedReserva.unit_id)
+                                ? 'Monto total a cobrar por la estancia.'
+                                : 'Elige una habitación para calcular el total.'}
                             </p>
                           )}
                         </div>
