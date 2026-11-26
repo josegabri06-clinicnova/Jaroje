@@ -23,6 +23,7 @@ import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCap
 import { getChannelBadge, CHANNEL_COLLECT_OTAS } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
+import { GuestContactField } from '@/components/GuestContactField';
 import { normalizePhone } from '@/lib/phone';
 import { uploadDataUrlPhotos } from '@/lib/upload-photo';
 
@@ -65,6 +66,7 @@ interface Reserva {
   phone?: string;
   mobile?: string;
   guest_email?: string;
+  email?: string;
   check_in: string;
   check_out: string;
   checked_in?: boolean;
@@ -6838,16 +6840,28 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
 
 
                   {/* 2. Teléfono WhatsApp del Huésped (Con selector de país y obligatorio para OTAs) */}
-                  <PhoneWithCountrySelect
-                    value={editedPhone}
-                    onChange={setEditedPhone}
-                    channel={selectedReserva.channel}
-                    guestCountry={(selectedReserva as any).country || (selectedReserva as any).guest_country}
-                    onSaveOnly={handleSavePhoneOnly}
-                    savingOnly={savingPhoneOnly}
-                    savedSuccess={phoneSavedSuccess}
-                    required={true}
-                    alwaysRequired={!selectedReserva.checked_in}
+                  <GuestContactField
+                    key={`contacto-${selectedReserva.id}`}
+                    bookingIds={[selectedReserva.id]}
+                    email={selectedReserva.guest_email || selectedReserva.email}
+                    onSaved={(email) => {
+                      setSelectedReserva(prev => prev ? { ...prev, guest_email: email, email } : null);
+                      setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, guest_email: email, email } : r));
+                    }}
+                    renderPhone={(switchToEmail) => (
+                      <PhoneWithCountrySelect
+                        value={editedPhone}
+                        onSwitchToEmail={switchToEmail}
+                        onChange={setEditedPhone}
+                        channel={selectedReserva.channel}
+                        guestCountry={(selectedReserva as any).country || (selectedReserva as any).guest_country}
+                        onSaveOnly={handleSavePhoneOnly}
+                        savingOnly={savingPhoneOnly}
+                        savedSuccess={phoneSavedSuccess}
+                        required={true}
+                        alwaysRequired={!selectedReserva.checked_in}
+                      />
+                    )}
                   />
 
 

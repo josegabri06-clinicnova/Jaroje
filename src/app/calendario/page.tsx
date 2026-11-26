@@ -17,6 +17,7 @@ import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapa
 import { getChannelBadge, CHANNEL_COLLECT_OTAS, keepsOtaPrice } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
+import { GuestContactField } from '@/components/GuestContactField';
 
 // Base de datos a través de la pasarela del servidor (/api/db): requiere sesión y no usa la clave pública de Supabase
 const supabase = createDbClient();
@@ -2790,15 +2791,27 @@ export default function CalendarPage() {
                   </div>
 
                   {/* 2. Teléfono Huésped / WhatsApp (Con selector de país y obligatorio para OTAs) */}
-                  <PhoneWithCountrySelect
-                    value={editedPhone}
-                    onChange={setEditedPhone}
-                    channel={selectedReserva.channel}
-                    guestCountry={(selectedReserva as any).country || (selectedReserva as any).guest_country}
-                    onSaveOnly={handleSavePhoneOnly}
-                    savingOnly={savingPhoneOnly}
-                    savedSuccess={phoneSavedSuccess}
-                    required={true}
+                  <GuestContactField
+                    key={`contacto-${selectedReserva.id}`}
+                    bookingIds={[selectedReserva.id]}
+                    email={selectedReserva.guest_email || selectedReserva.email}
+                    onSaved={(email) => {
+                      setSelectedReserva((prev: Record<string, unknown> | null) => prev ? { ...prev, guest_email: email, email } : null);
+                      setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, guest_email: email, email } : r));
+                    }}
+                    renderPhone={(switchToEmail) => (
+                      <PhoneWithCountrySelect
+                        value={editedPhone}
+                        onSwitchToEmail={switchToEmail}
+                        onChange={setEditedPhone}
+                        channel={selectedReserva.channel}
+                        guestCountry={(selectedReserva as any).country || (selectedReserva as any).guest_country}
+                        onSaveOnly={handleSavePhoneOnly}
+                        savingOnly={savingPhoneOnly}
+                        savedSuccess={phoneSavedSuccess}
+                        required={true}
+                      />
+                    )}
                   />
 
                   {/* 3. Habitación asignada */}
