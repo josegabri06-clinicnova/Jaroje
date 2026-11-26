@@ -8210,10 +8210,12 @@ Se usa para enviarle las plantillas de bienvenida, claves de acceso y portal dig
                     const totalVal = selectedReserva.id === 'walkin'
                       ? (selectedReserva.price_estimate || 0)
                       : Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0));
+                    // Walk-in: todavía no se ha cobrado nada (paymentAmount es lo que se VA a cobrar y se rellena solo con el total),
+                    // así que el recuadro muestra el total por cobrar
                     const depositVal = selectedReserva.id === 'walkin'
-                      ? Number(paymentAmount || 0)
+                      ? 0
                       : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
-                    
+
                     const isOta = !!(selectedReserva?.channel && CHANNEL_COLLECT_OTAS.some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
                     const isGroupReservation = siblingBookings.length > 0;
                     const isConsolidatedActive = isGroupReservation && payGroupConsolidated;
