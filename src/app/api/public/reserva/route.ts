@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24BookingsForArrival, isWithinFullListingWindow, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
-import { grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
+import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
-import { checkGuestAccess, firstNameOf, requireGuestWriteAccess, canAccessGuestFiles } from '@/lib/guest-access';
+import { checkGuestAccess, firstNameOf, requireGuestWriteAccess } from '@/lib/guest-access';
 import { isVerifiablePhone } from '@/lib/guest-live-phone';
 import { physicalRoomName } from '@/lib/room-names';
 import { isKnownMissingBooking, reserveBeds24Lookup, rememberBookingNotFound } from '@/lib/beds24-public-cache';
@@ -68,15 +68,15 @@ export async function GET(req: Request) {
     }
 
     // Acceso al portal: si la reserva tiene un teléfono con el que verificar, no se enseña NADA hasta que el huésped
-    // escriba los 4 últimos dígitos (cookie firmada de esa reserva) o sea personal con sesión.
+    // escriba los 4 últimos dígitos (cookie firmada de esa reserva), aunque tenga sesión del personal.
     const guestId = String(bookingId);
     const access = await checkGuestAccess(req, guestId);
     if (!access.allowed) {
       return lockedPortalResponse(bookingId, access.contact?.phone, access.contact?.guestName);
     }
 
-    // ¿Puede ver los ARCHIVOS sin volver a verificarse? Quien entró verificado (cookie) o es personal con sesión.
-    const guestAuthorized = access.reason === 'cookie' || access.reason === 'staff';
+    // ¿Puede ver los ARCHIVOS sin volver a verificarse? Solo quien entró verificado (cookie firmada de esta reserva).
+    const guestAuthorized = access.reason === 'cookie';
 
     // Obtener el listado de comprobantes de transferencia de la reserva
     const { data: transferReceipts } = await supabase
@@ -592,7 +592,7 @@ export async function POST(req: Request) {
     }
     const bookingId = Number(guestId); // mismo id que valida la guardia (no el texto crudo del cliente)
 
-    // Solo quien ya verificó su teléfono (o personal) puede subir; ya no basta con conocer el número de reserva
+    // Solo quien ya verificó su teléfono puede subir; ya no basta con conocer el número de reserva
     const denied = await requireGuestWriteAccess(req, guestId);
     if (denied) return denied;
 
@@ -602,7 +602,7 @@ export async function POST(req: Request) {
       .select('receipt_url')
       .eq('reservation_id', guestId)
       .maybeSingle();
-    if (priorCheckin?.receipt_url && !(await canAccessGuestFiles(req, guestId))) {
+    if (priorCheckin?.receipt_url && !(await isGuestAuthorized(req, guestId))) {
       return NextResponse.json({ error: 'Verifica tu identidad para cambiar tu comprobante.', code: 'verification_required' }, { status: 403 });
     }
 

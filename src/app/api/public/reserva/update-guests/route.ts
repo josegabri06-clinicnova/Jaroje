@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Faltan parámetros obligatorios' }, { status: 400 });
     }
 
-    // Modifica el número de huéspedes (también en Beds24): solo para quien verificó su teléfono o personal
+    // Modifica el número de huéspedes (también en Beds24): solo para quien verificó su teléfono
     const guestId = normalizeBookingId(bookingId);
     if (!guestId) {
       return NextResponse.json({ success: false, error: 'ID de reserva no válido' }, { status: 400 });

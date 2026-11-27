@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
-import { grantGuestAccess, normalizeBookingId, guestFileUrl } from '@/lib/guest-auth';
+import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileUrl } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
-import { requireGuestWriteAccess, canAccessGuestFiles } from '@/lib/guest-access';
+import { requireGuestWriteAccess } from '@/lib/guest-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     }
     const bookingId = Number(guestId); // mismo id que valida la guardia (no el texto crudo del cliente)
 
-    // Solo quien ya verificó su teléfono (o personal) puede subir; ya no basta con conocer el número de reserva
+    // Solo quien ya verificó su teléfono puede subir; ya no basta con conocer el número de reserva
     const denied = await requireGuestWriteAccess(req, guestId);
     if (denied) return denied;
 
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
     }
 
     // Sustituir una identificación ya subida solo lo puede hacer quien está autorizado en esta reserva; la primera subida es libre
-    if (existingCheckin?.document_url && !(await canAccessGuestFiles(req, guestId))) {
+    if (existingCheckin?.document_url && !(await isGuestAuthorized(req, guestId))) {
       return NextResponse.json({ error: 'Verifica tu identidad para cambiar tu identificación.', code: 'verification_required' }, { status: 403 });
     }
 
