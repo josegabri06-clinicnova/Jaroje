@@ -13,6 +13,7 @@ import { computeOtaSplit, getCapacityRules, getGroupExtraGuestFee, detectAndAdju
 import { getChannelBadge, CHANNEL_COLLECT_OTAS } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
+import { GuestContactField } from '@/components/GuestContactField';
 import { normalizePhone } from '@/lib/phone';
 import { findWiseAccount, isWiseMxnNote } from '@/lib/wise-accounts';
 
@@ -230,6 +231,10 @@ export default function ReservasList() {
     </Suspense>
   );
 }
+
+/** Reserva principal y, en grupos, el resto de habitaciones (sin repetir): a todas se les guarda el mismo correo */
+const contactBookingIds = (r: { id: string | number; group_members?: Array<{ id: string | number }> | null }) =>
+  [...new Set([r.id, ...(r.group_members || []).map(m => m.id)].map(String))];
 
 function ReservasListInner() {
   const searchParams = useSearchParams();
@@ -4839,15 +4844,28 @@ function ReservasListInner() {
                 // Formulario de Check-In (Con scroll)
                 <div className="animate-in fade-in duration-200 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm text-left font-sans space-y-4">
                   {/* TELÉFONO DE CONTACTO / WHATSAPP (CON SELECTOR INTERNACIONAL Y OBLIGATORIO PARA OTAs) */}
-                  <PhoneWithCountrySelect
-                    value={editPhone}
-                    onChange={setEditPhone}
-                    channel={selectedRes.channel}
-                    guestCountry={(selectedRes as any).country || (selectedRes as any).guest_country}
-                    onSaveOnly={handleSavePhoneOnly}
-                    savingOnly={savingPhoneOnly}
-                    savedSuccess={phoneSavedSuccess}
-                    required={true}
+                  <GuestContactField
+                    key={`contacto-${selectedRes.id}`}
+                    bookingIds={contactBookingIds(selectedRes)}
+                    email={selectedRes.guest_email || selectedRes.email}
+                    onSaved={(email) => {
+                      const ids = new Set(contactBookingIds(selectedRes));
+                      setSelectedRes((prev: Record<string, unknown> | null) => prev ? { ...prev, guest_email: email, email } : null);
+                      setReservas(prev => prev.map(r => ids.has(String(r.id)) ? { ...r, guest_email: email, email } : r));
+                    }}
+                    renderPhone={(switchToEmail) => (
+                      <PhoneWithCountrySelect
+                        value={editPhone}
+                        onSwitchToEmail={switchToEmail}
+                        onChange={setEditPhone}
+                        channel={selectedRes.channel}
+                        guestCountry={(selectedRes as any).country || (selectedRes as any).guest_country}
+                        onSaveOnly={handleSavePhoneOnly}
+                        savingOnly={savingPhoneOnly}
+                        savedSuccess={phoneSavedSuccess}
+                        required={true}
+                      />
+                    )}
                   />
 
                   {/* IDENTIFICACIÓN (DNI/PASAPORTE) */}
@@ -5361,51 +5379,71 @@ function ReservasListInner() {
                     </div>
                   </div>
 
-                  {/* 2. Teléfono */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-50/50 border border-emerald-100 flex items-center justify-center shrink-0">
-                      <svg className="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                      </svg>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
-                      {(() => {
-                        const rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
-                        const isDummy = isDummyOrInvalidPhone(rawPhone, selectedRes.notes, selectedRes.channel);
-                        let waDigits = rawPhone.replace(/\D/g, '');
-                        if (waDigits.startsWith('521') && waDigits.length === 13) {
-                          waDigits = '52' + waDigits.substring(3);
-                        } else if (waDigits.startsWith('34') && waDigits.length === 11) {
-                          // España estándar
-                        } else if (waDigits.length === 9 && ['6', '7', '8', '9'].includes(waDigits[0])) {
-                          waDigits = '34' + waDigits;
-                        } else if (waDigits.startsWith('1') && waDigits.length === 11) {
-                          // EE.UU. / Canadá
-                        } else if (waDigits.length === 10) {
-                          waDigits = (portalLanguage === 'en' || selectedRes.guest_country === 'US' || selectedRes.country === 'US' || String(rawPhone).startsWith('+1')) ? '1' + waDigits : '52' + waDigits;
-                        }
-                        return (rawPhone && !isDummy) ? (
-                          <a 
-                            href={`https://wa.me/${waDigits}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 cursor-pointer mt-0.5 w-fit"
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span>{rawPhone}</span>
-                            <svg className="w-2.5 h-2.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                              <polyline points="15 3 21 3 21 9"></polyline>
-                              <line x1="10" y1="14" x2="21" y2="3"></line>
-                            </svg>
-                          </a>
-                        ) : (
-                          <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Sin teléfono</p>
-                        );
-                      })()}
-                    </div>
-                  </div>
+                  {/* 2. Teléfono (pulsando el icono se cambia al email) */}
+                  <GuestContactField
+                    key={`contacto-ver-${selectedRes.id}`}
+                    bookingIds={contactBookingIds(selectedRes)}
+                    email={selectedRes.guest_email || selectedRes.email}
+                    startOnEmail={isDummyOrInvalidPhone(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone, selectedRes.notes, selectedRes.channel)}
+                    onSaved={(email) => {
+                      const ids = new Set(contactBookingIds(selectedRes));
+                      setSelectedRes((prev: Record<string, unknown> | null) => prev ? { ...prev, guest_email: email, email } : null);
+                      setReservas(prev => prev.map(r => ids.has(String(r.id)) ? { ...r, guest_email: email, email } : r));
+                    }}
+                    renderPhone={(switchToEmail) => (
+                      <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                        <button
+                          type="button"
+                          onClick={switchToEmail}
+                          disabled={!switchToEmail}
+                          title={switchToEmail ? 'Cambiar a email' : undefined}
+                          aria-label={switchToEmail ? 'Cambiar a email' : 'Teléfono'}
+                          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${switchToEmail ? 'bg-emerald-50 border-emerald-200 cursor-pointer active:scale-95 hover:bg-emerald-100' : 'bg-emerald-50/50 border-emerald-100'}`}
+                        >
+                          <svg className="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                          </svg>
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
+                          {(() => {
+                            const rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
+                            const isDummy = isDummyOrInvalidPhone(rawPhone, selectedRes.notes, selectedRes.channel);
+                            let waDigits = rawPhone.replace(/\D/g, '');
+                            if (waDigits.startsWith('521') && waDigits.length === 13) {
+                              waDigits = '52' + waDigits.substring(3);
+                            } else if (waDigits.startsWith('34') && waDigits.length === 11) {
+                              // España estándar
+                            } else if (waDigits.length === 9 && ['6', '7', '8', '9'].includes(waDigits[0])) {
+                              waDigits = '34' + waDigits;
+                            } else if (waDigits.startsWith('1') && waDigits.length === 11) {
+                              // EE.UU. / Canadá
+                            } else if (waDigits.length === 10) {
+                              waDigits = (portalLanguage === 'en' || selectedRes.guest_country === 'US' || selectedRes.country === 'US' || String(rawPhone).startsWith('+1')) ? '1' + waDigits : '52' + waDigits;
+                            }
+                            return (rawPhone && !isDummy) ? (
+                              <a 
+                                href={`https://wa.me/${waDigits}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 cursor-pointer mt-0.5 w-fit"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>{rawPhone}</span>
+                                <svg className="w-2.5 h-2.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                  <polyline points="15 3 21 3 21 9"></polyline>
+                                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                                </svg>
+                              </a>
+                            ) : (
+                              <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Sin teléfono</p>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  />
 
 
                   {/* 3. Habitación asignada */}

@@ -2973,6 +2973,29 @@ export async function updateBeds24BookingPhone(bookingId: string | number, phone
   }
 }
 
+/** Guarda el correo de contacto en una o varias reservas de Beds24 (solo ese campo). true solo si Beds24 acepta todas. */
+export async function updateBeds24BookingEmail(bookingIds: (string | number)[], email: string): Promise<boolean> {
+  const payload = bookingIds.map(id => ({ id: Number(id), email })).filter(p => p.id > 0);
+  if (payload.length === 0 || !email) return false;
+  try {
+    const token = await getBeds24Token();
+    const res = await fetch('https://api.beds24.com/v2/bookings', {
+      method: 'POST',
+      headers: { 'token': token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store'
+    });
+    const json = await res.json().catch(() => null);
+    const results: Array<{ success?: boolean }> = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
+    if (res.ok && !results.some(r => r?.success === false)) return true;
+    console.warn(`[Beds24 API] No se pudo guardar el correo (reservas ${payload.map(p => p.id).join(', ')}): HTTP ${res.status}`);
+    return false;
+  } catch (err) {
+    console.error('[Beds24 API] Error guardando el correo:', (err as Error)?.message);
+    return false;
+  }
+}
+
 /**
  * Mapea e inserta una reserva de Beds24 en la tabla local de Supabase 'beds24_reservations'.
  * Beds24 es la fuente de verdad: esta función siempre guarda lo que Beds24 devuelve.

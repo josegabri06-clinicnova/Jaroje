@@ -25,6 +25,8 @@ interface PhoneWithCountrySelectProps {
   showSaveButton?: boolean;
   /** El teléfono es obligatorio sea cual sea el canal (check-in: toda reserva debe terminar con un teléfono guardado) */
   alwaysRequired?: boolean;
+  /** Si se pasa, el icono del teléfono es un botón que cambia al correo del huésped */
+  onSwitchToEmail?: () => void;
 }
 
 export function PhoneWithCountrySelect({
@@ -38,7 +40,8 @@ export function PhoneWithCountrySelect({
   required = false,
   className = '',
   showSaveButton = true,
-  alwaysRequired = false
+  alwaysRequired = false,
+  onSwitchToEmail
 }: PhoneWithCountrySelectProps) {
   // Inicializar prefijo y número nacional a partir del valor externo
   const parsed = useMemo(() => {
@@ -109,10 +112,22 @@ export function PhoneWithCountrySelect({
       {/* Header / Badges */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
-          <Phone
-            size={13}
-            className={isMandatoryOta && isMissing ? 'text-amber-700' : 'text-emerald-600'}
-          />
+          {onSwitchToEmail ? (
+            <button
+              type="button"
+              onClick={onSwitchToEmail}
+              title="Cambiar a email"
+              aria-label="Cambiar a email"
+              className="w-8 h-8 -my-1.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0 cursor-pointer active:scale-95 hover:bg-emerald-100"
+            >
+              <Phone size={14} className="text-emerald-600" />
+            </button>
+          ) : (
+            <Phone
+              size={13}
+              className={isMandatoryOta && isMissing ? 'text-amber-700' : 'text-emerald-600'}
+            />
+          )}
           <span className="text-[11px] font-extrabold text-zinc-700 uppercase tracking-wider flex items-center gap-1">
             <span>Teléfono del Huésped (WhatsApp)</span>
             {isMandatoryOta && (
