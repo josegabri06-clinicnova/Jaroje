@@ -40,7 +40,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Identificador de reserva con formato inválido.' }, { status: 400 });
     }
 
-    // Solo quien verificó los 4 últimos dígitos (o el personal) puede subir un comprobante a una reserva con teléfono.
+    // Solo quien verificó los 4 últimos dígitos puede subir un comprobante a una reserva con teléfono.
     // Un número que no existe tampoco tiene teléfono, así que además se exige que la reserva exista.
     const access = await checkGuestAccess(req, guestId);
     if (!access.allowed) {

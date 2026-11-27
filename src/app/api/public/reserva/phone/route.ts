@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     if (['cancelled', '0'].includes(String(row.status || '').toLowerCase())) return fail(409, 'cancelled', 'La reserva está cancelada.');
     if (!isDummyOrInvalidPhone(row.guest_phone)) return fail(409, 'has_phone', 'Esta reserva ya tiene un teléfono registrado.');
 
-    // Con documentos o comprobantes ya subidos, solo el dispositivo que los subió (cookie) o el personal pueden añadir el teléfono
+    // Con documentos o comprobantes ya subidos, solo el dispositivo que los subió (cookie) puede añadir el teléfono
     if (access.reason === 'no_phone') {
       const [{ data: checkin }, { data: receipts }] = await Promise.all([
         supabase.from('checkins').select('document_url, receipt_url').eq('reservation_id', guestId).maybeSingle(),

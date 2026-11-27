@@ -6,18 +6,17 @@
  *
  * Tiene acceso quien cumple UNA de estas:
  *  - 'cookie'   : ya verificó los 4 dígitos en este dispositivo (cookie firmada de esa reserva).
- *  - 'staff'    : es personal con sesión (admin o recepción), p. ej. la vista previa del portal dentro de Reservas.
  *  - 'no_phone' : la reserva no tiene teléfono verificable (p. ej. OTA con teléfono de relleno). No hay con qué verificar,
  *                 así que sigue abierta como hasta ahora; sus documentos siguen protegidos aparte.
  *
+ * Una sesión del personal NO basta: admin y recepción verifican igual que el huésped (para sus tareas tienen el panel).
  * Si no se puede comprobar el teléfono por un fallo de la base de datos, se cierra (fail-closed).
  */
 import { NextResponse } from 'next/server';
 import { isGuestAuthorized, hasUsablePhone } from '@/lib/guest-auth';
 import { resolveBookingContact } from '@/lib/guest-phone';
-import { getSessionFromRequest } from '@/lib/session';
 
-export type GuestAccessReason = 'cookie' | 'staff' | 'no_phone' | 'locked';
+export type GuestAccessReason = 'cookie' | 'no_phone' | 'locked';
 
 export interface GuestAccess {
   allowed: boolean;
@@ -31,24 +30,10 @@ export interface GuestAccess {
 export async function checkGuestAccess(req: Request, bookingId: string): Promise<GuestAccess> {
   if (await isGuestAuthorized(req, bookingId)) return { allowed: true, reason: 'cookie' };
 
-  const session = await getSessionFromRequest(req);
-  if (session && (session.role === 'admin' || session.role === 'recepcion')) return { allowed: true, reason: 'staff' };
-
   const contact = await resolveBookingContact(bookingId);
   if (!contact.failed && !hasUsablePhone(contact.phone)) return { allowed: true, reason: 'no_phone', bookingFound: contact.found };
 
   return { allowed: false, reason: 'locked', contact: { phone: contact.phone, guestName: contact.guestName } };
-}
-
-/**
- * ¿Puede ver (y sustituir) los documentos y comprobantes de la reserva sin volver a verificarse?
- * Sí quien ya verificó los 4 dígitos en este dispositivo (cookie de esa reserva) y el personal con sesión (admin o recepción),
- * que además ya los ve desde el panel. Quien entró sin verificarse (reserva sin teléfono) no.
- */
-export async function canAccessGuestFiles(req: Request, bookingId: string): Promise<boolean> {
-  if (await isGuestAuthorized(req, bookingId)) return true;
-  const session = await getSessionFromRequest(req);
-  return session?.role === 'admin' || session?.role === 'recepcion';
 }
 
 /** Respuesta estándar de las rutas de escritura cuando el huésped aún no ha verificado su teléfono */
