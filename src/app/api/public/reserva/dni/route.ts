@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
-import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileUrl } from '@/lib/guest-auth';
+import { grantGuestAccess, normalizeBookingId, guestFileUrl } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
-import { requireGuestWriteAccess } from '@/lib/guest-access';
+import { requireGuestWriteAccess, canAccessGuestFiles } from '@/lib/guest-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
     }
 
     // Sustituir una identificación ya subida solo lo puede hacer quien está autorizado en esta reserva; la primera subida es libre
-    if (existingCheckin?.document_url && !(await isGuestAuthorized(req, guestId))) {
+    if (existingCheckin?.document_url && !(await canAccessGuestFiles(req, guestId))) {
       return NextResponse.json({ error: 'Verifica tu identidad para cambiar tu identificación.', code: 'verification_required' }, { status: 403 });
     }
 

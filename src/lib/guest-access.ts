@@ -40,6 +40,17 @@ export async function checkGuestAccess(req: Request, bookingId: string): Promise
   return { allowed: false, reason: 'locked', contact: { phone: contact.phone, guestName: contact.guestName } };
 }
 
+/**
+ * ¿Puede ver (y sustituir) los documentos y comprobantes de la reserva sin volver a verificarse?
+ * Sí quien ya verificó los 4 dígitos en este dispositivo (cookie de esa reserva) y el personal con sesión (admin o recepción),
+ * que además ya los ve desde el panel. Quien entró sin verificarse (reserva sin teléfono) no.
+ */
+export async function canAccessGuestFiles(req: Request, bookingId: string): Promise<boolean> {
+  if (await isGuestAuthorized(req, bookingId)) return true;
+  const session = await getSessionFromRequest(req);
+  return session?.role === 'admin' || session?.role === 'recepcion';
+}
+
 /** Respuesta estándar de las rutas de escritura cuando el huésped aún no ha verificado su teléfono */
 export function verificationRequiredResponse() {
   return NextResponse.json(
