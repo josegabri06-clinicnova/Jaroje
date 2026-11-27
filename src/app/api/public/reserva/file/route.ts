@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { normalizeBookingId, isGuestAuthorized } from '@/lib/guest-auth';
+import { normalizeBookingId } from '@/lib/guest-auth';
+import { canAccessGuestFiles } from '@/lib/guest-access';
 import { parseStoredFileUrl } from '@/lib/storage-files';
 import { serveStoredFile } from '@/lib/storage-serve';
 
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * El huésped abre SU documento (DNI o comprobante). Solo con la cookie firmada de esa reserva, que se obtiene verificando
- * los últimos 4 dígitos del teléfono o subiendo el archivo desde ese dispositivo. El archivo se busca siempre en la base de
+ * los últimos 4 dígitos del teléfono o subiendo el archivo desde ese dispositivo; o el personal con sesión (admin, recepción). El archivo se busca siempre en la base de
  * datos por la reserva: el huésped no puede pedir una ruta de almacenamiento cualquiera.
  */
 export async function GET(req: Request) {
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ success: false, error: 'Solicitud no válida.' }, { status: 400 });
   }
 
-  if (!(await isGuestAuthorized(req, bookingId))) {
+  if (!(await canAccessGuestFiles(req, bookingId))) {
     return NextResponse.json({ success: false, code: 'verification_required', error: 'Verifica tu identidad para ver este archivo.' }, { status: 403 });
   }
 

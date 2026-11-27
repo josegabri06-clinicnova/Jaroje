@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24BookingsForArrival, isWithinFullListingWindow, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment, isDummyOrInvalidPhone } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
-import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
+import { grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
 import { filesProxyUrl } from '@/lib/storage-files';
-import { checkGuestAccess, firstNameOf, requireGuestWriteAccess } from '@/lib/guest-access';
+import { checkGuestAccess, firstNameOf, requireGuestWriteAccess, canAccessGuestFiles } from '@/lib/guest-access';
+import { isVerifiablePhone } from '@/lib/guest-live-phone';
 import { physicalRoomName } from '@/lib/room-names';
 import { isKnownMissingBooking, reserveBeds24Lookup, rememberBookingNotFound } from '@/lib/beds24-public-cache';
 import { rateLimitResponse } from '@/lib/public-rate-limit';
@@ -22,6 +23,26 @@ function publicTransferReceipts(list: any[] | null | undefined, bookingId: strin
       ? { receipt_url: guestFileUrl(bookingId, 'transfer', receipt_url, String(rest.id)) }
       : {}),
   }));
+}
+
+// Portal bloqueado: no se envía nada de la reserva (solo el nombre de pila) hasta verificar los 4 dígitos
+async function lockedPortalResponse(bookingId: number, phone: string | null | undefined, guestName: string | null | undefined) {
+  const { data: settings } = await supabase
+    .from('booking_portal_settings')
+    .select('language')
+    .eq('booking_id', String(bookingId))
+    .maybeSingle();
+  return NextResponse.json({
+    success: true,
+    data: {
+      id: bookingId,
+      locked: true,
+      needs_verification: true,
+      verify_available: true,
+      guest_first_name: firstNameOf(guestName),
+      portal_settings: { language: settings?.language || detectLanguageFromPhone(phone || '') }
+    }
+  }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function GET(req: Request) {
@@ -51,26 +72,11 @@ export async function GET(req: Request) {
     const guestId = String(bookingId);
     const access = await checkGuestAccess(req, guestId);
     if (!access.allowed) {
-      const { data: lockedSettings } = await supabase
-        .from('booking_portal_settings')
-        .select('language')
-        .eq('booking_id', guestId)
-        .maybeSingle();
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: bookingId,
-          locked: true,
-          needs_verification: true,
-          verify_available: true,
-          guest_first_name: firstNameOf(access.contact?.guestName),
-          portal_settings: { language: lockedSettings?.language || detectLanguageFromPhone(access.contact?.phone || '') }
-        }
-      }, { headers: { 'Cache-Control': 'no-store' } });
+      return lockedPortalResponse(bookingId, access.contact?.phone, access.contact?.guestName);
     }
 
-    // ¿Este dispositivo está autorizado a ver los ARCHIVOS de esta reserva? Solo con la cookie del huésped (el personal usa el panel).
-    const guestAuthorized = access.reason === 'cookie';
+    // ¿Puede ver los ARCHIVOS sin volver a verificarse? Quien entró verificado (cookie) o es personal con sesión.
+    const guestAuthorized = access.reason === 'cookie' || access.reason === 'staff';
 
     // Obtener el listado de comprobantes de transferencia de la reserva
     const { data: transferReceipts } = await supabase
@@ -411,6 +417,12 @@ export async function GET(req: Request) {
     if (!booking && confirmedMissing) rememberBookingNotFound(String(bookingId));
 
     if (booking) {
+      // Nuestra copia aún no tenía el teléfono, pero Beds24 sí: se verifica ANTES de enseñar nada (no a mitad del portal)
+      const livePhone = booking.guest_phone || booking.phone || booking.mobile;
+      if (access.reason === 'no_phone' && isVerifiablePhone(livePhone, booking.notes, booking.channel)) {
+        return lockedPortalResponse(bookingId, livePhone, booking.guest_name);
+      }
+
       // Las tres consultas son independientes: se lanzan a la vez (antes iban una tras otra)
       const [{ data: checkinData }, { data: transferData }, { data: portalSettings, error: portalSettingsError }, { data: mirrorContact }] = await Promise.all([
         supabase
@@ -590,7 +602,7 @@ export async function POST(req: Request) {
       .select('receipt_url')
       .eq('reservation_id', guestId)
       .maybeSingle();
-    if (priorCheckin?.receipt_url && !(await isGuestAuthorized(req, guestId))) {
+    if (priorCheckin?.receipt_url && !(await canAccessGuestFiles(req, guestId))) {
       return NextResponse.json({ error: 'Verifica tu identidad para cambiar tu comprobante.', code: 'verification_required' }, { status: 403 });
     }
 
