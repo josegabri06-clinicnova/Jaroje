@@ -100,9 +100,9 @@ export async function GET(req: Request) {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // FASE 3: Fallback de 20 minutos para Airbnb y Expedia
+    // FASE 3: Fallback de 20 minutos (Airbnb, Expedia y Booking)
     // Si pasaron >20 min sin recibir el WhatsApp, envía automáticamente la plantilla
-    // oficial de Meta con el enlace directo al Portal del Huésped
+    // oficial en el chat de la OTA (con enlace al portal, salvo en Booking)
     // ─────────────────────────────────────────────────────────────────────────────
     const fallbackResults = await processOta20MinuteFallback();
     if (fallbackResults.fallbackSentCount > 0) {

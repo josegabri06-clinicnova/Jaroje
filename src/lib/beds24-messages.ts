@@ -976,10 +976,14 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
   }
 }
 
+// Booking solo recibe el mensaje de los 20 minutos si la solicitud es reciente: así nunca se escribe de golpe a reservas antiguas
+const BOOKING_FALLBACK_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
 /**
- * FASE 2: Fallback temporal de 20 minutos para Airbnb y Expedia
- * Si pasaron más de 20 minutos desde la solicitud inicial y el huésped no dio su WhatsApp:
- * Envía automáticamente la plantilla oficial de Meta correspondiente con el enlace directo al portal.
+ * FASE 2: Fallback temporal de 20 minutos para las OTA
+ * Si pasaron más de 20 minutos desde la solicitud inicial y el huésped no dio su WhatsApp, se le escribe en el chat de la OTA:
+ *  - Airbnb y Expedia: la plantilla oficial correspondiente con el enlace directo al portal.
+ *  - Booking.com: "reservación confirmada" sin enlaces (los censura); nunca la petición de anticipo.
  */
 export async function processOta20MinuteFallback(): Promise<{
   checkedCount: number;
@@ -1029,8 +1033,12 @@ export async function processOta20MinuteFallback(): Promise<{
       const bId = String(log.booking_id);
       const channel = log.channel || 'OTA';
 
-      // Solo aplica para canales que permiten enlaces (Airbnb, Expedia, Vrbo)
-      if (!canOtaReceiveLinks(channel)) {
+      // Canales que permiten enlaces (Airbnb, Expedia, Vrbo) y Booking (sin enlaces, y solo solicitudes recientes)
+      const isBooking = channel.toLowerCase().includes('booking');
+      if (!canOtaReceiveLinks(channel) && !isBooking) {
+        continue;
+      }
+      if (isBooking && !(Date.parse(log.created_at) >= Date.now() - BOOKING_FALLBACK_MAX_AGE_MS)) {
         continue;
       }
 
@@ -1052,9 +1060,12 @@ export async function processOta20MinuteFallback(): Promise<{
       const isCancelled = bStatus === 'cancelled' || bStatus === '0';
       if (isCancelled) continue; // Cancelaciones se manejan por su propio evento
 
-      // Airbnb y Expedia llegan con el pago anticipado ya hecho: nunca se les pide el anticipo de 24 h
+      // Una solicitud de Booking sin confirmar no recibe nada (a Booking nunca se le pide el anticipo por este camino)
+      if (isBooking && bStatus === 'request') continue;
+
+      // Airbnb, Expedia y Booking: nunca se les pide el anticipo de 24 h (igual que cuando dan su teléfono)
       // (una reserva en estado "request" todavía no está confirmada, aunque venga de una OTA prepagada)
-      const isPrepaidOta = bStatus !== 'request' && ['airbnb', 'expedia'].some(ota => channel.toLowerCase().includes(ota));
+      const isPrepaidOta = bStatus !== 'request' && ['airbnb', 'expedia', 'booking'].some(ota => channel.toLowerCase().includes(ota));
       const bookingPrice = Number(b.price || 0);
       const effectivePaid = Number(b.actual_paid || b.deposit || 0);
       const hasMin50Deposit = bookingPrice > 0 ? (effectivePaid >= (bookingPrice * 0.5 - 0.01)) : (effectivePaid > 0);
@@ -1062,7 +1073,7 @@ export async function processOta20MinuteFallback(): Promise<{
 
       const templateToSend = isConfirmed ? 'reservacion_confirmada' : 'solicitud_recibida';
 
-      console.log(`[OTA 20min Fallback] ⏱️ Han pasado >20 min sin WhatsApp para reserva ${bId} (${channel}). Enviando plantilla oficial '${templateToSend}' con enlace al Portal...`);
+      console.log(`[OTA 20min Fallback] ⏱️ Han pasado >20 min sin WhatsApp para reserva ${bId} (${channel}). Enviando plantilla oficial '${templateToSend}'${isBooking ? ' (sin enlaces)' : ' con enlace al Portal'}...`);
 
       // Obtener idioma preferido si existe
       let lang = 'es';
